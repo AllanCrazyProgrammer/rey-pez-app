@@ -16,6 +16,7 @@ const { crearHandlersAbonos } = require('./lib/abonosClientes');
 const { crearHandlersPedidosCrudo } = require('./lib/pedidosCrudo');
 const { crearHandlersPrecios } = require('./lib/preciosVenta');
 const { crearHandlersRefrigerados } = require('./lib/pedidosLimpioRefrigerados');
+const { pedidoLimpioVacio, pedidoLimpioNuevoAsistente, pedidoLimpioEstaVacio } = require('./lib/pedidoLimpioDia');
 
 /**
  * Genera un ID único para identificar filas creadas por el asistente.
@@ -2245,9 +2246,9 @@ async function handlePostPedidosLimpio(req, res) {
       'El campo idempotencyKey es requerido y debe ser único');
   }
 
-  if (!Array.isArray(lineas) || lineas.length === 0) {
+  if (!Array.isArray(lineas)) {
     return errorResponse(res, 400, 'LINEAS_REQUERIDAS',
-      'Debe proporcionar al menos una línea en el campo lineas');
+      'El campo lineas debe ser un arreglo (vacío para solo crear el pedido del día)');
   }
 
   try {
@@ -2257,9 +2258,14 @@ async function handlePostPedidosLimpio(req, res) {
     
     if (idemSnap.exists) {
       const idemData = idemSnap.data();
-      if (idemData.operation === 'pedidos_limpio_create' || idemData.operation === 'pedidos_limpio_update') {
+      if (['pedidos_limpio_create', 'pedidos_limpio_update', 'pedidos_limpio_existente'].includes(idemData.operation)) {
         return res.json(idemData.response);
       }
+    }
+
+    // lineas: [] = asegurar que exista el pedido del día, sin tocar sus líneas.
+    if (lineas.length === 0) {
+      return await asegurarPedidoLimpioDia(res, { fecha, idempotencyKey, idemRef, dryRun });
     }
 
     // Validar medidas - handle duplicates: valid if ANY doc has tipo granja/especial
@@ -2318,20 +2324,13 @@ async function handlePostPedidosLimpio(req, res) {
 
     // Preparar documento base (sin _asistenteId - solo para nuevos)
     const pedidoData = {
-      fecha,
-      tipo: 'limpio',
+      ...pedidoLimpioVacio(fecha),
       otilio: pedidoPorCliente.otilio,
       catarro: pedidoPorCliente.catarro,
       joselito: pedidoPorCliente.joselito,
       ozuna: pedidoPorCliente.ozuna,
       lorena: pedidoPorCliente.lorena,
-      clientesTemporales: pedidoPorCliente.clientesTemporales,
-      etiquetas: [],
-      etiquetasColores: {},
-      rendimientos: {},
-      divisores: {},
-      completados: {},
-      kilosRefrigerados: {}
+      clientesTemporales: pedidoPorCliente.clientesTemporales
     };
 
     if (dryRun) {
@@ -2540,6 +2539,76 @@ async function handlePostPedidosLimpio(req, res) {
     return errorResponse(res, 500, 'ERROR_INTERNO', 
       'Error inesperado al procesar el pedido limpio: ' + error.message);
   }
+}
+
+/**
+ * POST /pedidos/limpio con lineas: [].
+ * Crea el pedido limpio vacío del día (mismos campos que la app) si no existe.
+ * Si ya existe lo devuelve tal cual, sin tocar sus líneas.
+ */
+async function asegurarPedidoLimpioDia(res, { fecha, idempotencyKey, idemRef, dryRun }) {
+  const consulta = db.collection('pedidos').where('fecha', '==', fecha).where('tipo', '==', 'limpio');
+  if (dryRun) {
+    const snap = await consulta.get();
+    return res.json({
+      dryRun: true,
+      operation: snap.empty ? 'pedidos_limpio_create' : 'pedidos_limpio_existente',
+      pedidoId: snap.empty ? null : snap.docs[0].id,
+      fecha,
+      creado: snap.empty,
+      document: snap.empty ? { ...pedidoLimpioVacio(fecha), createdAt: new Date().toISOString() } : undefined
+    });
+  }
+
+  const response = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(consulta);
+    let pedidoId;
+    let operation;
+    let totales = { tarasTotal: 0, kilosTotal: 0 };
+    if (snap.empty) {
+      operation = 'pedidos_limpio_create';
+      const docRef = db.collection('pedidos').doc();
+      pedidoId = docRef.id;
+      const pedidoData = pedidoLimpioNuevoAsistente(fecha, { FieldValue: admin.firestore.FieldValue, generarAsistenteId });
+      transaction.set(docRef, pedidoData);
+      const afterData = { ...pedidoData };
+      delete afterData.createdAt;
+      // Mismo log que una creación con líneas: POST /pedidos/limpio/deshacer lo encuentra.
+      transaction.set(db.collection('asistenteLog').doc(), {
+        operation,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        idempotencyKey,
+        pedidoId,
+        fecha,
+        _asistenteId: pedidoData._asistenteId,
+        assistantLineIds: [],
+        before: null,
+        after: afterData,
+        totales,
+        request: { fecha, lineas: [] }
+      });
+    } else {
+      // Ya existe: no se escribe nada en el pedido ni en el log.
+      operation = 'pedidos_limpio_existente';
+      pedidoId = snap.docs[0].id;
+      totales = calcularTotalesPedidoLimpio(snap.docs[0].data());
+    }
+    const resp = {
+      success: true,
+      operation,
+      pedidoId,
+      fecha,
+      creado: snap.empty,
+      totales: { taras: totales.tarasTotal, kilos: totales.kilosTotal }
+    };
+    transaction.set(idemRef, {
+      operation,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      response: resp
+    });
+    return resp;
+  });
+  return res.json(response);
 }
 
 /**
@@ -2814,6 +2883,11 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
         
         // Only delete whole doc if it ONLY has assistant lines
         isFullDelete = (totalLines === assistantLinesCount && assistantLinesCount > 0);
+        // Pedido del día creado vacío (lineas: []): se borra solo si sigue sin nada capturado.
+        if (assistantLineIds.length === 0 && logEntry?._asistenteId && currentData._asistenteId === logEntry._asistenteId
+          && pedidoLimpioEstaVacio(currentData)) {
+          isFullDelete = true;
+        }
       }
 
       if (isFullDelete) {
@@ -2917,7 +2991,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
 }
 
 // Export handlers for testing
-const refrigeradosHandlers = crearHandlersRefrigerados({ db, errorResponse });
+const refrigeradosHandlers = crearHandlersRefrigerados({ db, errorResponse, FieldValue: admin.firestore.FieldValue, generarAsistenteId });
 const abonosHandlers = crearHandlersAbonos({ db, admin, errorResponse });
 const pedidosCrudoHandlers = crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteId });
 const preciosHandlers = crearHandlersPrecios({ db, admin, errorResponse });

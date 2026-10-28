@@ -54,8 +54,59 @@ conEmulador('demo-reypez-refrigerados', async ({ db, handlers }) => {
   await db.collection('pedidos').doc('crudo-refri').set({ tipo: 'crudo', fecha: base.fecha });
   for (const selector of [{ pedidoId: 'ausente' }, { fecha: '2020-01-01' }, { pedidoId: 'crudo-refri' }]) {
     assert.equal((await get('?' + new URLSearchParams(selector))).status, 404);
-    assert.equal((await post({ ...selector, medidas: { a: 1 } })).status, 404);
+  }
+  for (const selector of [{ pedidoId: 'ausente' }, { pedidoId: 'crudo-refri' }]) {
+    assert.equal((await post({ ...selector, medidas: { a: 1 } })).status, 404); // Por id no se crea nada.
   }
   assert.deepEqual((await ref.get()).data(), { ...base, kilosRefrigerados: {} });
-  console.log('✓ Refrigerados: GET id/fecha, reemplazo, reintento, borrado, normalización, etiquetas, dryRun, validaciones y 404');
+
+  // idempotencyKey en un pedido existente: el reintento no reaplica aunque la app haya cambiado el valor.
+  const primera = await post({ pedidoId: ref.id, medidas: { '21/25': 11 }, idempotencyKey: 'refri-existente-1' });
+  assert.equal(primera.status, 200, JSON.stringify(primera.body));
+  await ref.update({ kilosRefrigerados: { '21/25': 2 } });
+  const segunda = await post({ pedidoId: ref.id, medidas: { '21/25': 11 }, idempotencyKey: 'refri-existente-1' });
+  assert.deepEqual(segunda.body, primera.body);
+  assert.deepEqual((await ref.get()).data().kilosRefrigerados, { '21/25': 2 }, 'misma key no se aplica dos veces');
+  await ref.update({ kilosRefrigerados: {} });
+
+  // Día sin pedido limpio: POST por fecha lo crea como la app y aplica los kilos.
+  const pedidosDia = async f => (await db.collection('pedidos').where('fecha', '==', f).where('tipo', '==', 'limpio').get()).docs;
+  const fechaNueva = '2026-11-05';
+  assert.equal((await pedidosDia(fechaNueva)).length, 0);
+  let dry = await post({ fecha: fechaNueva, medidas: { '21/25': 7 }, dryRun: true });
+  assert.equal(dry.status, 200, JSON.stringify(dry.body));
+  assert.equal(dry.body.pedidoCreado, true);
+  assert.equal((await pedidosDia(fechaNueva)).length, 0, 'dryRun no crea');
+  r = await post({ fecha: fechaNueva, medidas: { '21/25': 7 }, idempotencyKey: 'refri-nuevo-1' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.pedidoCreado, true);
+  let docs = await pedidosDia(fechaNueva);
+  assert.equal(docs.length, 1);
+  assert.equal(docs[0].id, r.body.pedidoId);
+  const { createdAt, _asistenteId, version, ...campos } = docs[0].data();
+  assert.ok(createdAt && typeof createdAt.toDate === 'function' && _asistenteId && version === 1);
+  assert.deepEqual(campos, {
+    fecha: fechaNueva, tipo: 'limpio', otilio: [], catarro: [], joselito: [], ozuna: [], lorena: [],
+    clientesTemporales: {}, etiquetas: [], etiquetasColores: {}, rendimientos: {}, divisores: {},
+    completados: {}, kilosRefrigerados: { '21/25': 7 }
+  });
+  // Mismo idempotencyKey: no se aplica dos veces y devuelve la misma respuesta.
+  await docs[0].ref.update({ kilosRefrigerados: { '21/25': 9 } }); // La app lo cambió después.
+  const repetido = await post({ fecha: fechaNueva, medidas: { '21/25': 7 }, idempotencyKey: 'refri-nuevo-1' });
+  assert.deepEqual(repetido.body, r.body);
+  assert.deepEqual((await docs[0].ref.get()).data().kilosRefrigerados, { '21/25': 9 }, 'reintento no reaplica');
+  assert.equal((await pedidosDia(fechaNueva)).length, 1, 'no crea otro pedido');
+  // Otra key sobre el día ya creado: actualiza ese mismo pedido.
+  r = await post({ fecha: fechaNueva, medidas: { '16/20': 3 }, idempotencyKey: 'refri-nuevo-2' });
+  assert.equal(r.body.pedidoCreado, false);
+  assert.equal(r.body.pedidoId, docs[0].id);
+  assert.deepEqual((await docs[0].ref.get()).data().kilosRefrigerados, { '21/25': 9, '16/20': 3 });
+  const logs = await db.collection('asistenteLog').where('operation', '==', 'pedidos_limpio_refrigerados').where('fecha', '==', fechaNueva).get();
+  assert.equal(logs.size, 2, 'un log por escritura aplicada');
+  for (const key of ['', 'a/b', 5]) {
+    assert.equal((await post({ fecha: fechaNueva, medidas: { a: 1 }, idempotencyKey: key })).status, 400);
+  }
+  await db.collection('asistenteIdem').doc('otra-op').set({ operation: 'pedidos_limpio_create', response: {} });
+  assert.equal((await post({ fecha: fechaNueva, medidas: { a: 1 }, idempotencyKey: 'otra-op' })).status, 409);
+  console.log('✓ Refrigerados: GET id/fecha, reemplazo, reintento, borrado, normalización, etiquetas, dryRun, validaciones, 404, crea el día faltante e idempotencyKey');
 }).catch(err => { console.error(err); process.exitCode = 1; });

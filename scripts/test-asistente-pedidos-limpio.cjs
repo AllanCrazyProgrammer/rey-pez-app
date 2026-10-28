@@ -437,6 +437,64 @@ async function run() {
     }
     testsPassed++;
     
+    // TEST 10: lineas: [] crea el pedido vacío del día (como la app) y no toca días existentes
+    console.log('\n📝 Test 10: lineas [] crea/asegura el pedido del día');
+    const fecha10 = '2026-11-02';
+    const key10 = 'test-dia-vacio-' + Date.now();
+    const pedidosDia = async f => (await db.collection('pedidos').where('fecha', '==', f).where('tipo', '==', 'limpio').get()).docs;
+    assert.equal((await pedidosDia(fecha10)).length, 0);
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', { fecha: fecha10, idempotencyKey: key10, lineas: [] });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.operation, 'pedidos_limpio_create');
+    assert.equal(res.body.creado, true);
+    const creado10 = (await db.collection('pedidos').doc(res.body.pedidoId).get()).data();
+    const { createdAt: createdAt10, _asistenteId: asisId10, version: version10, ...campos10 } = creado10;
+    assert.ok(createdAt10 && typeof createdAt10.toDate === 'function', 'createdAt es Timestamp');
+    assert.ok(asisId10, 'doc lleva _asistenteId');
+    assert.equal(version10, 1);
+    assert.deepEqual(campos10, {
+      fecha: fecha10, tipo: 'limpio', otilio: [], catarro: [], joselito: [], ozuna: [], lorena: [],
+      clientesTemporales: {}, etiquetas: [], etiquetasColores: {}, rendimientos: {}, divisores: {},
+      completados: {}, kilosRefrigerados: {}
+    }, 'mismos campos que crea la app');
+    const repetido10 = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', { fecha: fecha10, idempotencyKey: key10, lineas: [] });
+    assert.deepEqual(repetido10.body, res.body, 'misma key = misma respuesta');
+    const otraKey10 = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', { fecha: fecha10, idempotencyKey: key10 + '-b', lineas: [] });
+    assert.equal(otraKey10.body.operation, 'pedidos_limpio_existente');
+    assert.equal(otraKey10.body.creado, false);
+    assert.equal(otraKey10.body.pedidoId, res.body.pedidoId);
+    assert.equal((await pedidosDia(fecha10)).length, 1, 'un solo pedido en el día');
+    // Undo de la creación vacía: el doc sigue vacío, se borra.
+    let undo10 = await callHandler(handlers.handlePostPedidosLimpioDeshacer, 'POST', '/pedidos/limpio/deshacer', { idempotencyKey: key10 });
+    assert.equal(undo10.status, 200, JSON.stringify(undo10.body));
+    assert.equal(undo10.body.action, 'deleted_document');
+    assert.equal((await pedidosDia(fecha10)).length, 0);
+    // Si la app ya capturó algo en el día creado vacío, el undo no lo borra.
+    const key10c = key10 + '-c';
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', { fecha: fecha10, idempotencyKey: key10c, lineas: [] });
+    await db.collection('pedidos').doc(res.body.pedidoId).update({ otilio: [{ kilos: 5, medida: '21/25', tipo: '' }] });
+    undo10 = await callHandler(handlers.handlePostPedidosLimpioDeshacer, 'POST', '/pedidos/limpio/deshacer', { idempotencyKey: key10c });
+    assert.equal(undo10.status, 200, JSON.stringify(undo10.body));
+    assert.equal(undo10.body.action, 'removed_lines');
+    const tras10 = (await db.collection('pedidos').doc(res.body.pedidoId).get()).data();
+    assert.deepEqual(tras10.otilio, [{ kilos: 5, medida: '21/25', tipo: '' }]);
+    await db.collection('pedidos').doc(res.body.pedidoId).delete();
+    // Día existente con líneas de la app: lineas [] no lo modifica.
+    const ui10 = db.collection('pedidos').doc('ui-dia-existente');
+    const uiData10 = { fecha: '2026-11-03', tipo: 'limpio', otilio: [{ kilos: 30, medida: '41/50', tipo: '' }], catarro: [], joselito: [], ozuna: [], lorena: [], clientesTemporales: {}, kilosRefrigerados: { '41/50': 4 } };
+    await ui10.set(uiData10);
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', { fecha: '2026-11-03', idempotencyKey: key10 + '-ui', lineas: [] });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.pedidoId, 'ui-dia-existente');
+    assert.equal(res.body.operation, 'pedidos_limpio_existente');
+    assert.deepEqual((await ui10.get()).data(), uiData10, 'no altera líneas existentes');
+    assert.equal((await db.collection('asistenteLog').where('idempotencyKey', '==', key10 + '-ui').get()).size, 0, 'sin log si no cambió nada');
+    // lineas que no es arreglo sigue siendo 400.
+    assert.equal((await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', { fecha: fecha10, idempotencyKey: key10 + '-x', lineas: 'no' })).status, 400);
+    await ui10.delete();
+    console.log('  ✓ Crea el día vacío con defaults de la app, idempotente, no toca días existentes, undo seguro');
+    testsPassed++;
+
     console.log('\n' + '='.repeat(60));
     console.log(`✅ TODOS LOS TESTS PASARON (${testsPassed} tests)`);
     console.log('='.repeat(60));
