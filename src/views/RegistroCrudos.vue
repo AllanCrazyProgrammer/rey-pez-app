@@ -203,21 +203,75 @@
               </select>
               <button @click="addSalida" :disabled="!isSalidaValida">Agregar Salida</button>
             </div>
+            <div class="input-group destino-group">
+              <select v-model="newSalida.destino" aria-label="Destino de la salida" class="destino-select">
+                <option value="">Destino: sin especificar</option>
+                <option v-for="d in destinosSalida" :key="d.valor" :value="d.valor">{{ d.etiqueta }}</option>
+              </select>
+              <input
+                v-if="newSalida.destino === 'otro'"
+                v-model="newSalida.destinoDetalle"
+                type="text"
+                :maxlength="destinoDetalleMax"
+                placeholder="¿Cuál? (opcional)"
+                aria-label="Detalle del destino"
+              />
+            </div>
             <p class="disponibles-info">
               Disponibles: {{ formatNumber(kilosDisponiblesSeleccionados) }} kg
             </p>
           </div>
         </div>
         
+        <div v-if="salidas.length" class="filtro-destino">
+          <label>
+            Filtrar por destino
+            <select v-model="filtroDestino" aria-label="Filtrar salidas por destino">
+              <option value="">Todos</option>
+              <option v-for="d in destinosSalida" :key="d.valor" :value="d.valor">{{ d.etiqueta }}</option>
+              <option :value="filtroSinDestino">Sin especificar</option>
+            </select>
+          </label>
+          <span v-if="filtroDestino" class="filtro-resumen">
+            {{ salidasFiltradas.length }} de {{ salidas.length }} · {{ formatNumber(kilosFiltrados) }} kg
+          </span>
+        </div>
         <ul class="list">
-          <li v-for="(salida, index) in salidas" :key="'salida-' + index">
+          <li v-for="{ salida, indice } in salidasFiltradas" :key="'salida-' + indice" class="salida-item">
             <div class="item-info">
               <strong>{{ salida.proveedor }}</strong> - {{ salida.producto }}: {{ formatNumber(salida.kilos) }} kg
               <span v-if="salida.cuartoFrio" class="total-info"> - Cuarto: {{ salida.cuartoFrio }}</span>
+              <span class="destino-badge" :class="{ 'sin-destino': !etiquetaDestino(salida) }">
+                {{ etiquetaDestino(salida) || 'Sin destino' }}
+              </span>
+              <div v-if="destinoEditIndex === indice" class="destino-editor">
+                <select v-model="destinoEdit.destino" aria-label="Cambiar destino">
+                  <option value="">Sin especificar</option>
+                  <option v-for="d in destinosSalida" :key="d.valor" :value="d.valor">{{ d.etiqueta }}</option>
+                </select>
+                <input
+                  v-if="destinoEdit.destino === 'otro'"
+                  v-model="destinoEdit.destinoDetalle"
+                  type="text"
+                  :maxlength="destinoDetalleMax"
+                  placeholder="¿Cuál? (opcional)"
+                  aria-label="Detalle del destino"
+                />
+                <button type="button" class="destino-guardar" @click="guardarDestino(indice)">Aplicar</button>
+                <button type="button" class="destino-cancelar" @click="destinoEditIndex = null">Cancelar</button>
+              </div>
             </div>
-            <button @click="removeSalida(index)" class="delete-btn">&times;</button>
+            <button
+              v-if="destinoEditIndex !== indice"
+              type="button"
+              class="destino-edit-btn"
+              @click="editarDestino(indice)"
+              :aria-label="'Cambiar destino de ' + salida.producto"
+            >Destino</button>
+            <button @click="removeSalida(indice)" class="delete-btn">&times;</button>
           </li>
         </ul>
+        <p v-if="filtroDestino && !salidasFiltradas.length" class="sin-resultados">No hay salidas con ese destino.</p>
         <p class="total">Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
       </div>
     </div>
@@ -362,6 +416,9 @@ import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaValor } from '@/utils/dateUtils';
 import inventarioNavigation from '@/mobile/inventarioNavigation';
+import {
+  DESTINOS_SALIDA, FILTRO_SIN_DESTINO, DETALLE_MAX, normalizarDestino, aplicarDestino, etiquetaDestino, filtrarPorDestino
+} from '@/utils/destinoSalida';
 
 export default {
   name: 'RegistroCrudos',
@@ -400,8 +457,16 @@ export default {
         proveedor: '', 
         producto: '', 
         kilos: null,
-        cuartoFrio: 'Todos los cuartos'
+        cuartoFrio: 'Todos los cuartos',
+        destino: '',
+        destinoDetalle: ''
       },
+      destinosSalida: DESTINOS_SALIDA,
+      filtroSinDestino: FILTRO_SIN_DESTINO,
+      destinoDetalleMax: DETALLE_MAX,
+      filtroDestino: '',
+      destinoEditIndex: null,
+      destinoEdit: { destino: '', destinoDetalle: '' },
       nuevoProveedorEntrada: '',
       customProducto: '',
       isEditing: false,
@@ -435,6 +500,12 @@ export default {
     },
     totalSalidas() {
       return Number(this.salidas.reduce((total, salida) => total + salida.kilos, 0).toFixed(1));
+    },
+    salidasFiltradas() {
+      return filtrarPorDestino(this.salidas, this.filtroDestino);
+    },
+    kilosFiltrados() {
+      return Number(this.salidasFiltradas.reduce((total, { salida }) => total + Number(salida.kilos || 0), 0).toFixed(1));
     },
     isEntradaValida() {
       const proveedorValido = this.newEntrada.proveedor === '__nuevo__' 
@@ -962,6 +1033,13 @@ export default {
         return;
       }
 
+      const destino = normalizarDestino(this.newSalida.destino, this.newSalida.destinoDetalle);
+      if (destino.error) {
+        alert(destino.error);
+        return;
+      }
+      salidasParaAgregar.forEach(salida => aplicarDestino(salida, destino.destino, destino.destinoDetalle));
+
       this.salidas.push(...salidasParaAgregar);
 
       this.resetProductoSalida();
@@ -973,7 +1051,28 @@ export default {
       await this.loadProductosDisponibles();
     },
 
+    etiquetaDestino,
+
+    editarDestino(indice) {
+      const salida = this.salidas[indice];
+      this.destinoEdit = { destino: salida.destino || '', destinoDetalle: salida.destinoDetalle || '' };
+      this.destinoEditIndex = indice;
+    },
+
+    // Solo cambia la etiqueta de destino; kilos, cuarto y existencias quedan igual.
+    guardarDestino(indice) {
+      const salida = this.salidas[indice];
+      const r = aplicarDestino(salida, this.destinoEdit.destino, this.destinoEdit.destinoDetalle, this.$set);
+      if (r.error) {
+        alert(r.error);
+        return;
+      }
+      this.$set(this.salidas, indice, { ...salida });
+      this.destinoEditIndex = null;
+    },
+
     async removeSalida(index) {
+      this.destinoEditIndex = null;
       this.salidas.splice(index, 1);
       await this.loadProductosDisponibles();
     },
@@ -1929,4 +2028,18 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.destino-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.destino-group select, .destino-group input { flex: 0 0 auto; width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+.filtro-destino { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; font-size: 0.95em; }
+.filtro-destino select { margin-left: 6px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+.filtro-resumen { color: #3760b0; font-weight: 600; }
+.destino-badge { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 10px; background: #e3ecfb; color: #2a4b8d; font-size: 0.8em; font-weight: 600; }
+.destino-badge.sin-destino { background: #eee; color: #777; font-weight: normal; }
+.destino-editor { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.destino-editor select, .destino-editor input { flex: 1 1 140px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+.destino-editor button, .destino-edit-btn { padding: 6px 10px; border: 1px solid #3760b0; border-radius: 4px; background: #fff; color: #3760b0; cursor: pointer; font-size: 0.85em; }
+.destino-editor .destino-guardar { background: #3760b0; color: #fff; }
+.salida-item .destino-edit-btn { margin-left: 8px; flex-shrink: 0; }
+.sin-resultados { color: #777; font-style: italic; }
 </style>

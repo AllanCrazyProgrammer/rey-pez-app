@@ -18,6 +18,7 @@ const { crearHandlersPrecios } = require('./lib/preciosVenta');
 const { crearHandlersRefrigerados } = require('./lib/pedidosLimpioRefrigerados');
 const { crearHandlersNotas } = require('./lib/notasVenta');
 const { crearHandlersDeudas } = require('./lib/deudasProveedor');
+const { normalizarDestino: normalizarDestinoSalida } = require('./lib/destinoSalida');
 const { pedidoLimpioVacio, pedidoLimpioNuevoAsistente, pedidoLimpioEstaVacio } = require('./lib/pedidoLimpioDia');
 
 /**
@@ -1145,6 +1146,8 @@ async function handlePostCrudosSalida(req, res) {
     kilos: kilosParam,
     precio,
     cuarto,
+    destino,
+    destinoDetalle,
     dryRun = false,
     idempotencyKey
   } = req.body;
@@ -1174,6 +1177,11 @@ async function handlePostCrudosSalida(req, res) {
   if (precioNorm !== null && (isNaN(precioNorm) || precioNorm < 0)) {
     return errorResponse(res, 400, 'PARAMETRO_INVALIDO', 
       'El campo "precio" debe ser un número no negativo');
+  }
+  
+  const destinoNorm = normalizarDestinoSalida(destino, destinoDetalle);
+  if (destinoNorm.error) {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO', destinoNorm.error);
   }
   
   const cuartoNorm = normalizeCuarto(cuarto);
@@ -1309,6 +1317,8 @@ async function handlePostCrudosSalida(req, res) {
         producto,
         kilos,
         cuartoFrio: cuartoNorm,
+        ...(destinoNorm.destino ? { destino: destinoNorm.destino } : {}),
+        ...(destinoNorm.destinoDetalle ? { destinoDetalle: destinoNorm.destinoDetalle } : {}),
         _asistenteId: asistenteId
       };
       

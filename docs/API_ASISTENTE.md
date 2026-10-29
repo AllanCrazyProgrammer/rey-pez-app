@@ -807,6 +807,8 @@ Content-Type: application/json
 **Campos opcionales:**
 - `precio` (number): Precio por kilo. Si no se especifica o hay múltiples precios disponibles, la API puede rechazar la operación pidiendo que desambigües
 - `cuarto` (string): Cuarto frío. Si no se especifica, usa `s/c`. Puede usar `"Todos los cuartos"` para descontar de cualquier cuarto disponible
+- `destino` (string): A dónde va la salida: `embarque` (Embarque cliente), `macuil`, `venta_local` u `otro`. Si se omite, la salida queda sin destino (igual que antes). Solo es una etiqueta: no cambia existencias ni totales
+- `destinoDetalle` (string, máx. 80): Detalle libre, solo con `destino: "otro"`. Un valor inválido responde 400 `PARAMETRO_INVALIDO`
 - `dryRun` (boolean): Si es `true`, simula la operación sin escribir
 - `idempotencyKey` (string): Clave única para idempotencia
 
