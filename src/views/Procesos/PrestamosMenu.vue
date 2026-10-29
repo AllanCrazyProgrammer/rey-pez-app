@@ -40,7 +40,7 @@
           <i class="fas fa-piggy-bank"></i>
           <div class="button-text">
             <h3>Pablo</h3>
-            <p>Dinero que Pablo me deja guardado: depósitos, retiros y saldo.</p>
+            <p>Dinero que Pablo me deja guardado y lo que le debo.</p>
             <span class="category-cta">Ver cuenta de Pablo →</span>
           </div>
         </div>
@@ -319,5 +319,6 @@ export default {
 .resumen-card h3 { text-align: left; font-size: 17px; color: #365a4b; }
 .resumen-stats { flex-direction: row; gap: 40px; flex-wrap: wrap; }
 .stat-item { border: 0; flex: 1; min-width: 200px; }
+@media (min-width: 992px) { .actions-container { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 650px) { .actions-container { grid-template-columns: 1fr; } .prestamos-menu-container { padding: 18px 12px; } }
 </style>
