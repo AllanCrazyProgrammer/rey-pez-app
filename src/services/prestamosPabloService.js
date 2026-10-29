@@ -9,8 +9,8 @@ export async function cargarMovimientosPablo() {
   return snap.docs.map(d => ({ ...d.data(), id: d.id }));
 }
 
-export async function agregarMovimientoPablo(datos) {
-  const r = validarMovimientoPablo(datos);
+export async function agregarMovimientoPablo(datos, existentes) {
+  const r = validarMovimientoPablo(datos, existentes);
   if (!r.ok) throw new Error(r.errores.join('. '));
   const ref = await addDoc(collection(db, COLECCION_PABLO), { ...r.movimiento, fechaCreacion: serverTimestamp() });
   return ref.id;

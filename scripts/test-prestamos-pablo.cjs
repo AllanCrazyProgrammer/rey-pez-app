@@ -19,14 +19,16 @@ const P = compilar('src/utils/prestamosPablo.js');
 const plano = v => JSON.parse(JSON.stringify(v));
 
 // Saldo
-assert.deepEqual(plano(P.resumenPablo([])), { depositos: 0, retiros: 0, saldo: 0 });
+const R0 = plano(P.resumenPablo([]));
+assert.deepEqual([R0.depositos, R0.retiros, R0.saldoPablo, R0.deudaAllan, R0.efectivoReal], [0, 0, 0, 0, 0]);
 const movs = [
   { id: 'a', fecha: '2026-10-01', tipo: 'deposito', monto: 5000, fechaCreacion: { seconds: 1 } },
   { id: 'b', fecha: '2026-10-10', tipo: 'retiro', monto: 1200.5, fechaCreacion: { seconds: 2 } },
   { id: 'c', fecha: '2026-10-10', tipo: 'deposito', monto: 300.1, fechaCreacion: { seconds: 3 } },
   { id: 'd', fecha: '2026-10-05', tipo: 'deposito', monto: '0.2' },
 ];
-assert.deepEqual(plano(P.resumenPablo(movs)), { depositos: 5300.3, retiros: 1200.5, saldo: 4099.8 });
+const R1 = P.resumenPablo(movs);
+assert.deepEqual([R1.depositos, R1.retiros, R1.saldoPablo, R1.deudaAllan, R1.efectivoReal], [5300.3, 1200.5, 4099.8, 0, 4099.8], 'docs viejos (solo depósito/retiro) siguen igual');
 assert.equal(P.resumenPablo([{ tipo: 'retiro', monto: 100 }]).saldo, -100, 'retiro de más queda negativo visible');
 assert.equal(P.resumenPablo([{ tipo: 'otro', monto: 99 }]).saldo, 0, 'tipo desconocido no cuenta');
 
@@ -36,6 +38,30 @@ assert.deepEqual(plano(h.map(m => m.id)), ['c', 'b', 'd', 'a']);
 assert.deepEqual(plano(h.map(m => m.saldoDespues)), [4099.8, 3799.7, 5000.2, 5000]);
 assert.equal(h[0].saldoDespues, P.resumenPablo(movs).saldo);
 assert.equal(movs[0].saldoDespues, undefined, 'no muta la entrada');
+
+// Escenario Allan le debe a Pablo: depósito 60000, tomado 60000, abono 10000
+const deuda = [
+  { id: 'p1', fecha: '2026-10-01', tipo: 'deposito', monto: 60000 },
+  { id: 'p2', fecha: '2026-10-02', tipo: 'tomado', monto: 60000 },
+  { id: 'p3', fecha: '2026-10-15', tipo: 'abono', monto: 10000 },
+];
+const RD = P.resumenPablo(deuda);
+assert.equal(RD.saldoPablo, 60000, 'Pablo debe tener 60000');
+assert.equal(RD.deudaAllan, 50000, 'Allan debe 50000');
+assert.equal(RD.efectivoReal, 10000, 'efectivo real 10000');
+assert.equal(RD.avanceAbonos, 17);
+const HD = P.historialPablo(deuda);
+assert.deepEqual(plano(HD.map(m => m.etiqueta)), ['Abono de Allan', 'Allan tomó', 'Depósito de Pablo']);
+assert.deepEqual(plano(HD.map(m => m.deudaDespues)), [50000, 60000, 0]);
+assert.deepEqual(plano(HD.map(m => m.efectivoDespues)), [10000, 0, 60000]);
+// abono que excede la deuda: rechazado; justo la deuda: aceptado; deuda nunca negativa
+const exceso = P.validarMovimientoPablo({ fecha: '2026-10-20', tipo: 'abono', monto: 50000.01 }, deuda);
+assert.equal(exceso.ok, false); assert.match(exceso.errores.join(' '), /excede la deuda/);
+assert.equal(P.validarMovimientoPablo({ fecha: '2026-10-20', tipo: 'abono', monto: 50000 }, deuda).ok, true);
+assert.equal(P.validarMovimientoPablo({ fecha: '2026-10-20', tipo: 'tomado', monto: 5 }, deuda).ok, true);
+assert.equal(P.resumenPablo([{ tipo: 'abono', monto: 100 }]).deudaAllan, 0, 'deuda no negativa');
+const saldada = P.resumenPablo([...deuda, { tipo: 'abono', monto: 50000 }]);
+assert.deepEqual([saldada.deudaAllan, saldada.efectivoReal, saldada.avanceAbonos], [0, 60000, 100]);
 
 // Validación
 const ok = P.validarMovimientoPablo({ fecha: '2026-10-29', tipo: 'retiro', monto: '250.555', nota: '  gasolina ' });
