@@ -7,6 +7,7 @@
 
     <p v-if="error" class="error" role="alert">{{ error }} <button @click="cargar">Reintentar</button></p>
 
+    <div class="resumen-grid">
     <div class="saldo-card deuda-card" :class="{ saldada: resumen.deudaAllan === 0 }">
       <span class="saldo-label">Le debo a Pablo</span>
       <strong class="saldo-valor deuda">{{ cargando ? '…' : '$' + formatNumber(resumen.deudaAllan) }}</strong>
@@ -31,7 +32,9 @@
         <div class="saldo-detalle"><span>Debe tener − lo que le debo</span></div>
       </div>
     </div>
+    </div>
 
+    <div class="cuerpo">
     <form class="form-card" @submit.prevent="guardar">
       <h2>Nuevo movimiento</h2>
       <div class="tipo-toggle">
@@ -45,6 +48,7 @@
       <button type="submit" class="guardar" :disabled="guardando">{{ guardando ? 'Guardando…' : 'Guardar: ' + etiquetas[nuevo.tipo] }}</button>
     </form>
 
+    <section class="historial-col">
     <h2>Historial</h2>
     <p v-if="!cargando && !historial.length" class="vacio">Sin movimientos todavía.</p>
     <ul class="historial">
@@ -62,6 +66,24 @@
         <button class="borrar" @click="borrar(m)" :disabled="borrando === m.id">Borrar</button>
       </li>
     </ul>
+    <table v-if="historial.length" class="historial-tabla">
+      <thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Monto</th><th>Nota</th><th class="num">Saldo</th><th></th></tr></thead>
+      <tbody>
+        <tr v-for="m in historial" :key="'t-' + m.id" :class="m.tipo">
+          <td class="fecha">{{ formatearFecha(m.fecha) }}</td>
+          <td><span class="chip">{{ m.etiqueta }}</span></td>
+          <td class="num mov-monto">{{ m.signo > 0 ? '+' : '−' }}${{ formatNumber(m.monto) }}</td>
+          <td class="nota">{{ m.nota || '—' }}</td>
+          <td class="num saldo-col">
+            <template v-if="m.tipo === 'tomado' || m.tipo === 'abono'"><small>Le debo</small> ${{ formatNumber(m.deudaDespues) }}</template>
+            <template v-else><small>Debe tener</small> ${{ formatNumber(m.saldoDespues) }}</template>
+          </td>
+          <td><button class="borrar" @click="borrar(m)" :disabled="borrando === m.id">Borrar</button></td>
+        </tr>
+      </tbody>
+    </table>
+    </section>
+    </div>
   </div>
 </template>
 
@@ -165,4 +187,35 @@ h2 { color: #254c44; font-size: 18px; margin: 22px 0 10px; }
 .mov-nota { margin: 6px 0 0; color: #4b5f59; font-size: 14px; }
 .borrar { margin-top: 8px; background: none; border: 1px solid #e0b4ae; color: #b03a2e; border-radius: 6px; padding: 4px 10px; font-size: 13px; }
 .vacio { color: #687a75; }
+.historial-tabla { display: none; }
+
+/* Escritorio: el layout móvil (<992px) queda igual. */
+@media (min-width: 992px) {
+  .pablo-container { max-width: 1200px; padding: 28px 28px 60px; }
+  .pablo-container h1 { text-align: left; }
+  .resumen-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 16px; align-items: stretch; }
+  .resumen-grid .totales { display: contents; }
+  .resumen-grid .saldo-card { margin: 0; padding: 20px; }
+  .saldo-card.mini .saldo-valor { font-size: 28px; }
+  .saldo-card.mini .saldo-detalle { font-size: 13px; }
+  .cuerpo { display: grid; grid-template-columns: 360px 1fr; gap: 24px; align-items: start; margin-top: 22px; }
+  .form-card { position: sticky; top: 16px; margin-top: 0; }
+  .historial-col h2 { margin-top: 0; }
+  .historial { display: none; }
+  .historial-tabla { display: table; width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border: 1px solid #dce7e2; border-radius: 12px; overflow: hidden; font-size: 14px; }
+  .historial-tabla th { text-align: left; background: #f1f6f3; color: #365a4b; font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #dce7e2; }
+  .historial-tabla td { padding: 10px 12px; border-bottom: 1px solid #edf2ef; color: #254c44; vertical-align: middle; }
+  .historial-tabla tr:last-child td { border-bottom: 0; }
+  .historial-tabla tbody tr:hover { background: #f8faf8; }
+  .historial-tabla .num { text-align: right; white-space: nowrap; }
+  .historial-tabla .fecha { white-space: nowrap; color: #4b5f59; }
+  .historial-tabla .nota { color: #4b5f59; max-width: 260px; }
+  .historial-tabla .saldo-col small { color: #687a75; margin-right: 4px; }
+  .historial-tabla .mov-monto { font-weight: 700; }
+  .historial-tabla .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: #e6f2ec; color: #216652; }
+  .historial-tabla tr.retiro .chip { background: #f8ecdf; color: #a85d22; }
+  .historial-tabla tr.tomado .chip { background: #f8e1de; color: #b03a2e; }
+  .historial-tabla tr.abono .chip { background: #eee6f6; color: #6b4b94; }
+  .historial-tabla .borrar { margin: 0; }
+}
 </style>
