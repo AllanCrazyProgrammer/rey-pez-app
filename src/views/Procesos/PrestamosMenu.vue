@@ -35,6 +35,17 @@
         </div>
         <i class="fas fa-arrow-right"></i>
       </router-link>
+      <router-link to="/procesos/prestamos/pablo" class="action-button pablo">
+        <div class="button-content">
+          <i class="fas fa-piggy-bank"></i>
+          <div class="button-text">
+            <h3>Pablo</h3>
+            <p>Dinero que Pablo me deja guardado: depósitos, retiros y saldo.</p>
+            <span class="category-cta">Ver cuenta de Pablo →</span>
+          </div>
+        </div>
+        <i class="fas fa-arrow-right"></i>
+      </router-link>
     </div>
     
     <div class="resumen-container">
@@ -299,6 +310,8 @@ export default {
 .button-content { flex-direction: column; align-items: start; gap: 22px; }
 .action-button.despicadoras .button-content i { color: #2f8470; }
 .action-button.trabajadores .button-content i { color: #5183a0; }
+.action-button.pablo { border-left-color: #dce7e2; border-top-color: #8e6bb8; }
+.action-button.pablo .button-content i { color: #8e6bb8; }
 .button-text h3 { font-size: 21px; color: #254c44; }
 .button-text p { margin: 10px 0 24px; line-height: 1.6; }
 .category-cta { color: #216652; font-size: 13px; font-weight: 600; }
