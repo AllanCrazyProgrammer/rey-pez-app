@@ -26,7 +26,7 @@ export function estadoMedidaProducto(producto, individuales, agrupados, referenc
   const pedido = estadoPedido(referencia, agrupados);
   if (individuales.totalTaras > 0) {
     const cubierto = individuales.totalTaras === totalTarasReportadas(producto);
-    return { ...pedido, cubierto, etiqueta: cubierto ? 'Reportado' : 'Falta reportar' };
+    return { ...pedido, pedidoCubierto: pedido.cubierto, cubierto, etiqueta: cubierto ? 'Reportado' : 'Falta reportar' };
   }
   return { ...pedido, etiqueta: pedido.cubierto ? 'Completo' : pedido.tieneReferencia ? 'Pendiente' : 'Sin referencia' };
 }

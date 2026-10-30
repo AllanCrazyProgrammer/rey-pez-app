@@ -5,7 +5,7 @@ const { vueOptions, loadSource } = require('./helpers/embarques-source.cjs');
 const base = 'src/views/Embarques/components/';
 const pedido = loadSource('src/utils/embarquePedidoEstado.js');
 const { calcularTotalesPesadas } = loadSource('src/utils/embarquePesadas.js');
-const opciones = vueOptions(base + 'ClienteProductos.vue', ['data', 'computed'], { ...pedido, calcularTotalesPesadas });
+const opciones = vueOptions(base + 'ClienteProductos.vue', ['data', 'computed'], { ...pedido, calcularTotalesPesadas, ...loadSource('src/utils/medidasMovilOrden.js') });
 function cliente(productos = [], crudos = []) {
   return new Vue({
     data: () => ({ ...opciones.data(), productos, crudos, clienteId: 'c1', pedidoReferenciaCrudosPorCliente: {}, pedidoReferenciaPorCliente: {} }),
