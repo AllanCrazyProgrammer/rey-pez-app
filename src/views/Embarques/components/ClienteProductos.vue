@@ -179,6 +179,7 @@
 import { ordenarMedidasMovil } from '@/utils/medidasMovilOrden';
 import { claveReferenciaProducto, estadoPedido, estadoMedidaProducto, tarasCrudoPorTalla, referenciaPedidoProducto } from '@/utils/embarquePedidoEstado';
 import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
+import { totalesLimpio, totalesCrudo, extraerNumero, calcularKilosCrudoItem, formatearKilos } from '@/utils/embarqueTotales';
 
 import ProductoItem from './ProductoItem.vue';
 import CrudoItem from './CrudoItem.vue';
@@ -371,58 +372,12 @@ export default {
 
         // Una interpretación compartida para el resumen y los pedidos agrupados.
         pesadasPorProducto() { return this.productos.map(calcularTotalesPesadas); },
-        calcularTotalLimpioCliente() {
-            return this.pesadasPorProducto.reduce((total, pesadas) => total + pesadas.totalTaras, 0);
-        },
-
-        calcularKilosLimpioCliente() {
-            return this.productos.reduce((total, producto, indice) => {
-                if (producto.tipo === 'c/h20') {
-                    // Para productos c/h20, calcular con el valor neto
-                    const reporteTaras = producto.reporteTaras || [];
-                    const reporteBolsas = producto.reporteBolsas || [];
-                    let sumaTotalKilos = 0;
-
-                    for (let i = 0; i < reporteTaras.length; i++) {
-                        const taras = parseInt(reporteTaras[i]) || 0;
-                        const bolsa = parseInt(reporteBolsas[i]) || 0;
-                        sumaTotalKilos += taras * bolsa;
-                    }
-
-                    // Multiplicar por el valor neto (0.65 por defecto)
-                    const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
-                    return total + kilosReales;
-                } else {
-                    return total + this.pesadasPorProducto[indice].totalKilos;
-                }
-            }, 0);
-        },
-
-        // Calcular totales de crudo
-        calcularTotalCrudoCliente() {
-            return this.crudos.reduce((total, crudo) => {
-                if (!crudo || !crudo.items || !Array.isArray(crudo.items)) {
-                    return total;
-                }
-                return total + crudo.items.reduce((itemTotal, item) => {
-                    let taras = this.extraerNumero(item.taras);
-                    let sobrante = this.extraerNumero(item.sobrante);
-                    let sobrante2 = this.extraerNumero(item.sobrante2);
-                    return itemTotal + taras + sobrante + sobrante2;
-                }, 0);
-            }, 0);
-        },
-
-        calcularKilosCrudoCliente() {
-            return this.crudos.reduce((total, crudo) => {
-                if (!crudo || !crudo.items || !Array.isArray(crudo.items)) {
-                    return total;
-                }
-                return total + crudo.items.reduce((itemTotal, item) => {
-                    return itemTotal + this.calcularKilosCrudos(item);
-                }, 0);
-            }, 0);
-        },
+        totalesLimpioCliente() { return totalesLimpio(this.productos, this.pesadasPorProducto); },
+        calcularTotalLimpioCliente() { return this.totalesLimpioCliente.taras; },
+        calcularKilosLimpioCliente() { return this.totalesLimpioCliente.kilos; },
+        totalesCrudoCliente() { return totalesCrudo(this.crudos); },
+        calcularTotalCrudoCliente() { return this.totalesCrudoCliente.taras; },
+        calcularKilosCrudoCliente() { return this.totalesCrudoCliente.kilos; },
 
         totalesAgrupadosPorClave() {
             const mapa = {};
@@ -447,11 +402,7 @@ export default {
     },
 
     methods: {
-        extraerNumero(valor) {
-            if (!valor) return 0;
-            const match = valor.toString().match(/^(\d+)/);
-            return match ? parseInt(match[1]) : 0;
-        },
+        extraerNumero(valor) { return extraerNumero(valor); },
 
         actualizarProducto(producto) {
             this.$emit('update:productos', this.productos.map(p =>
@@ -471,78 +422,9 @@ export default {
             this.$emit('seleccionar-medida', producto, medida);
         },
 
-        calcularKilosCrudos(item) {
-            let kilosTotales = 0;
+        calcularKilosCrudos(item) { return calcularKilosCrudoItem(item); },
 
-            // Procesar taras
-            if (item.taras) {
-                // Verificar si la tara tiene formato "5-19" o similar
-                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
-                if (formatoGuion) {
-                    const cantidad = parseInt(formatoGuion[1]) || 0;
-                    let medida = parseInt(formatoGuion[2]) || 0;
-
-                    // Si la medida es 19, sustituirla por 20
-                    if (medida === 19) {
-                        medida = 20;
-                    }
-
-                    kilosTotales += cantidad * medida;
-                } else {
-                    // Formato original si no coincide con el patrón
-                    const [cantidad, medida] = item.taras.split('-').map(Number);
-                    kilosTotales += cantidad * medida;
-                }
-            }
-
-            // Procesar sobrante
-            if (item.sobrante) {
-                // Verificar si el sobrante tiene formato "5-19" o similar
-                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
-                if (formatoGuion) {
-                    const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
-                    let medidaSobrante = parseInt(formatoGuion[2]) || 0;
-
-                    // Si la medida es 19, sustituirla por 20
-                    if (medidaSobrante === 19) {
-                        medidaSobrante = 20;
-                    }
-
-                    kilosTotales += cantidadSobrante * medidaSobrante;
-                } else {
-                    // Formato original si no coincide con el patrón
-                    const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
-                    kilosTotales += cantidadSobrante * medidaSobrante;
-                }
-            }
-
-            // Procesar segundo sobrante
-            if (item.sobrante2) {
-                const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
-                if (formatoGuion2) {
-                    const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
-                    let medidaSobrante2 = parseInt(formatoGuion2[2]) || 0;
-
-                    if (medidaSobrante2 === 19) {
-                        medidaSobrante2 = 20;
-                    }
-
-                    kilosTotales += cantidadSobrante2 * medidaSobrante2;
-                } else {
-                    const [cantidadSobrante2, medidaSobrante2] = item.sobrante2.split('-').map(Number);
-                    kilosTotales += cantidadSobrante2 * medidaSobrante2;
-                }
-            }
-
-            return kilosTotales;
-        },
-
-        formatearKilos(kilos) {
-            return kilos.toLocaleString('en-US', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 1
-            });
-        },
+        formatearKilos(kilos) { return formatearKilos(kilos); },
 
         handleJuntarMedidasChange(event) {
             this.$emit('juntarMedidas-change', this.clienteId, event.target.checked);

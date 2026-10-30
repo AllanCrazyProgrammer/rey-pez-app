@@ -5,13 +5,13 @@ const { loadSource, vueOptions } = require('./helpers/embarques-source.cjs');
 const { calcularTotalesPesadas } = loadSource('src/utils/embarquePesadas.js');
 const pedido = loadSource('src/utils/embarquePedidoEstado.js');
 const base = 'src/views/Embarques/components/';
-const cliente = vueOptions(base + 'ClienteProductos.vue', ['computed'], { calcularTotalesPesadas, ...pedido }).computed;
+const cliente = vueOptions(base + 'ClienteProductos.vue', ['computed'], { calcularTotalesPesadas, ...pedido, ...loadSource('src/utils/embarqueTotales.js') }).computed;
 const producto = vueOptions(base + 'ProductoItem.vue', ['computed'], { calcularTotalesPesadas, ...pedido }).computed;
 const PedidoReferencia = Vue.extend(vueOptions(base + 'PedidoReferencia.vue', ['props', 'computed', 'methods'], pedido));
 const seleccionar = (opciones, claves) => Object.fromEntries(claves.map(k => [k, opciones[k]]));
 const crearCliente = productos => new Vue({
   data: () => ({ productos }),
-  computed: seleccionar(cliente, ['pesadasPorProducto', 'calcularTotalLimpioCliente', 'calcularKilosLimpioCliente', 'totalesAgrupadosPorClave']),
+  computed: seleccionar(cliente, ['pesadasPorProducto', 'totalesLimpioCliente', 'calcularTotalLimpioCliente', 'calcularKilosLimpioCliente', 'totalesAgrupadosPorClave']),
 });
 const crearProducto = p => new Vue({
   data: () => ({ producto: p }),

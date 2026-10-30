@@ -73,6 +73,14 @@
         <button class="btn btn-secondary" @click="mostrarEscalaResumen = false">Cancelar</button>
       </div>
 
+      <!-- Resumen del embarque completo (todos los clientes) -->
+      <div class="resumen-embarque-total" role="status" aria-live="polite" aria-label="Resumen del embarque">
+        <span class="resumen-embarque-etiqueta">Total embarque</span>
+        <span class="resumen-embarque-dato">Limpio {{ resumenEmbarqueTotal.limpio.taras }}T / {{ formatearKilosResumen(resumenEmbarqueTotal.limpio.kilos) }} kg</span>
+        <span class="resumen-embarque-sep" aria-hidden="true">·</span>
+        <span class="resumen-embarque-dato">Crudo {{ resumenEmbarqueTotal.crudo.taras }}T / {{ formatearKilosResumen(resumenEmbarqueTotal.crudo.kilos) }} kg</span>
+      </div>
+
       <!-- Botones Undo/Redo -->
       <p v-if="mensajeHistorial" role="status" class="alert alert-info">{{ mensajeHistorial }}</p>
       <div class="botones-undo-redo">
@@ -287,6 +295,7 @@ import { embarqueSyncMixin } from './mixins/embarqueSyncMixin';
 import { embarqueClientesMixin } from './mixins/embarqueClientesMixin';
 import { embarqueSonidosMixin } from './mixins/embarqueSonidosMixin';
 import ClienteProductos from './components/ClienteProductos.vue';
+import { resumenEmbarque, formatearKilos as formatearKilosResumen } from '@/utils/embarqueTotales';
 import { v4 as uuidv4 } from 'uuid';
 
 // Importar constantes y utilidades
@@ -528,6 +537,9 @@ export default {
       return resultado;
     },
     
+    resumenEmbarqueTotal() {
+      return resumenEmbarque(this.productosPorCliente, this.clienteCrudos);
+    },
     productosPorCliente() {
       
       const productosPorCliente = {};
@@ -669,6 +681,7 @@ export default {
   },
   
   methods: {
+    formatearKilosResumen(kilos) { return formatearKilosResumen(kilos); },
     async guardarAntesDeExportar() {
       await this.$nextTick();
       if (this._guardandoInicial || this._creandoEmbarque || this._inicializandoEmbarque) {
@@ -1704,6 +1717,18 @@ export default {
 </script>
 
 <style scoped>
+.resumen-embarque-total {
+  /* Solo móvil: en escritorio ya existe el resumen de la barra lateral. */
+  display: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px;
+  max-width: 100%; margin: 12px auto 4px; padding: 8px 14px; border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.25); background: rgba(16,27,45,.85); color: #e2e8f0;
+  font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; width: fit-content;
+}
+.resumen-embarque-etiqueta { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 768px) {
+  .resumen-embarque-total { display: flex; margin: 10px 0 2px; width: auto; font-size: 13px; padding: 8px 10px; }
+  .resumen-embarque-etiqueta { flex-basis: 100%; text-align: center; }
+}
 /* Aviso de edición colaborativa */
 /* Estilos base */
 .nuevo-embarque-container {
