@@ -255,7 +255,10 @@
                         :disabled="embarqueBloqueado"
                         enterkeyhint="enter"
                         @keydown.tab="handleTaraTab($event, taraIndex)"
-                        @keydown.enter="handlePesadaEnter($event, 'tara', taraIndex)">
+                        data-pesada
+                        @keydown="handlePesadaEnter($event, 'tara')"
+                        @keyup="handlePesadaEnter($event, 'tara')"
+                        @beforeinput="handlePesadaEnter($event, 'tara')">
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
                         tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
@@ -288,7 +291,10 @@
                         :disabled="embarqueBloqueado"
                         enterkeyhint="enter"
                         @keydown.tab="handleKiloTab($event, kiloIndex)"
-                        @keydown.enter="handlePesadaEnter($event, 'kilo', kiloIndex)">
+                        data-pesada
+                        @keydown="handlePesadaEnter($event, 'kilo')"
+                        @keyup="handlePesadaEnter($event, 'kilo')"
+                        @beforeinput="handlePesadaEnter($event, 'kilo')">
                 </div>
                 <div style="height: 38px"></div>
                 <div class="total">Total: {{ totalKilos }}</div>
@@ -344,7 +350,7 @@ import {
     PRECIO_MAQUILA_OZUNA_FALLBACK
 } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
-import { destinoEnterPesada } from '@/utils/pesadasEnterFoco';
+import { esEnterPesada, inputDestinoEnter } from '@/utils/pesadasEnterFoco';
 
 export default {
     directives: { campoColaborativo },
@@ -740,14 +746,18 @@ export default {
             this.enfocarInput(this.$refs.kiloInputs, taraIndex);
         },
 
-        handlePesadaEnter(event, campo, indice) {
-            // Android: la tecla "siguiente" del teclado salta en orden del DOM (siguiente Tara).
-            // Con enterkeyhint=enter llega como Enter y aquí decidimos el destino.
-            if (event.isComposing) return;
+        handlePesadaEnter(event, campo) {
+            // Android: según el teclado, Enter llega como keydown 13, como keydown 229 + keyup
+            // Enter, o como beforeinput insertLineBreak. Se atiende el primero que llegue.
+            if (!esEnterPesada(event)) return;
             event.preventDefault();
-            const destino = destinoEnterPesada(campo, indice, (this.producto.taras || []).length);
+            const input = event.target;
+            const ahora = Date.now();
+            if (this._ultimoEnterPesada && this._ultimoEnterPesada.input === input && ahora - this._ultimoEnterPesada.t < 400) return;
+            const destino = inputDestinoEnter(this.$el, campo, input);
             if (!destino) return;
-            this.enfocarInput(destino.campo === 'kilo' ? this.$refs.kiloInputs : this.$refs.taraInputs, destino.indice);
+            this._ultimoEnterPesada = { input: destino, t: ahora };
+            destino.focus();
         },
 
         handleKiloTab(event, kiloIndex) {
