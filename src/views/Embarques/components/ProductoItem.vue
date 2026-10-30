@@ -68,7 +68,7 @@
         </h2>
         <div v-if="mostrarIndicadoresProducto" class="producto-indicadores">
             <PedidoReferencia
-                :pedido-referencia="producto.pedidoReferencia"
+                :pedido-referencia="pedidoReferenciaEfectiva || {}"
                 :total-kilos="totalesCompartidos.totalKilos"
                 :total-taras="totalesCompartidos.totalTaras"
             />
@@ -329,6 +329,7 @@
 
 
 <script>
+import { claveReferenciaProducto, referenciaPedidoProducto, estadoPedido, totalTarasReportadas } from '@/utils/embarquePedidoEstado';
 import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
 import campoColaborativo from '@/directives/campoColaborativo';
 import { insertarFilaProducto, eliminarFilaProducto } from '@/utils/embarqueColaboracion';
@@ -453,16 +454,7 @@ export default {
             return this.producto.tipo || 'Sin Tipo';
         },
 
-        claveReferenciaProducto() {
-            // Usar nombreAlternativoPDF como medida efectiva para agrupar con el producto del pedido
-            const medidaEfectiva = this.producto.nombreAlternativoPDF || this.producto.medida;
-            const { medida, tipoDetectado } = this.normalizarMedidaParaReferencia(medidaEfectiva);
-            if (!medida) return null;
-            const tipoBase = (this.producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
-            const tipoPersonalizado = (this.producto.tipoPersonalizado || '').toString().trim().toLowerCase();
-            const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
-            return `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
-        },
+        claveReferenciaProducto() { return claveReferenciaProducto(this.producto); },
 
         totalesCompartidos() {
             if (!this.claveReferenciaProducto || !this.totalesAgrupadosPorClave[this.claveReferenciaProducto]) {
@@ -471,29 +463,10 @@ export default {
             return this.totalesAgrupadosPorClave[this.claveReferenciaProducto];
         },
 
-        tienePedidoReferencia() {
-            const referencia = this.producto.pedidoReferencia || {};
-            const normalizar = valor => Number(
-                typeof valor === 'string' ? valor.replace(',', '.') : (valor || 0)
-            ) || 0;
-            return normalizar(referencia.kilos) > 0 || normalizar(referencia.taras) > 0;
-        },
-
-        pedidoCubierto() {
-            if (!this.tienePedidoReferencia) return false;
-
-            const referencia = this.producto.pedidoReferencia || {};
-            const normalizar = valor => Number(
-                typeof valor === 'string' ? valor.replace(',', '.') : (valor || 0)
-            ) || 0;
-            const kilosPedido = normalizar(referencia.kilos);
-            const tarasPedido = normalizar(referencia.taras);
-
-            if (kilosPedido > 0) {
-                return this.totalesCompartidos.totalKilos >= kilosPedido;
-            }
-            return this.totalesCompartidos.totalTaras >= tarasPedido;
-        },
+        pedidoReferenciaEfectiva() { return referenciaPedidoProducto(this.producto, this.pedidoReferenciaCliente); },
+        estadoPedidoReferencia() { return estadoPedido(this.pedidoReferenciaEfectiva, this.totalesCompartidos); },
+        tienePedidoReferencia() { return this.estadoPedidoReferencia.tieneReferencia; },
+        pedidoCubierto() { return this.estadoPedidoReferencia.cubierto; },
 
         mostrarIndicadoresProducto() {
             return Boolean(this.producto.precio) || this.tienePedidoReferencia;
@@ -512,11 +485,7 @@ export default {
         },
 
         // Total de taras reportadas
-        totalTarasReportadas() {
-            return (this.producto.reporteTaras || []).reduce((total, tara) => {
-                return total + (parseInt(tara) || 0);
-            }, 0);
-        },
+        totalTarasReportadas() { return totalTarasReportadas(this.producto); },
 
         // Total de bolsas reportadas
         totalBolsasReportadas() {
@@ -569,7 +538,6 @@ export default {
     mounted() {
         // Asignar precio automático para todos los clientes
         this.asignarPrecioAutomatico();
-        this.actualizarPedidoReferencia();
         
         if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
             this.$emit('activar-incluir-precios-catarro');
@@ -578,18 +546,6 @@ export default {
     watch: {
         'producto.medida': function() {
             this.asignarPrecioAutomatico();
-            this.actualizarPedidoReferencia();
-        },
-        'producto.tipo': function() {
-            this.actualizarPedidoReferencia();
-        },
-        'producto.tipoPersonalizado': function() {
-            this.actualizarPedidoReferencia();
-        },
-        'producto.nombreAlternativoPDF': function() {
-            // El alias es exclusivamente visual/PDF. No recalcular contra el
-            // alias: el precio debe seguir ligado a producto.medida.
-            this.actualizarPedidoReferencia();
         },
         nombreCliente: function() {
             this.asignarPrecioAutomatico();
@@ -613,12 +569,6 @@ export default {
                     this.asignarPrecioAutomatico();
                 }
             }
-        },
-        pedidoReferenciaCliente: {
-            handler() {
-                this.actualizarPedidoReferencia();
-            },
-            deep: true
         },
         'producto.esVenta': {
             handler() {
@@ -658,68 +608,6 @@ export default {
                 this.$delete(this.producto, campo);
             });
         },
-        normalizarMedidaParaReferencia(valor) {
-            const texto = (valor || '').toString();
-            let medida = texto.toLowerCase();
-            let tipoDetectado = '';
-
-            if (medida.includes('s/h20') || medida.includes('s/h2o')) {
-                tipoDetectado = 's/h20';
-                medida = medida.replace(/s\/h2o|s\/h20/gi, ' ');
-            }
-            if (medida.includes('c/h20') || medida.includes('c/h2o')) {
-                tipoDetectado = 'c/h20';
-                medida = medida.replace(/c\/h2o|c\/h20/gi, ' ');
-            }
-
-            medida = medida.replace(/\s+/g, ' ').trim();
-            return { medida, tipoDetectado };
-        },
-        actualizarPedidoReferencia() {
-            const referenciaCliente = this.pedidoReferenciaCliente;
-            if (!referenciaCliente || !this.producto) {
-                this.producto.pedidoReferencia = null;
-                return;
-            }
-
-            const tipoPersonalizado = (this.producto.tipoPersonalizado || '').toString().trim().toLowerCase();
-
-            const buscarReferenciaPorMedida = (medidaTexto) => {
-                const { medida, tipoDetectado } = this.normalizarMedidaParaReferencia(medidaTexto);
-                if (!medida) return null;
-
-                const tipoBase = (this.producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
-
-                let ref = null;
-                if (tipoBase) {
-                    const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
-                    const clave = `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
-                    ref = referenciaCliente.porClave?.[clave] || null;
-                }
-
-                if (!ref && !tipoBase) {
-                    ref = referenciaCliente.porMedida?.[medida] || null;
-                }
-
-                return ref;
-            };
-
-            // Usar nombreAlternativoPDF como medida efectiva cuando exista,
-            // para mantener consistente la referencia con lo mostrado en el encabezado.
-            let referencia = null;
-            if (this.producto.nombreAlternativoPDF) {
-                referencia = buscarReferenciaPorMedida(this.producto.nombreAlternativoPDF);
-            }
-
-            if (!referencia) {
-                referencia = buscarReferenciaPorMedida(this.producto.medida);
-            }
-
-            this.producto.pedidoReferencia = referencia
-                ? { kilos: referencia.kilos || 0, taras: referencia.taras || 0 }
-                : null;
-        },
-
         // Hace que Tab alterne entre la tara y el kilo de la misma fila
         enfocarInput(inputs, index) {
             const input = Array.isArray(inputs) ? inputs[index] : null;
@@ -1126,7 +1014,6 @@ export default {
             }
             
             this.asignarPrecioAutomatico();
-            this.actualizarPedidoReferencia();
             this.actualizarProducto();
         },
 
@@ -1173,7 +1060,6 @@ export default {
             }
             
             this.asignarPrecioAutomatico();
-            this.actualizarPedidoReferencia();
             this.actualizarProducto();
             this.$emit('seleccionar-medida', this.producto, medida);
         },
@@ -1193,7 +1079,6 @@ export default {
             }
             
             this.asignarPrecioAutomatico();
-            this.actualizarPedidoReferencia();
             this.actualizarProducto();
         },
 

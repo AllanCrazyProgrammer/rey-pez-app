@@ -10,6 +10,7 @@
 </template>
 
 <script>
+import { estadoPedido, numeroPedido } from '@/utils/embarquePedidoEstado';
 export default {
   name: 'PedidoReferencia',
   props: {
@@ -41,13 +42,8 @@ export default {
       return this.kilos > 0 || this.taras > 0;
     },
     claseCumplimiento() {
-      if (this.kilos === 0 && this.taras === 0) {
-        return 'neutro';
-      }
-      if (this.kilos > 0) {
-        return this.totalKilos >= this.kilos ? 'cumple' : 'falta';
-      }
-      return this.totalTaras >= this.taras ? 'cumple' : 'falta';
+      const estado = estadoPedido({ kilos: this.kilos, taras: this.taras }, this);
+      return !estado.tieneReferencia ? 'neutro' : estado.cubierto ? 'cumple' : 'falta';
     },
     textoReferencia() {
       if (this.kilos > 0 && this.taras > 0) {
@@ -63,14 +59,7 @@ export default {
     }
   },
   methods: {
-    normalizarNumero(valor) {
-      if (valor === null || valor === undefined || valor === '') {
-        return 0;
-      }
-      const limpio = typeof valor === 'string' ? valor.replace(',', '.') : valor;
-      const numero = Number(limpio);
-      return Number.isNaN(numero) ? 0 : numero;
-    },
+    normalizarNumero: numeroPedido,
     formatearCantidad(valor) {
       const redondeado = Number.isInteger(valor) ? valor : Number(valor.toFixed(1));
       return redondeado;

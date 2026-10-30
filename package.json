@@ -32,7 +32,8 @@
     "test:deudas": "node --test scripts/test-deudas-saldo.cjs",
     "test:embarques-presencia": "node --test scripts/test-embarques-presencia.cjs",
     "test:embarques-presencia-rtdb": "node --test scripts/test-embarques-presencia-rtdb.cjs",
-    "test:embarques-pesadas": "node --test scripts/test-embarques-pesadas.cjs"
+    "test:embarques-pesadas": "node --test scripts/test-embarques-pesadas.cjs",
+    "test:embarques-movil": "node --test scripts/test-embarques-movil.cjs"
   },
   "dependencies": {
     "@capacitor/android": "6.1.2",

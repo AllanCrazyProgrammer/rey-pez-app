@@ -3,10 +3,11 @@ const assert = require('node:assert/strict');
 const Vue = require('vue');
 const { loadSource, vueOptions } = require('./helpers/embarques-source.cjs');
 const { calcularTotalesPesadas } = loadSource('src/utils/embarquePesadas.js');
+const pedido = loadSource('src/utils/embarquePedidoEstado.js');
 const base = 'src/views/Embarques/components/';
-const cliente = vueOptions(base + 'ClienteProductos.vue', ['computed'], { calcularTotalesPesadas }).computed;
-const producto = vueOptions(base + 'ProductoItem.vue', ['computed'], { calcularTotalesPesadas }).computed;
-const PedidoReferencia = Vue.extend(vueOptions(base + 'PedidoReferencia.vue', ['props', 'computed', 'methods']));
+const cliente = vueOptions(base + 'ClienteProductos.vue', ['computed'], { calcularTotalesPesadas, ...pedido }).computed;
+const producto = vueOptions(base + 'ProductoItem.vue', ['computed'], { calcularTotalesPesadas, ...pedido }).computed;
+const PedidoReferencia = Vue.extend(vueOptions(base + 'PedidoReferencia.vue', ['props', 'computed', 'methods'], pedido));
 const seleccionar = (opciones, claves) => Object.fromEntries(claves.map(k => [k, opciones[k]]));
 const crearCliente = productos => new Vue({
   data: () => ({ productos }),

@@ -1,5 +1,5 @@
 <template>
-    <div class="cliente-grupo" :style="{ '--cliente-color': clienteVisualColor }" v-show="clienteActivo === clienteId || clienteActivo === null">
+    <div class="cliente-grupo" :class="{ 'menu-cliente-abierto': menuClienteAbierto }" :style="{ '--cliente-color': clienteVisualColor }" v-show="clienteActivo === clienteId || clienteActivo === null">
         <div class="cliente-header sticky-header" :data-cliente="nombreCliente">
             <div class="cliente-info">
                 <h3>
@@ -17,7 +17,13 @@
                         }}Kg</span>
                 </div>
             </div>
-            <div class="cliente-header-controls">
+            <button type="button" class="menu-cliente-toggle" :aria-expanded="menuClienteAbierto ? 'true' : 'false'"
+                :aria-controls="'cliente-opciones-' + clienteId" :aria-label="(menuClienteAbierto ? 'Cerrar opciones de ' : 'Opciones de ') + nombreCliente"
+                @click="menuClienteAbierto = !menuClienteAbierto">
+                <i class="fas" :class="menuClienteAbierto ? 'fa-times' : 'fa-sliders-h'" aria-hidden="true"></i>
+                {{ menuClienteAbierto ? 'Cerrar opciones' : 'Opciones' }}
+            </button>
+            <div class="cliente-header-controls" :id="'cliente-opciones-' + clienteId">
                 <div class="juntar-medidas-checkbox">
                     <input type="checkbox" :id="'juntar-medidas-' + clienteId"
                         v-model="clientesJuntarMedidas[clienteId]" @change="handleJuntarMedidasChange" @click.stop
@@ -110,12 +116,28 @@
             </div>
         </div>
 
+        <section class="medidas-movil" :aria-label="'Medidas del pedido de ' + nombreCliente">
+            <div class="medidas-movil-titulo">Medidas del pedido <span>{{ opcionesMedidasMovil.length }}</span></div>
+            <div v-if="opcionesMedidasMovil.length" class="medidas-movil-lista">
+                <button type="button" class="medida-movil-chip" :aria-pressed="!medidaMovilSeleccionada ? 'true' : 'false'"
+                    @click="medidaMovilActiva = null">Todas</button>
+                <button v-for="opcion in opcionesMedidasMovil" :key="opcion.clave" type="button" class="medida-movil-chip"
+                    :class="opcion.cubierto ? 'medida-cubierta' : 'medida-pendiente'"
+                    :aria-pressed="medidaMovilActiva === opcion.clave ? 'true' : 'false'" @click="medidaMovilActiva = opcion.clave">
+                    <span>{{ opcion.medida }}</span>
+                    <small class="medida-tipo" :class="'tipo-' + opcion.categoria">{{ opcion.tipo }}</small>
+                    <small class="medida-estado">{{ opcion.cubierto ? '✓ ' : '' }}{{ opcion.etiqueta || (opcion.cubierto ? 'Completo' : opcion.tieneReferencia ? 'Pendiente' : 'Sin referencia') }}</small>
+                </button>
+            </div>
+            <p v-else>Agrega un producto o genera el esqueleto para ver sus medidas aquí.</p>
+        </section>
+
         <div class="productos-container">
             <!-- Lista de productos -->
             <!-- Key por id estable (no por índice): si otro editor inserta un
                  producto y la lista se recorre, el key por índice re-enlazaba
                  el input con foco a OTRO producto y lo tecleado "desaparecía". -->
-            <ProductoItem :editores-colaboracion="editoresColaboracion" v-for="(producto, index) in productos" :key="producto.id || ('idx-' + index)" :producto="producto"
+            <ProductoItem :class="{ 'fuera-medida-movil': medidaMovilSeleccionada && medidaMovilSeleccionada.productoId !== producto.id }" :editores-colaboracion="editoresColaboracion" v-for="(producto, index) in productos" :key="producto.id || ('idx-' + index)" :producto="producto"
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
                 :pedido-referencia-cliente="pedidoReferenciaPorCliente[clienteId] || null"
                 :totales-agrupados-por-clave="totalesAgrupadosPorClave"
@@ -131,28 +153,30 @@
                 @activar-incluir-precios-catarro="activarIncluirPreciosCatarro" />
 
             <!-- Lista de crudos -->
-            <CrudoItem :editores-colaboracion="editoresColaboracion" v-for="(crudo, index) in crudos" :key="crudo.id" :crudo="crudo"
+            <CrudoItem :class="{ 'fuera-medida-movil': medidaMovilSeleccionada && medidaMovilSeleccionada.crudoId !== crudo.id }"
+                :item-movil-activo="medidaMovilSeleccionada && medidaMovilSeleccionada.crudoId === crudo.id ? medidaMovilSeleccionada.itemId : null" :editores-colaboracion="editoresColaboracion" v-for="(crudo, index) in crudos" :key="crudo.id" :crudo="crudo"
                 :embarque-bloqueado="embarqueBloqueado" :cliente-id="clienteId" :crudo-index="index"
                 :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque" :nombre-cliente="nombreCliente"
                 :pedido-referencia-crudos="pedidoReferenciaCrudosPorCliente[clienteId] || null"
                 @update:crudo="actualizarCrudo(index, $event)"
                 @eliminar-crudo="$emit('eliminar-crudo', $event, clienteId)"
                 @eliminar-crudo-item="$emit('eliminar-crudo-item', clienteId, ...$event)"
-                @agregar-crudo-item="$emit('agregar-crudo-item', clienteId, $event)"
+                @agregar-crudo-item="medidaMovilActiva = null; $emit('agregar-crudo-item', clienteId, $event)"
                 @toggle-sobrante="$emit('toggle-sobrante', clienteId, ...$event)"
                 @mostrar-modal-precio="$emit('mostrar-modal-precio', $event)" />
         </div>
 
         <div class="botones-agregar">
-            <button type="button" @click="$emit('agregar-producto', clienteId)"
+            <button type="button" @click="medidaMovilActiva = null; $emit('agregar-producto', clienteId)"
                 class="btn btn-primary btn-sm agregar-producto" :disabled="embarqueBloqueado">Agregar Producto</button>
-            <button type="button" @click="$emit('agregar-crudo', clienteId)" class="btn btn-info btn-sm agregar-crudo" s
+            <button type="button" @click="medidaMovilActiva = null; $emit('agregar-crudo', clienteId)" class="btn btn-info btn-sm agregar-crudo" s
                 :disabled="embarqueBloqueado">Agregar Crudos</button>
         </div>
     </div>
 </template>
 
 <script>
+import { claveReferenciaProducto, estadoPedido, estadoMedidaProducto, tarasCrudoPorTalla, referenciaPedidoProducto } from '@/utils/embarquePedidoEstado';
 import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
 
 import ProductoItem from './ProductoItem.vue';
@@ -284,7 +308,30 @@ export default {
         'abrir-modal-pdf-fecha'
     ],
 
+    data() { return { menuClienteAbierto: false, medidaMovilActiva: null }; },
     computed: {
+        opcionesMedidasMovil() {
+            const productos = this.productos.filter(p => p.id).map(p => ({
+                clave: 'producto:' + p.id, productoId: p.id,
+                medida: p.nombreAlternativoPDF || p.medida || 'Producto nuevo',
+                ...estadoMedidaProducto(p, calcularTotalesPesadas(p), this.totalesAgrupadosPorClave[claveReferenciaProducto(p)] || calcularTotalesPesadas(p), referenciaPedidoProducto(p, this.pedidoReferenciaPorCliente[this.clienteId])),
+                categoria: /^s\/h2[o0]$/i.test(p.tipo || '') ? 'sin-agua' : /^c\/h2[o0]$/i.test(p.tipo || '') ? 'con-agua' : 'otro',
+                tipo: p.tipo === 'otro' ? (p.tipoPersonalizado || 'Otro') : (p.tipo || 'Limpio'),
+            }));
+            const referenciasCrudo = this.pedidoReferenciaCrudosPorCliente[this.clienteId] || {};
+            const crudos = this.crudos.flatMap(g => {
+                const totales = tarasCrudoPorTalla(g.items);
+                return (g.items || []).filter(i => i.id).map(i => ({
+                clave: 'crudo:' + g.id + ':' + i.id, crudoId: g.id, itemId: i.id,
+                medida: i.talla || 'Crudo nuevo', tipo: 'Crudo', categoria: 'crudo',
+                ...estadoPedido(referenciasCrudo[i.talla] || i.pedidoReferencia, { totalTaras: totales[String(i.talla || i.medida || '').trim()] || 0, totalKilos: 0 }),
+            }));
+            });
+            return [...productos, ...crudos].sort((a, b) => Number(a.cubierto) - Number(b.cubierto));
+        },
+        medidaMovilSeleccionada() {
+            return this.opcionesMedidasMovil.find(o => o.clave === this.medidaMovilActiva) || null;
+        },
         clienteVisualColor() {
             const nombre = (this.nombreCliente || '').toLowerCase();
             if (nombre.includes('joselito')) return '#3498db';
@@ -379,34 +426,11 @@ export default {
         totalesAgrupadosPorClave() {
             const mapa = {};
 
-            const normalizarMedida = (valor) => {
-                const texto = (valor || '').toString();
-                let medida = texto.toLowerCase();
-                let tipoDetectado = '';
-                if (medida.includes('s/h20') || medida.includes('s/h2o')) {
-                    tipoDetectado = 's/h20';
-                    medida = medida.replace(/s\/h2o|s\/h20/gi, ' ');
-                }
-                if (medida.includes('c/h20') || medida.includes('c/h2o')) {
-                    tipoDetectado = 'c/h20';
-                    medida = medida.replace(/c\/h2o|c\/h20/gi, ' ');
-                }
-                medida = medida.replace(/\s+/g, ' ').trim();
-                return { medida, tipoDetectado };
-            };
-
             this.productos.forEach((producto, indice) => {
                 if (!producto || (!producto.medida && !producto.nombreAlternativoPDF)) return;
 
-                // Usar nombreAlternativoPDF como medida efectiva para agrupar con el producto del pedido
-                const medidaEfectiva = producto.nombreAlternativoPDF || producto.medida;
-                const { medida, tipoDetectado } = normalizarMedida(medidaEfectiva);
-                if (!medida) return;
-
-                const tipoBase = (producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
-                const tipoPersonalizado = (producto.tipoPersonalizado || '').toString().trim().toLowerCase();
-                const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
-                const clave = `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
+                const clave = claveReferenciaProducto(producto);
+                if (!clave) return;
 
                 const { totalTaras, totalKilos } = this.pesadasPorProducto[indice];
 
@@ -1039,5 +1063,35 @@ button:disabled {
     .cliente-header-controls .btn { flex: 1 1 130px; justify-content: center; }
     .productos-container { padding: 16px 12px; }
     .botones-agregar { padding: 0 12px 14px; }
+}
+.menu-cliente-toggle, .medidas-movil { display: none; }
+@media (max-width: 768px) {
+    .cliente-grupo .cliente-header { position: relative; top: auto; gap: 10px; padding: 12px; }
+    .cliente-info { width: 100%; }
+    .cliente-info h3 { margin: 0; font-size: 18px; }
+    .cliente-totales { margin: 8px 0 0; gap: 6px; font-size: 12px; }
+    .cliente-totales span { padding: 5px 8px; }
+    .menu-cliente-toggle { display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; gap: 7px; min-height: 44px; padding: 8px 12px; border: 1px solid rgba(148,163,184,.22); border-radius: 10px; color: #dbeafe; background: rgba(148,163,184,.08); font-size: 13px; }
+    .cliente-grupo:not(.menu-cliente-abierto) .cliente-header-controls { display: none; }
+    .medidas-movil { display: block; min-width: 0; margin: 10px 0; padding: 12px; border: 1px solid rgba(148,163,184,.18); border-radius: 12px; background: #101b2d; color: #e2e8f0; }
+    .medidas-movil-titulo { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+    .medidas-movil-titulo span { color: #94a3b8; font-weight: 400; }
+    .medidas-movil-lista { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; }
+    .medida-movil-chip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 44px; max-width: 220px; padding: 7px 12px; border: 1px solid #334155; border-radius: 10px; background: #172338; color: #e2e8f0; text-align: left; font-size: 14px; }
+    .medida-movil-chip span { overflow-wrap: anywhere; }
+    .medida-movil-chip small { color: #94a3b8; font-size: 11px; }
+    .medida-movil-chip[aria-pressed="true"] { background: #23334c; box-shadow: inset 0 0 0 1px #e2e8f0; color: #fff; }
+    .medida-movil-chip.medida-pendiente { border: 2px solid #fb7185; }
+    .medida-movil-chip.medida-cubierta { border: 2px solid #4ade80; }
+    .medida-pendiente .medida-estado { color: #fda4af; }
+    .medida-cubierta .medida-estado { color: #86efac; }
+    .medida-movil-chip .medida-tipo { display: inline-block; padding: 2px 6px; margin: 4px 0; border-radius: 5px; font-weight: 700; }
+    .medida-tipo.tipo-sin-agua { color: #e9d5ff; background: #581c87; }
+    .medida-tipo.tipo-con-agua { color: #bae6fd; background: #075985; }
+    .medida-tipo.tipo-crudo { color: #fde68a; background: #78350f; }
+    .medida-tipo.tipo-otro { color: #e2e8f0; background: #334155; }
+    .medidas-movil p { margin: 0; font-size: 12px; color: #94a3b8; }
+    .menu-cliente-toggle:focus-visible, .medida-movil-chip:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+    .productos-container > .fuera-medida-movil { display: none; }
 }
 </style>

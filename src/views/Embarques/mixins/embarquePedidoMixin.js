@@ -2,6 +2,7 @@ import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
 import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { normalizarMedidaCrudoEmbarque } from '@/utils/medidasPedidoCrudo';
+import { medidaSinAnotaciones } from '@/utils/embarquePedidoEstado';
 
 export const embarquePedidoMixin = {
   data() {
@@ -53,7 +54,7 @@ export const embarquePedidoMixin = {
       const clientesLimpios = ['joselito', 'catarro', 'otilio', 'ozuna', 'lorena', 'veronica'];
 
       const asegurarCliente = (clienteId) => {
-        if (!referencias[clienteId]) referencias[clienteId] = { porClave: {}, porMedida: {} };
+        if (!referencias[clienteId]) referencias[clienteId] = { porClave: {}, porMedida: {}, porClaveSinAnotaciones: {} };
         return referencias[clienteId];
       };
 
@@ -83,6 +84,13 @@ export const embarquePedidoMixin = {
         const clave = `${medidaNormalizada}__${tipoNormalizado}__${tipoPersonalizado}`;
 
         const referenciaCliente = asegurarCliente(clienteId);
+        const claveSinNota = `${medidaSinAnotaciones(medidaNormalizada)}__${tipoNormalizado}__${tipoPersonalizado}`;
+        const equivalencias = referenciaCliente.porClaveSinAnotaciones;
+        if (!Object.prototype.hasOwnProperty.call(equivalencias, claveSinNota)) {
+          equivalencias[claveSinNota] = clave;
+        } else if (equivalencias[claveSinNota] !== clave) {
+          equivalencias[claveSinNota] = null; // Hay varias variantes: exigir coincidencia exacta.
+        }
         const referenciaClave = referenciaCliente.porClave[clave] || { kilos: 0, taras: 0 };
         const referenciaMedida = referenciaCliente.porMedida[medidaNormalizada] || { kilos: 0, taras: 0 };
 

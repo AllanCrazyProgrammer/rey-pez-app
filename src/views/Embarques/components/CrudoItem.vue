@@ -3,7 +3,7 @@
         <h2 class="crudo-header">Crudos</h2>
 
         <div class="crudo-items">
-            <div v-for="(item, itemIndex) in crudoData.items || []" :key="item.id" class="crudo-item"
+            <div v-for="(item, itemIndex) in crudoData.items || []" :key="item.id" class="crudo-item" :class="{ 'fuera-medida-movil': itemMovilActivo && item.id !== itemMovilActivo }"
                 :data-es-venta="item.esVenta">
                 <div class="crudo-talla-container">
                     <button @click="abrirModalPrecio(item)" class="btn-precio" :class="{ 'tiene-precio': item.precio }"
@@ -86,6 +86,7 @@
 </template>
 
 <script>
+import { tarasCrudoPorTalla } from '@/utils/embarquePedidoEstado';
 import campoColaborativo from '@/directives/campoColaborativo';
 import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
 import PedidoReferencia from './PedidoReferencia.vue';
@@ -99,6 +100,7 @@ export default {
         PedidoReferencia
     },
     props: {
+        itemMovilActivo: { type: String, default: null },
         editoresColaboracion: { type: Array, default: () => [] },
         crudo: {
             type: Object,
@@ -225,18 +227,7 @@ export default {
         },
 
         // Suma de taras (+ sobrante) por talla para todos los items del crudo
-        totalTarasPorTalla() {
-            const mapa = {};
-            (this.crudoData.items || []).forEach(item => {
-                const talla = (item.talla || item.medida || '').toString().trim();
-                if (!talla) return;
-                const taras = this.extraerNumero(item.taras);
-                const sobrante = this.extraerNumero(item.sobrante);
-                const sobrante2 = this.extraerNumero(item.sobrante2);
-                mapa[talla] = (mapa[talla] || 0) + taras + sobrante + sobrante2;
-            });
-            return mapa;
-        }
+        totalTarasPorTalla() { return tarasCrudoPorTalla(this.crudoData.items); }
     },
 
     methods: {
@@ -1059,4 +1050,5 @@ button:disabled {
 .crudo-talla-container > .btn-precio {
     margin-bottom: 9px;
 }
+@media (max-width: 768px) { .crudo-items > .fuera-medida-movil { display: none; } }
 </style>

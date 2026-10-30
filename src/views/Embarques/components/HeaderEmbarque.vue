@@ -1,18 +1,27 @@
 <!-- HeaderEmbarque.vue -->
 <template>
-  <div class="header-embarque">
+  <div class="header-embarque" :class="{ 'menu-movil-abierto': menuMovilAbierto }">
     <div class="header-hero">
       <div class="titulo-embarque">
         <h1>
           <span class="titulo-icono"><i class="fas fa-ship"></i></span>
           {{ modoEdicion ? 'Embarque' : 'Nuevo embarque' }}
         </h1>
+        <div class="resumen-embarque" aria-label="Fecha y responsable del embarque">
+          <time :datetime="embarque.fecha || null">{{ fechaResumen }}</time>
+          <span>Carga: {{ embarque.cargaCon || 'Sin asignar' }}</span>
+        </div>
       </div>
       <div class="estado-operacion">
         <span class="estado-punto" :class="{ 'estado-punto--alerta': embarqueBloqueado }"></span>
         <strong>{{ embarqueBloqueado ? 'Protegido' : 'Editable' }}</strong>
       </div>
-      <div class="botones">
+      <button type="button" class="menu-movil-toggle" :aria-expanded="menuMovilAbierto ? 'true' : 'false'"
+        aria-controls="embarque-herramientas embarque-acciones embarque-datos" @click="menuMovilAbierto = !menuMovilAbierto">
+        <i class="fas" :class="menuMovilAbierto ? 'fa-times' : 'fa-sliders-h'" aria-hidden="true"></i>
+        {{ menuMovilAbierto ? 'Cerrar menú' : 'Menú del embarque' }}
+      </button>
+      <div id="embarque-herramientas" class="botones">
         <button
           type="button"
           class="btn-sonidos"
@@ -50,7 +59,7 @@
       </div>
     </div>
 
-    <div class="botones-accion">
+    <div id="embarque-acciones" class="botones-accion">
       <!-- Siempre renderizado: evita que el encabezado salte durante cada
            ciclo de guardado automático. Solo cambia su estado visual. -->
       <button
@@ -96,7 +105,7 @@
       </precios-historial-modal>
     </div>
 
-    <div class="header datos-operacion">
+    <div id="embarque-datos" class="header datos-operacion">
       <div class="header-row">
         <div class="fecha-selector">
           <span class="selector-icono"><i class="far fa-calendar-alt"></i></span>
@@ -196,16 +205,26 @@ export default {
   },
   data() {
     return {
+      menuMovilAbierto: false,
       fechaLocal: this.embarque.fecha,
       cargaConLocal: this.embarque.cargaCon
     };
   },
   computed: {
+    fechaResumen() {
+      const fecha = /^\d{4}-\d{2}-\d{2}$/.test(this.embarque.fecha || '')
+        ? new Date(this.embarque.fecha + 'T12:00:00Z') : null;
+      if (!fecha || Number.isNaN(fecha.getTime())) return 'Sin fecha';
+      return new Intl.DateTimeFormat('es-MX', {
+        weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
+      }).format(fecha);
+    },
     navbarPrincipalVisible() {
       return useUIStore().navbarVisibleEnEmbarque;
     }
   },
   watch: {
+    embarqueId() { this.menuMovilAbierto = false; },
     'embarque.fecha'(newVal) {
       this.fechaLocal = newVal;
     },
@@ -541,7 +560,8 @@ label {
   flex-wrap: wrap;
 }
 
-.titulo-embarque { margin-right: auto; }
+.titulo-embarque { margin-right: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.resumen-embarque { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 11px; line-height: 1.4; color: #b8c6db; }
 
 .titulo-embarque h1 {
   display: flex;
@@ -802,4 +822,15 @@ label {
   }
 }
 
+.menu-movil-toggle { display: none; }
+@media (max-width: 768px) {
+  .header-embarque { padding: 12px; margin-bottom: 10px; }
+  .header-hero { margin-bottom: 0; }
+  .header-embarque:not(.menu-movil-abierto) .botones,
+  .header-embarque:not(.menu-movil-abierto) .botones-accion,
+  .header-embarque:not(.menu-movil-abierto) .datos-operacion { display: none; }
+  .menu-movil-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1 0 100%; min-height: 44px; padding: 8px 12px; margin-top: 4px; color: #dbeafe; background: rgba(148,163,184,.08); border: 1px solid rgba(148,163,184,.22); border-radius: 10px; font-size: 13px; font-weight: 650; }
+  .menu-movil-toggle:focus-visible { outline: 2px solid #38d9ff; outline-offset: 2px; }
+  .menu-movil-abierto .botones { margin-top: 8px; }
+}
 </style>
