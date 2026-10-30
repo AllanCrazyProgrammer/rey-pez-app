@@ -13,6 +13,12 @@
       >
       <span class="scale-value">{{ (contentScale * 100).toFixed(0) }}%</span>
     </div>
+    <label class="medidas-color-toggle">
+      <input v-model="resaltarMedidas" type="checkbox" role="switch" :disabled="generandoPreviewPdf">
+      <span class="medidas-color-track" aria-hidden="true"></span>
+      <span>Resaltar medidas con color</span>
+      <span class="medidas-color-state">{{ resaltarMedidas ? 'Activado' : 'Apagado' }}</span>
+    </label>
     <div class="buttons-container">
       <button @click="abrirVistaPreviaPDF" class="btn-preview-pdf" :disabled="generandoPreviewPdf">
         <i class="fas fa-eye"></i>
@@ -84,6 +90,13 @@
             <i class="fas fa-download"></i> Descargar PDF
           </button>
         </div>
+
+    <label class="medidas-color-toggle medidas-color-toggle-modal">
+      <input v-model="resaltarMedidas" type="checkbox" role="switch" :disabled="generandoPreviewPdf" @change="actualizarVistaPreviaPDF">
+      <span class="medidas-color-track" aria-hidden="true"></span>
+      <span>Resaltar medidas con color</span>
+      <span class="medidas-color-state">{{ resaltarMedidas ? 'Activado' : 'Apagado' }}</span>
+    </label>
 
         <div class="pdf-preview-frame-shell">
           <div v-if="generandoPreviewPdf" class="pdf-preview-loading">
@@ -747,6 +760,7 @@ export default {
       filasImagenCajas: [],
       pendientesImagenCajas: [],
       contentScale: 1,
+      resaltarMedidas: false,
       mostrarPreviewPdf: false,
       generandoPreviewPdf: false,
       pdfPreviewUrl: '',
@@ -899,6 +913,7 @@ export default {
       }
     },
     async prepararColoresPDF() {
+      if (!this.resaltarMedidas) return;
       // Esperar el catálogo evita imprimir colores por defecto mientras llegan los guardados.
       const cargadas = await this._cargaMedidasCatalogo;
       if (!cargadas) {
@@ -1377,7 +1392,7 @@ export default {
       return this.esMedidaMacuil(medida) ? '' : (medida || '');
     },
     estiloMedida(medida) {
-      if (this.esMedidaMacuil(medida)) return {};
+      if (!this.resaltarMedidas || this.esMedidaMacuil(medida)) return {};
       return {
         backgroundColor: this.colorMedida(medida),
         color: '#000000'
@@ -1392,7 +1407,7 @@ export default {
         text,
         fontSize,
         color: '#000000',
-        background: this.colorMedida(medida)
+        ...(this.resaltarMedidas ? { background: this.colorMedida(medida) } : {})
       };
     },
     tipoParaImpresion(tipo) {
@@ -4178,4 +4193,56 @@ h4.cliente-header.ozuna-header {
     gap: 8px;
   }
 }
+</style>
+
+<style scoped>
+.medidas-color-toggle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 48px;
+  margin: 12px auto;
+  padding: 10px 14px;
+  border: 1px solid #587563;
+  border-radius: 8px;
+  background: #07110c;
+  color: #eefcf3;
+  font: 1rem/1.5 Arial, sans-serif;
+  cursor: pointer;
+}
+.medidas-color-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.medidas-color-track {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid #b6c9bd;
+  border-radius: 16px;
+  background: #46584d;
+}
+.medidas-color-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+}
+.medidas-color-toggle input:checked + .medidas-color-track { background: #39f6a0; border-color: #39f6a0; }
+.medidas-color-toggle input:checked + .medidas-color-track::after { left: 23px; background: #07110c; }
+.medidas-color-toggle input:focus-visible + .medidas-color-track { outline: 3px solid #ffc247; outline-offset: 3px; }
+.medidas-color-toggle input:disabled ~ span { opacity: .65; cursor: wait; }
+.medidas-color-state { color: #c5ddce; font-weight: 700; }
+.medidas-color-toggle-modal { margin: 12px 20px; }
+@media print { .medidas-color-toggle { display: none !important; } }
 </style>

@@ -141,7 +141,7 @@ test('agrega medidas con colores similares o repetidos y los conserva al recarga
     assert.equal(vm.newMedida.nombre, '');
     assert.equal(vm.newMedida.colorPdf, '');
   }
-  const pdf = context(print, { medidasCatalogo: vm.medidas, etiquetasPedido: [], etiquetasColoresPedido: {} });
+  const pdf = context(print, { resaltarMedidas: true, medidasCatalogo: vm.medidas, etiquetasPedido: [], etiquetasColoresPedido: {} });
   const items = records.map(m => ({ kilos: 5, medida: m.nombre }));
   for (const table of [pdf.generarTablaCliente(items), pdf.generarTablaClienteReducido(items)]) {
     records.forEach((m, i) => {
@@ -167,7 +167,7 @@ test('si falla el guardado, el selector y la muestra conservan el color anterior
 });
 
 test('ambos formatos del PDF sombrean solo la medida y conservan etiquetas, notas y tipos', async () => {
-  const vm = context(print, { medidasCatalogo: [{ nombre: '51/60', colorPdf: '#FF0000' }], etiquetasPedido: [], etiquetasColoresPedido: {} });
+  const vm = context(print, { resaltarMedidas: true, medidasCatalogo: [{ nombre: '51/60', colorPdf: '#FF0000' }], etiquetasPedido: [], etiquetasColoresPedido: {} });
   const items = [
     { kilos: 5, esTara: true, medida: '51/60', tipo: 'C/H20', nota: 'Kileado', proveedor: 'Proveedor' },
     { kilos: 15, medida: '51/60', tipo: 'S/H20' },
@@ -194,7 +194,7 @@ test('ambos formatos del PDF sombrean solo la medida y conservan etiquetas, nota
 test('generar la vista PDF espera los colores del catálogo y no continúa si no puede cargarlos', async () => {
   let finish;
   let ready = false;
-  const vm = context(print, { _cargaMedidasCatalogo: new Promise(resolve => { finish = resolve; }) });
+  const vm = context(print, { resaltarMedidas: true, _cargaMedidasCatalogo: new Promise(resolve => { finish = resolve; }) });
   const pending = vm.prepararColoresPDF().then(() => { ready = true; });
   await Promise.resolve();
   assert.equal(ready, false);
@@ -211,4 +211,23 @@ test('compilan las plantillas de configuración y vista previa', () => {
     const sfc = compiler.parseComponent(fs.readFileSync(path.join(root, file), 'utf8'));
     assert.deepEqual(compiler.compile(sfc.template.content).errors, []);
   }
+});
+
+
+test('el resaltado inicia apagado y alterna en pantalla y ambos formatos del PDF', async () => {
+  const vm = context(print, { ...print.data.call({}), medidasCatalogo: [{ nombre: '51/60', colorPdf: '#FF0000' }], etiquetasPedido: [], etiquetasColoresPedido: {} });
+  assert.equal(vm.resaltarMedidas, false);
+  const items = [{ kilos: 5, medida: '51/60', tipo: 'C/H20', nota: 'Kileado' }];
+  for (const activo of [false, true, false]) {
+    vm.resaltarMedidas = activo;
+    assert.equal(vm.estiloMedida('51/60').backgroundColor, activo ? '#FF5F5F' : undefined);
+    for (const tabla of [vm.generarTablaCliente(items), vm.generarTablaClienteReducido(items)]) {
+      const medida = tabla.table.body[0][1].stack[0];
+      assert.equal(medida.text, '51/60');
+      assert.equal(medida.background, activo ? '#FF5F5F' : undefined);
+      assert.ok(JSON.stringify(tabla).includes('Kileado'));
+    }
+  }
+  vm.cargarMedidasCatalogo = async () => { throw new Error('No requiere colores con resaltado apagado'); };
+  await vm.prepararColoresPDF();
 });
