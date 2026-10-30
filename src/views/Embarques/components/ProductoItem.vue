@@ -253,7 +253,9 @@
                         @focus="$event.target.select()"
                         @blur="actualizarProducto"
                         :disabled="embarqueBloqueado"
-                        @keydown.tab="handleTaraTab($event, taraIndex)">
+                        enterkeyhint="enter"
+                        @keydown.tab="handleTaraTab($event, taraIndex)"
+                        @keydown.enter="handlePesadaEnter($event, 'tara', taraIndex)">
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
                         tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
@@ -284,7 +286,9 @@
                         @focus="$event.target.select()"
                         @blur="actualizarProducto"
                         :disabled="embarqueBloqueado"
-                        @keydown.tab="handleKiloTab($event, kiloIndex)">
+                        enterkeyhint="enter"
+                        @keydown.tab="handleKiloTab($event, kiloIndex)"
+                        @keydown.enter="handlePesadaEnter($event, 'kilo', kiloIndex)">
                 </div>
                 <div style="height: 38px"></div>
                 <div class="total">Total: {{ totalKilos }}</div>
@@ -340,6 +344,7 @@ import {
     PRECIO_MAQUILA_OZUNA_FALLBACK
 } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
+import { destinoEnterPesada } from '@/utils/pesadasEnterFoco';
 
 export default {
     directives: { campoColaborativo },
@@ -733,6 +738,16 @@ export default {
             }
             event.preventDefault();
             this.enfocarInput(this.$refs.kiloInputs, taraIndex);
+        },
+
+        handlePesadaEnter(event, campo, indice) {
+            // Android: la tecla "siguiente" del teclado salta en orden del DOM (siguiente Tara).
+            // Con enterkeyhint=enter llega como Enter y aquí decidimos el destino.
+            if (event.isComposing) return;
+            event.preventDefault();
+            const destino = destinoEnterPesada(campo, indice, (this.producto.taras || []).length);
+            if (!destino) return;
+            this.enfocarInput(destino.campo === 'kilo' ? this.$refs.kiloInputs : this.$refs.taraInputs, destino.indice);
         },
 
         handleKiloTab(event, kiloIndex) {
