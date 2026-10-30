@@ -54,4 +54,8 @@ test('NuevoEmbarque lo calcula en vivo y lo pinta arriba de Deshacer', () => {
   } finally { vm.$destroy(); }
   const src = fs.readFileSync(path.resolve(__dirname, '..', base + 'NuevoEmbarque.vue'), 'utf8');
   assert.ok(src.indexOf('resumen-embarque-total') < src.indexOf('class="botones-undo-redo"'));
+  // Solo móvil: oculto por defecto y visible en el mismo breakpoint que .medidas-movil (≤768px).
+  const css = src.slice(src.indexOf('<style scoped>'));
+  assert.match(css, /\.resumen-embarque-total \{[^}]*display: none;/);
+  assert.match(css, /@media \(max-width: 768px\) \{\s*\.resumen-embarque-total \{ display: flex;/);
 });

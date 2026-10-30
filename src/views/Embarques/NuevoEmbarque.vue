@@ -1718,14 +1718,15 @@ export default {
 
 <style scoped>
 .resumen-embarque-total {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px;
+  /* Solo móvil: en escritorio ya existe el resumen de la barra lateral. */
+  display: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px;
   max-width: 100%; margin: 12px auto 4px; padding: 8px 14px; border-radius: 12px;
   border: 1px solid rgba(148,163,184,.25); background: rgba(16,27,45,.85); color: #e2e8f0;
   font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; width: fit-content;
 }
 .resumen-embarque-etiqueta { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 768px) {
-  .resumen-embarque-total { margin: 10px 0 2px; width: auto; font-size: 13px; padding: 8px 10px; }
+  .resumen-embarque-total { display: flex; margin: 10px 0 2px; width: auto; font-size: 13px; padding: 8px 10px; }
   .resumen-embarque-etiqueta { flex-basis: 100%; text-align: center; }
 }
 /* Aviso de edición colaborativa */
