@@ -258,7 +258,8 @@
                         data-pesada
                         @keydown="handlePesadaEnter($event, 'tara')"
                         @keyup="handlePesadaEnter($event, 'tara')"
-                        @beforeinput="handlePesadaEnter($event, 'tara')">
+                        @beforeinput="handlePesadaEnter($event, 'tara')"
+                        @focusout="handlePesadaSiguienteNativo($event, 'tara')">
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
                         tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
@@ -294,7 +295,8 @@
                         data-pesada
                         @keydown="handlePesadaEnter($event, 'kilo')"
                         @keyup="handlePesadaEnter($event, 'kilo')"
-                        @beforeinput="handlePesadaEnter($event, 'kilo')">
+                        @beforeinput="handlePesadaEnter($event, 'kilo')"
+                        @focusout="handlePesadaSiguienteNativo($event, 'kilo')">
                 </div>
                 <div style="height: 38px"></div>
                 <div class="total">Total: {{ totalKilos }}</div>
@@ -350,7 +352,7 @@ import {
     PRECIO_MAQUILA_OZUNA_FALLBACK
 } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
-import { esEnterPesada, inputDestinoEnter } from '@/utils/pesadasEnterFoco';
+import { esEnterPesada, inputDestinoEnter, destinoSiguienteNativo, esTeclaNavegacion } from '@/utils/pesadasEnterFoco';
 
 export default {
     directives: { campoColaborativo },
@@ -546,7 +548,19 @@ export default {
         }
     },
 
+    beforeDestroy() {
+        if (this._marcarInteraccion) {
+            ['pointerdown', 'mousedown', 'touchstart', 'keydown'].forEach((tipo) => document.removeEventListener(tipo, this._marcarInteraccion, true));
+        }
+    },
     mounted() {
+        // Marca toques/clics/Tab/Enter para distinguirlos del "siguiente" nativo de Android.
+        this._ultimaInteraccion = 0;
+        this._marcarInteraccion = (event) => {
+            if (event.type !== 'keydown' || esTeclaNavegacion(event)) this._ultimaInteraccion = Date.now();
+        };
+        ['pointerdown', 'mousedown', 'touchstart', 'keydown'].forEach((tipo) => document.addEventListener(tipo, this._marcarInteraccion, true));
+
         // Asignar precio automático para todos los clientes
         this.asignarPrecioAutomatico();
         
@@ -744,6 +758,24 @@ export default {
             }
             event.preventDefault();
             this.enfocarInput(this.$refs.kiloInputs, taraIndex);
+        },
+
+        handlePesadaSiguienteNativo(event, campo) {
+            const destino = destinoSiguienteNativo({
+                contenedor: this.$el,
+                campo,
+                inputActual: event.target,
+                relacionado: event.relatedTarget,
+                msDesdeInteraccion: Date.now() - (this._ultimaInteraccion || 0)
+            });
+            if (!destino) return;
+            // Se espera a que Chrome termine de enfocar su destino y luego se corrige.
+            setTimeout(() => {
+                if (document.activeElement !== event.relatedTarget) return;
+                // Marca la corrección como interacción para que su propio focusout no encadene otra.
+                this._ultimaInteraccion = Date.now();
+                destino.focus();
+            }, 0);
         },
 
         handlePesadaEnter(event, campo) {

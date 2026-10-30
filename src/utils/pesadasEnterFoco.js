@@ -26,3 +26,23 @@ export function inputDestinoEnter(contenedor, campo, inputActual) {
     if (!destino) return null;
     return (destino.campo === 'kilo' ? kilos : taras)[destino.indice] || null;
 }
+
+// Android: la tecla "siguiente" (→|) del teclado numérico la resuelve Chrome sin mandar
+// ningún evento de tecla: solo mueve el foco al siguiente campo editable. Si el foco sale
+// de una Tara (o Kilo) hacia otro campo sin que el usuario haya tocado/clicado ni usado
+// Tab/Enter, se trata como "siguiente" y se corrige al destino de la misma fila.
+export const VENTANA_INTERACCION_MS = 400;
+
+export function destinoSiguienteNativo({ contenedor, campo, inputActual, relacionado, msDesdeInteraccion }) {
+    if (!relacionado || !(msDesdeInteraccion > VENTANA_INTERACCION_MS)) return null;
+    if (typeof relacionado.matches !== 'function' || !relacionado.matches('input, textarea')) return null;
+    const destino = inputDestinoEnter(contenedor, campo, inputActual);
+    return destino && destino !== relacionado ? destino : null;
+}
+
+// Teclas que mueven el foco a propósito (no cuentan teclas de escritura ni 229).
+export function esTeclaNavegacion(event) {
+    if (!event) return false;
+    return event.key === 'Tab' || esEnterPesada(event) || event.key === 'Escape' ||
+        event.key === 'Clear' || event.key === 'NumLock' || [9, 12, 27, 144].includes(event.keyCode);
+}
