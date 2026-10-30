@@ -115,7 +115,7 @@
             <!-- Key por id estable (no por índice): si otro editor inserta un
                  producto y la lista se recorre, el key por índice re-enlazaba
                  el input con foco a OTRO producto y lo tecleado "desaparecía". -->
-            <ProductoItem v-for="(producto, index) in productos" :key="producto.id || ('idx-' + index)" :producto="producto"
+            <ProductoItem :editores-colaboracion="editoresColaboracion" v-for="(producto, index) in productos" :key="producto.id || ('idx-' + index)" :producto="producto"
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
                 :pedido-referencia-cliente="pedidoReferenciaPorCliente[clienteId] || null"
                 :totales-agrupados-por-clave="totalesAgrupadosPorClave"
@@ -128,12 +128,10 @@
                 @mostrar-modal-nota="$emit('mostrar-modal-nota', $event)"
                 @mostrar-modal-nombre-alternativo="$emit('mostrar-modal-nombre-alternativo', $event)"
                 @mostrar-modal-alt="$emit('mostrar-modal-alt', $event)" @seleccionar-medida="seleccionarMedida"
-                @activar-incluir-precios-catarro="activarIncluirPreciosCatarro"
-                @marcar-campo-edicion="$emit('marcar-campo-edicion', $event.productoId, $event.campo)"
-                @desmarcar-campo-edicion="$emit('desmarcar-campo-edicion', $event.productoId, $event.campo)" />
+                @activar-incluir-precios-catarro="activarIncluirPreciosCatarro" />
 
             <!-- Lista de crudos -->
-            <CrudoItem v-for="(crudo, index) in crudos" :key="crudo.id" :crudo="crudo"
+            <CrudoItem :editores-colaboracion="editoresColaboracion" v-for="(crudo, index) in crudos" :key="crudo.id" :crudo="crudo"
                 :embarque-bloqueado="embarqueBloqueado" :cliente-id="clienteId" :crudo-index="index"
                 :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque" :nombre-cliente="nombreCliente"
                 :pedido-referencia-crudos="pedidoReferenciaCrudosPorCliente[clienteId] || null"
@@ -155,6 +153,7 @@
 </template>
 
 <script>
+import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
 
 import ProductoItem from './ProductoItem.vue';
 import CrudoItem from './CrudoItem.vue';
@@ -167,6 +166,7 @@ export default {
         CrudoItem
     },
     props: {
+        editoresColaboracion: { type: Array, default: () => [] },
         clienteId: {
             type: [String, Number],
             required: true
@@ -321,17 +321,14 @@ export default {
             return this.nombreCliente && (this.nombreCliente.toLowerCase().includes('veronica') || this.nombreCliente.toLowerCase().includes('lorena'));
         },
 
-        // Calcular totales de limpio
+        // Una interpretación compartida para el resumen y los pedidos agrupados.
+        pesadasPorProducto() { return this.productos.map(calcularTotalesPesadas); },
         calcularTotalLimpioCliente() {
-            return this.productos.reduce((total, producto) => {
-                const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-                const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
-                return total + tarasNormales + tarasExtra;
-            }, 0);
+            return this.pesadasPorProducto.reduce((total, pesadas) => total + pesadas.totalTaras, 0);
         },
 
         calcularKilosLimpioCliente() {
-            return this.productos.reduce((total, producto) => {
+            return this.productos.reduce((total, producto, indice) => {
                 if (producto.tipo === 'c/h20') {
                     // Para productos c/h20, calcular con el valor neto
                     const reporteTaras = producto.reporteTaras || [];
@@ -348,13 +345,7 @@ export default {
                     const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
                     return total + kilosReales;
                 } else {
-                    // Para otros productos, mantener el cálculo original
-                    const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
-                    const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-                    // No incluimos las taras extra en el descuento
-                    const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
-                    const resultado = Number((sumaKilos - descuentoTaras).toFixed(1));
-                    return total + resultado;
+                    return total + this.pesadasPorProducto[indice].totalKilos;
                 }
             }, 0);
         },
@@ -404,7 +395,7 @@ export default {
                 return { medida, tipoDetectado };
             };
 
-            this.productos.forEach(producto => {
+            this.productos.forEach((producto, indice) => {
                 if (!producto || (!producto.medida && !producto.nombreAlternativoPDF)) return;
 
                 // Usar nombreAlternativoPDF como medida efectiva para agrupar con el producto del pedido
@@ -417,13 +408,7 @@ export default {
                 const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
                 const clave = `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
 
-                const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-                const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
-                const totalTaras = tarasNormales + tarasExtra;
-
-                const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
-                const descuentoTaras = producto.restarTaras ? tarasNormales * 3 : 0;
-                const totalKilos = Number((sumaKilos - descuentoTaras).toFixed(1));
+                const { totalTaras, totalKilos } = this.pesadasPorProducto[indice];
 
                 if (!mapa[clave]) {
                     mapa[clave] = { totalKilos: 0, totalTaras: 0 };

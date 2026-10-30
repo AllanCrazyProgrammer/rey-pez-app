@@ -22,7 +22,7 @@
 .prestamos-workspace .resumen-card h3 { font-size: 12px; font-weight: 600; color: #5b726c; }
 .prestamos-workspace .resumen-card p { font-size: clamp(20px, 2.3vw, 29px); color: #244c48; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .prestamos-workspace .resumen-card.abonado p { color: #157754; }
-.prestamos-workspace .acciones-container { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 22px; }
+.prestamos-workspace .acciones-container { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 22px; }
 .prestamos-workspace .orden-cuentas { margin-right: auto; text-align: left; }
 .prestamos-workspace .orden-cuentas label { display: block; font-size: 12px; color: #647870; margin-bottom: 5px; }
 .prestamos-workspace .btn-nuevo-prestamo, .prestamos-workspace .btn-abono, .prestamos-workspace .btn-guardar { background: #196a5a; border: 1px solid #196a5a; border-radius: 9px; padding: 10px 17px; color: white; box-shadow: none; }

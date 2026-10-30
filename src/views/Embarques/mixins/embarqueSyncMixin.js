@@ -14,6 +14,9 @@ import {
 } from '@/utils/embarqueRevision';
 
 export const embarqueSyncMixin = {
+  data() {
+    return { subiendoEnVivo: false, errorSincronizacion: '' };
+  },
   beforeDestroy() {
     this._editorCerrado = true;
     if (this._timerSubidaEnVivo) {
@@ -248,10 +251,11 @@ export const embarqueSyncMixin = {
 
     programarSubidaEnVivo(retrasoMs) {
       if (this._editorCerrado) return;
-      // Jitter: si dos sesiones agendan la subida con la misma cadencia fija,
-      // chocan sincronizadas en conflictos una y otra vez.
-      const retraso = retrasoMs || (1500 + Math.floor(Math.random() * 700));
+      // La escritura continua no reinicia el reloj. Agrupar las teclas
+      // durante 500–650 ms; la red y los conflictos pueden demorar el envío.
+      const retraso = retrasoMs || (500 + Math.floor(Math.random() * 150));
       if (this._timerSubidaEnVivo) {
+        if (!retrasoMs) return;
         clearTimeout(this._timerSubidaEnVivo);
       }
       this._timerSubidaEnVivo = setTimeout(() => {
@@ -277,6 +281,8 @@ export const embarqueSyncMixin = {
         return;
       }
       this._subiendoEnVivo = true;
+      this.subiendoEnVivo = true;
+      this.errorSincronizacion = '';
 
       try {
         const db = getFirestore();
@@ -421,6 +427,7 @@ export const embarqueSyncMixin = {
         }
         console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', revEscrita + ').');
       } catch (error) {
+        this.errorSincronizacion = error.message || 'No se pudo sincronizar';
         console.error('[subirCambiosEnVivo] Error al subir cambios:', error);
         // NUNCA quedarse atorado con cambios pendientes: si seguimos en
         // línea, reintentar con espera. (Quedarse esperando "el próximo
@@ -431,6 +438,7 @@ export const embarqueSyncMixin = {
         }
       } finally {
         this._subiendoEnVivo = false;
+        this.subiendoEnVivo = false;
         if (this._resubirAlTerminar) {
           this._resubirAlTerminar = false;
           this.programarSubidaEnVivo();

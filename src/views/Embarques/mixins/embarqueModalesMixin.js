@@ -27,15 +27,11 @@ export const embarqueModalesMixin = {
     abrirModalNombreAlternativo(producto) {
       this.productoSeleccionado = producto;
       this.productoNombreAlternativoEnEdicionId = producto?.id || null;
-      if (this.productoNombreAlternativoEnEdicionId) {
-        this.marcarCampoEnEdicion(this.productoNombreAlternativoEnEdicionId, 'nombreAlternativoPDF');
-      }
       this.mostrarModalNombreAlternativo = true;
     },
 
     cerrarModalNombreAlternativo() {
       if (this.productoNombreAlternativoEnEdicionId) {
-        this.desmarcarCampoEnEdicion(this.productoNombreAlternativoEnEdicionId, 'nombreAlternativoPDF');
         this.nombreAlternativoPendienteSync.delete(this.productoNombreAlternativoEnEdicionId);
         this.productoNombreAlternativoEnEdicionId = null;
       }
@@ -72,7 +68,6 @@ export const embarqueModalesMixin = {
         await this.guardarCambiosEnTiempoReal(true);
       } finally {
         if (this.productoNombreAlternativoEnEdicionId) {
-          this.desmarcarCampoEnEdicion(this.productoNombreAlternativoEnEdicionId, 'nombreAlternativoPDF');
           this.productoNombreAlternativoEnEdicionId = null;
         }
         this.productoSeleccionado = null;

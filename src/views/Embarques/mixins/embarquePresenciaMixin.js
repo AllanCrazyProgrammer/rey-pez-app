@@ -1,4 +1,6 @@
-import { ref, onValue, onDisconnect, set, remove } from 'firebase/database';
+import { crearPresenciaEmbarque } from '@/services/EmbarquePresencia';
+import { campoDesdeElemento, describirCampo } from '@/utils/embarquePresencia';
+import { ref, onValue, onDisconnect, set } from 'firebase/database';
 import { rtdb } from '@/firebase';
 
 export const embarquePresenciaMixin = {
@@ -7,10 +9,36 @@ export const embarquePresenciaMixin = {
       usuariosActivos: [],
       // Usuarios editando ESTE embarque en este momento (sin incluirme)
       editoresEmbarque: [],
+      estadoPresencia: 'conectando',
+      redDisponible: navigator.onLine,
     };
   },
 
+  computed: {
+    colaboradoresVisibles() {
+      return this.editoresEmbarque.map(e => ({ ...e, descripcion: describirCampo(e.campo, this.embarque, this.clienteCrudos, id => this.obtenerNombreCliente(id)) }));
+    },
+  },
+  mounted() {
+    this._actualizarRedPresencia = () => { this.redDisponible = navigator.onLine; };
+    this._restaurarFocoPresencia = () => { if (!document.hidden && !this.embarqueBloqueado) this._sesionPresencia?.enfocar(campoDesdeElemento(document.activeElement)); };
+    this._ocultarFocoPresencia = () => this._sesionPresencia?.enfocar(null);
+    this._visibilidadPresencia = () => { if (document.hidden) this._ocultarFocoPresencia(); else this._restaurarFocoPresencia(); };
+    window.addEventListener('online', this._actualizarRedPresencia);
+    window.addEventListener('offline', this._actualizarRedPresencia);
+    window.addEventListener('focus', this._restaurarFocoPresencia);
+    window.addEventListener('blur', this._ocultarFocoPresencia);
+    document.addEventListener('visibilitychange', this._visibilidadPresencia);
+  },
+  watch: {
+    embarqueBloqueado(bloqueado) { if (bloqueado) this._sesionPresencia?.enfocar(null); },
+  },
   beforeDestroy() {
+    window.removeEventListener('online', this._actualizarRedPresencia);
+    window.removeEventListener('offline', this._actualizarRedPresencia);
+    window.removeEventListener('focus', this._restaurarFocoPresencia);
+    window.removeEventListener('blur', this._ocultarFocoPresencia);
+    document.removeEventListener('visibilitychange', this._visibilidadPresencia);
     if (this.unsubscribeUsuarios) {
       this.unsubscribeUsuarios();
     }
@@ -18,70 +46,44 @@ export const embarquePresenciaMixin = {
   },
 
   methods: {
-    /**
-     * Presencia por embarque: registra a este usuario como editor del
-     * embarque en Realtime Database y escucha quién más lo está editando,
-     * para mostrarlo en la interfaz. Se limpia al desconectar (onDisconnect),
-     * al salir de la vista o al cambiar de embarque.
-     */
+    presenciaModal(campo, item) {
+      let destino = null;
+      if (item && this.embarque.productos.some(p => p.id === item.id)) destino = { tipo: 'producto', productoId: item.id, campo };
+      else if (item) {
+        for (const grupos of Object.values(this.clienteCrudos || {})) {
+          const grupo = grupos.find(g => (g.items || []).some(i => i.id === item.id));
+          if (grupo) { destino = { tipo: 'crudo', crudoId: grupo.id, itemId: item.id, campo }; break; }
+        }
+      }
+      return { campo: destino, editores: this.editoresEmbarque };
+    },
     iniciarPresenciaEmbarque(embarqueId) {
       this.detenerPresenciaEmbarque();
-
       const userId = this.authStore?.userId;
-      const username = this.authStore?.user?.username || 'Usuario';
-      if (!embarqueId || !userId) return;
-
-      try {
-        const propioRef = ref(rtdb, `presenciaEmbarques/${embarqueId}/${userId}`);
-        this._presenciaEmbarquePropioRef = propioRef;
-
-        const registrar = () => set(propioRef, {
-          username,
-          conectadoEn: Date.now()
-        }).catch(() => {});
-
-        registrar();
-        onDisconnect(propioRef).remove().catch(() => {});
-        // Refresco periódico: permite descartar registros huérfanos si algún
-        // onDisconnect no llegó a ejecutarse (cierres abruptos).
-        this._presenciaEmbarqueHeartbeat = setInterval(registrar, 60000);
-
-        const salaRef = ref(rtdb, `presenciaEmbarques/${embarqueId}`);
-        this._presenciaEmbarqueUnsub = onValue(salaRef, (snapshot) => {
-          const valores = snapshot.val() || {};
-          const ahora = Date.now();
-          this.editoresEmbarque = Object.entries(valores)
-            .filter(([uid, info]) =>
-              uid !== userId &&
-              info &&
-              (ahora - (Number(info.conectadoEn) || 0)) < 5 * 60 * 1000
-            )
-            .map(([, info]) => info.username || 'Alguien');
-        }, (error) => {
-          console.warn('[presenciaEmbarque] No se pudo escuchar la presencia:', error);
-        });
-      } catch (error) {
-        console.warn('[presenciaEmbarque] Presencia no disponible:', error);
-      }
+      if (!embarqueId || embarqueId === 'nuevo' || !userId) return;
+      this.estadoPresencia = 'conectando';
+      this._sesionPresencia = crearPresenciaEmbarque({
+        db: rtdb, embarqueId, userId, username: this.authStore.user?.username || 'Usuario',
+        alCambiar: editores => { this.editoresEmbarque = editores; },
+        alEstado: estado => { this.estadoPresencia = estado; },
+      });
     },
-
     detenerPresenciaEmbarque() {
-      if (this._presenciaEmbarqueHeartbeat) {
-        clearInterval(this._presenciaEmbarqueHeartbeat);
-        this._presenciaEmbarqueHeartbeat = null;
-      }
-      if (this._presenciaEmbarqueUnsub) {
-        try { this._presenciaEmbarqueUnsub(); } catch (_) { /* noop */ }
-        this._presenciaEmbarqueUnsub = null;
-      }
-      if (this._presenciaEmbarquePropioRef) {
-        try {
-          onDisconnect(this._presenciaEmbarquePropioRef).cancel().catch(() => {});
-          remove(this._presenciaEmbarquePropioRef).catch(() => {});
-        } catch (_) { /* noop */ }
-        this._presenciaEmbarquePropioRef = null;
-      }
+      if (this._sesionPresencia) this._sesionPresencia.detener();
+      this._sesionPresencia = null;
       this.editoresEmbarque = [];
+      this.estadoPresencia = 'desconectado';
+    },
+    enfocarCampoColaborativo(evento) {
+      if (this.embarqueBloqueado) return;
+      this._sesionPresencia?.enfocar(campoDesdeElemento(evento.target));
+    },
+    escribirCampoColaborativo(evento) {
+      if (this.embarqueBloqueado) return;
+      this._sesionPresencia?.enfocar(campoDesdeElemento(evento.target), true);
+    },
+    salirCampoColaborativo(evento) {
+      this._sesionPresencia?.enfocar(campoDesdeElemento(evento.relatedTarget));
     },
 
     async iniciarPresenciaUsuario() {

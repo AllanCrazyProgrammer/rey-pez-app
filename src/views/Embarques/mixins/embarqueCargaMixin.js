@@ -25,9 +25,6 @@ export const embarqueCargaMixin = {
         if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
           this.productosNuevosPendientes.clear();
         }
-        if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
-          this.camposEnEdicion.clear();
-        }
         this.resetearEmbarque();
         return;
       }
@@ -37,10 +34,6 @@ export const embarqueCargaMixin = {
       }
       if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
         this.productosNuevosPendientes.clear();
-      }
-      if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
-        console.log('[cargarEmbarque] Limpiando campos en edición');
-        this.camposEnEdicion.clear();
       }
 
       if (id !== this.embarqueId) {
@@ -580,7 +573,6 @@ export const embarqueCargaMixin = {
 
       this.productosEliminadosLocalmente = new Set(Object.keys(this._productosEliminadosDoc || {}).filter(k => this._productosEliminadosDoc[k]));
       this.productosNuevosPendientes = new Map();
-      this.camposEnEdicion = new Set();
 
       this._inicializandoEmbarque = false;
       this.$nextTick(() => { this._aplicandoRemoto = false; });

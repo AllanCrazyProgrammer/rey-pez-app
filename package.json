@@ -29,7 +29,10 @@
     "test:android:inventarios": "node scripts/test-inventarios-android.cjs",
     "test:android:arranque": "node scripts/test-inventarios-build.cjs",
     "test:sacadas:dias": "node scripts/test-sacadas-dias.cjs",
-    "test:deudas": "node --test scripts/test-deudas-saldo.cjs"
+    "test:deudas": "node --test scripts/test-deudas-saldo.cjs",
+    "test:embarques-presencia": "node --test scripts/test-embarques-presencia.cjs",
+    "test:embarques-presencia-rtdb": "node --test scripts/test-embarques-presencia-rtdb.cjs",
+    "test:embarques-pesadas": "node --test scripts/test-embarques-pesadas.cjs"
   },
   "dependencies": {
     "@capacitor/android": "6.1.2",

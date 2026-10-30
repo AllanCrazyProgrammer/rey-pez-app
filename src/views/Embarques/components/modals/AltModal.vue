@@ -3,7 +3,7 @@
         @confirmar="guardarAlt">
         <div class="form-group">
             <label for="altInput">Nombre alternativo:</label>
-            <input type="text" id="altInput" v-model="altLocal" class="form-control"
+            <input type="text" id="altInput" v-model="altLocal" v-campo-colaborativo="colaboracion" class="form-control"
                 placeholder="Ingrese el nombre alternativo para PDF" 
                 @keyup.enter="guardarAlt" 
                 @input="onInputUsuario"
@@ -23,14 +23,17 @@
 </template>
 
 <script>
+import campoColaborativo from '@/directives/campoColaborativo';
 import BaseModal from '../BaseModal.vue';
 
 export default {
+    directives: { campoColaborativo },
     name: 'AltModal',
     components: {
         BaseModal
     },
     props: {
+        colaboracion: { type: Object, default: () => ({}) },
         mostrar: {
             type: Boolean,
             required: true

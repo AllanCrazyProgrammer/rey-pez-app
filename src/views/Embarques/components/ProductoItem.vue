@@ -13,7 +13,7 @@
     }">
         <!-- Checkbox de venta para Ozuna -->
         <div v-if="isClienteOzuna" class="venta-checkbox-container">
-            <input type="checkbox" v-model="producto.esVenta" class="form-check-input venta-checkbox"
+            <input type="checkbox" v-model="producto.esVenta" v-campo-colaborativo="presenciaCampo('esVenta')" class="form-check-input venta-checkbox"
                 :id="'ventaCheck-' + producto.id" :disabled="embarqueBloqueado" @change="actualizarProducto">
             <label :for="'ventaCheck-' + producto.id">Venta</label>
         </div>
@@ -34,7 +34,7 @@
                         N
                     </button>
                     <div class="kg-radio">
-                        <input type="checkbox" v-model="producto.noSumarKilos" class="kg-checkbox"
+                        <input type="checkbox" v-model="producto.noSumarKilos" v-campo-colaborativo="presenciaCampo('noSumarKilos')" class="kg-checkbox"
                             :id="'kg-' + producto.id" :disabled="embarqueBloqueado">
                         <label :for="'kg-' + producto.id">kg</label>
                     </div>
@@ -88,7 +88,7 @@
             <div class="medida-input-container">
                 <input 
                     type="text" 
-                    v-model="producto.medida" 
+                    v-model="producto.medida" v-campo-colaborativo="presenciaCampo('medida')"
                     class="medida-input" 
                     placeholder="Medida"
                     @input="onMedidaInput" 
@@ -131,7 +131,7 @@
             </div>
             
             <div
-                class="tipo-dropdown"
+                class="tipo-dropdown" v-campo-colaborativo="presenciaCampo('tipo')"
                 :class="{
                     'tipo-c-h20': producto.tipo === 'c/h20',
                     'tipo-s-h20': producto.tipo === 's/h20',
@@ -209,7 +209,7 @@
                 </transition>
             </div>
 
-            <input v-if="producto.tipo === 'otro'" type="text" v-model="producto.tipoPersonalizado"
+            <input v-if="producto.tipo === 'otro'" type="text" v-model="producto.tipoPersonalizado" v-campo-colaborativo="presenciaCampo('tipoPersonalizado')"
                 class="form-control tipo-input" placeholder="Especificar" :disabled="embarqueBloqueado">
             <button type="button" @click="eliminarProducto" class="btn btn-danger btn-sm eliminar-producto"
                 :disabled="embarqueBloqueado">X</button>
@@ -217,7 +217,7 @@
         
         <!-- Checkbox de refrigeración - Solo para clientes agregados -->
         <div v-if="esClienteAgregado" class="refrigeracion-checkbox-container">
-            <input type="checkbox" v-model="producto.refrigerar" class="form-check-input refrigeracion-checkbox"
+            <input type="checkbox" v-model="producto.refrigerar" v-campo-colaborativo="presenciaCampo('refrigerar')" class="form-check-input refrigeracion-checkbox"
                 :id="'refrigerarCheck-' + producto.id" :disabled="embarqueBloqueado"
                 @change="actualizarProducto">
             <label :for="'refrigerarCheck-' + producto.id" class="refrigeracion-label">
@@ -229,37 +229,39 @@
         <div v-if="producto.tipo === 'c/h20'" class="valores-container-debajo">
             <div class="valor-neto-container">
                 <label>Valor neto:</label>
-                <input type="number" v-model="producto.camaronNeto" class="camaron-neto-input ios-numeric"
+                <input type="number" v-model="producto.camaronNeto" v-campo-colaborativo="presenciaCampo('camaronNeto')" class="camaron-neto-input ios-numeric"
                     step="0.01" min="0" max="1" inputmode="numeric" pattern="[0-9]*" :disabled="embarqueBloqueado">
             </div>
         </div>
         
+        <p v-if="totalesPesadas.hayValoresInvalidos" class="aviso-pesadas-invalidas" role="status">
+            Revisa los campos marcados de kilos y taras: los valores no numéricos no se incluyen en los totales.
+        </p>
         <div class="sumas-verticales">
             <div class="columna">
                 <div class="taras-header">
                     <h5>Taras</h5>
                     <div class="checkbox-container">
-                        <input type="checkbox" v-model="producto.restarTaras" :disabled="embarqueBloqueado">
+                        <input type="checkbox" v-model="producto.restarTaras" v-campo-colaborativo="presenciaCampo('restarTaras')" :disabled="embarqueBloqueado">
                         <label>-3</label>
                     </div>
                 </div>
                 <div v-for="(tara, taraIndex) in producto.taras" :key="producto.pesadasIds[taraIndex]" class="input-group">
-                    <input v-model.number="producto.taras[taraIndex]" type="tel" class="form-control tara-input"
-                        ref="taraInputs"
+                    <input v-model.number="producto.taras[taraIndex]" v-campo-colaborativo="presenciaCampo('taras', producto.pesadasIds[taraIndex])" type="tel" class="form-control tara-input"
+                        ref="taraInputs" :aria-invalid="totalesPesadas.invalidos.taras.includes(taraIndex)"
                         placeholder="Tara" :size="String(producto.taras[taraIndex] || '').length || 1"
-                        @focus="onTaraFocus(taraIndex, $event)"
-                        @blur="onTaraBlur(taraIndex)"
+                        @focus="$event.target.select()"
+                        @blur="actualizarProducto"
                         :disabled="embarqueBloqueado"
-                        @input="onTaraInput(taraIndex)"
                         @keydown.tab="handleTaraTab($event, taraIndex)">
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
                         tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="producto.tarasExtraIds[taraExtraIndex]"
                     class="input-group">
-                    <input v-model.number="producto.tarasExtra[taraExtraIndex]" type="tel"
+                    <input v-model.number="producto.tarasExtra[taraExtraIndex]" v-campo-colaborativo="presenciaCampo('tarasExtra', producto.tarasExtraIds[taraExtraIndex])" type="tel"
                         class="form-control tara-input" placeholder="Tara Extra"
-                        ref="taraExtraInputs"
+                        ref="taraExtraInputs" :aria-invalid="totalesPesadas.invalidos.tarasExtra.includes(taraExtraIndex)"
                         :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado">
                     <button type="button" @click="eliminarTaraExtra(taraExtraIndex)" class="btn btn-danger btn-sm"
@@ -276,13 +278,12 @@
             <div class="columna">
                 <h5>Kilos</h5>
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="producto.pesadasIds[kiloIndex]" class="input-group">
-                    <input v-model.number="producto.kilos[kiloIndex]" type="tel" class="form-control kilo-input"
-                        ref="kiloInputs"
+                    <input v-model.number="producto.kilos[kiloIndex]" v-campo-colaborativo="presenciaCampo('kilos', producto.pesadasIds[kiloIndex])" type="tel" class="form-control kilo-input"
+                        ref="kiloInputs" :aria-invalid="totalesPesadas.invalidos.kilos.includes(kiloIndex)"
                         placeholder="Kilos" :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                        @focus="onKiloFocus(kiloIndex, $event)"
-                        @blur="onKiloBlur(kiloIndex)"
+                        @focus="$event.target.select()"
+                        @blur="actualizarProducto"
                         :disabled="embarqueBloqueado"
-                        @input="onKiloInput(kiloIndex)"
                         @keydown.tab="handleKiloTab($event, kiloIndex)">
                 </div>
                 <div style="height: 38px"></div>
@@ -293,7 +294,7 @@
             <div class="reporte-item">
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="producto.reportesIds[index]" class="input-group mb-2">
-                    <input type="tel" v-model="producto.reporteTaras[index]" class="form-control reporte-input"
+                    <input type="tel" v-model="producto.reporteTaras[index]" v-campo-colaborativo="presenciaCampo('reporteTaras', producto.reportesIds[index])" class="form-control reporte-input"
                         ref="reporteTaraInputs"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
                         @keydown.tab="handleReporteTaraTab($event, index)">
@@ -309,7 +310,7 @@
             <div class="reporte-item">
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="producto.reportesIds[index]" class="input-group mb-2">
-                    <input type="tel" v-model="producto.reporteBolsas[index]" class="form-control reporte-input"
+                    <input type="tel" v-model="producto.reporteBolsas[index]" v-campo-colaborativo="presenciaCampo('reporteBolsas', producto.reportesIds[index])" class="form-control reporte-input"
                         ref="reporteBolsaInputs"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
                         @keydown.tab="handleReporteBolsaTab($event, index)">
@@ -328,6 +329,8 @@
 
 
 <script>
+import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
+import campoColaborativo from '@/directives/campoColaborativo';
 import { insertarFilaProducto, eliminarFilaProducto } from '@/utils/embarqueColaboracion';
 import PedidoReferencia from './PedidoReferencia.vue';
 import {
@@ -338,11 +341,13 @@ import {
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
+    directives: { campoColaborativo },
     name: 'ProductoItem',
     components: {
         PedidoReferencia
     },
     props: {
+        editoresColaboracion: { type: Array, default: () => [] },
         producto: {
             type: Object,
             required: true
@@ -436,22 +441,9 @@ export default {
             return !clientesPredefinidos.includes(this.nombreCliente.toLowerCase());
         },
 
-        // Cálculo del total de taras
-        totalTaras() {
-            const tarasNormales = (this.producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-            const tarasExtra = (this.producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
-            return tarasNormales + tarasExtra;
-        },
-
-        // Cálculo del total de kilos
-        totalKilos() {
-            const sumaKilos = (this.producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
-            const sumaTarasNormales = (this.producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-            // No incluimos las taras extra en el descuento
-            const descuentoTaras = this.producto.restarTaras ? sumaTarasNormales * 3 : 0;
-            const resultado = Number((sumaKilos - descuentoTaras).toFixed(1));
-            return resultado;
-        },
+        totalesPesadas() { return calcularTotalesPesadas(this.producto); },
+        totalTaras() { return this.totalesPesadas.totalTaras; },
+        totalKilos() { return this.totalesPesadas.totalKilos; },
 
         // Obtiene el tipo de producto
         obtenerTipoProducto() {
@@ -644,6 +636,9 @@ export default {
     },
 
     methods: {
+        presenciaCampo(campo, filaId) {
+            return { campo: { tipo: 'producto', productoId: this.producto.id, campo, ...(filaId ? { filaId } : {}) }, editores: this.editoresColaboracion };
+        },
         // Método para actualizar el componente padre
         actualizarProducto() {
             this.$emit('update:producto', this.producto);
@@ -723,49 +718,6 @@ export default {
             this.producto.pedidoReferencia = referencia
                 ? { kilos: referencia.kilos || 0, taras: referencia.taras || 0 }
                 : null;
-        },
-
-        // Métodos para manejar edición de kilos
-        onKiloFocus(kiloIndex, event) {
-            event.target.select();
-            this.$emit('marcar-campo-edicion', { 
-                productoId: this.producto.id, 
-                campo: `kilos-${kiloIndex}` 
-            });
-        },
-
-        onKiloBlur(kiloIndex) {
-            this.$emit('desmarcar-campo-edicion', { 
-                productoId: this.producto.id, 
-                campo: `kilos-${kiloIndex}` 
-            });
-            this.actualizarProducto();
-        },
-
-        onKiloInput(kiloIndex) {
-            // No llamar actualizarProducto inmediatamente para evitar guardado frecuente
-            // Solo actualizar cuando el usuario termine de escribir (onBlur)
-        },
-
-        // Métodos para manejar edición de taras
-        onTaraFocus(taraIndex, event) {
-            event.target.select();
-            this.$emit('marcar-campo-edicion', { 
-                productoId: this.producto.id, 
-                campo: `taras-${taraIndex}` 
-            });
-        },
-
-        onTaraBlur(taraIndex) {
-            this.$emit('desmarcar-campo-edicion', { 
-                productoId: this.producto.id, 
-                campo: `taras-${taraIndex}` 
-            });
-            this.actualizarProducto();
-        },
-
-        onTaraInput(taraIndex) {
-            // No llamar actualizarProducto inmediatamente
         },
 
         // Hace que Tab alterne entre la tara y el kilo de la misma fila
@@ -1277,6 +1229,9 @@ export default {
 </script>
 
 <style scoped>
+.aviso-pesadas-invalidas { color: #9f1239; background: #fff1f2; padding: 8px; border-radius: 6px; font-size: 12px; }
+input[aria-invalid="true"] { border: 2px solid #be123c; background: #fff1f2; }
+
 /* Estilos específicos del componente ProductoItem */
 .productos-container {
     display: flex;

@@ -102,7 +102,7 @@
           <span class="selector-icono"><i class="far fa-calendar-alt"></i></span>
           <div class="selector-campo">
           <label for="fecha">Fecha de embarque</label>
-          <input type="date" id="fecha" v-model="fechaLocal" class="form-control" required :disabled="embarqueBloqueado"
+          <input type="date" id="fecha" v-model="fechaLocal" v-campo-colaborativo="presenciaCampo('fecha')" class="form-control" required :disabled="embarqueBloqueado"
             @change="actualizarFecha">
           </div>
         </div>
@@ -110,7 +110,7 @@
           <span class="selector-icono"><i class="fas fa-truck-loading"></i></span>
           <div class="selector-campo">
           <label for="cargaCon">Responsable de carga</label>
-          <select id="cargaCon" v-model="cargaConLocal" class="form-control" required :disabled="embarqueBloqueado"
+          <select id="cargaCon" v-model="cargaConLocal" v-campo-colaborativo="presenciaCampo('cargaCon')" class="form-control" required :disabled="embarqueBloqueado"
             @change="actualizarCargaCon">
             <option value="">Seleccionar</option>
             <option value="Porro">Porro</option>
@@ -136,17 +136,20 @@
 </template>
 
 <script>
+import campoColaborativo from '@/directives/campoColaborativo';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import GenerarEsqueletoEmbarqueButton from './GenerarEsqueletoEmbarqueButton.vue';
 import { useUIStore } from '@/stores/ui';
 
 export default {
+    directives: { campoColaborativo },
   name: 'HeaderEmbarque',
   components: {
     PreciosHistorialModal,
     GenerarEsqueletoEmbarqueButton
   },
   props: {
+        editoresColaboracion: { type: Array, default: () => [] },
     sonidosActivados: {
       type: Boolean,
       default: true
@@ -211,6 +214,7 @@ export default {
     }
   },
   methods: {
+    presenciaCampo(campo) { return { campo: { tipo: 'cabecera', campo }, editores: this.editoresColaboracion }; },
     toggleNavbarPrincipal() {
       useUIStore().toggleNavbarEnEmbarque();
     },

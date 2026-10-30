@@ -2,7 +2,7 @@
     <BaseModal :mostrar="mostrar" titulo="Establecer Hilos" @cerrar="$emit('cerrar')" @confirmar="guardarHilos">
         <div class="form-group">
             <label for="hilosInput">Hilos:</label>
-            <input type="text" id="hilosInput" v-model="hilosLocal" class="form-control" placeholder="Ingrese los hilos"
+            <input type="text" id="hilosInput" v-model="hilosLocal" v-campo-colaborativo="colaboracion" class="form-control" placeholder="Ingrese los hilos"
                 @keyup.enter="guardarHilos" ref="hilosInput" :disabled="guardando">
             <div v-if="guardando" class="guardando-indicador">
                 <div class="spinner"></div>
@@ -13,14 +13,17 @@
 </template>
 
 <script>
+import campoColaborativo from '@/directives/campoColaborativo';
 import BaseModal from '../BaseModal.vue';
 
 export default {
+    directives: { campoColaborativo },
     name: 'HilosModal',
     components: {
         BaseModal
     },
     props: {
+        colaboracion: { type: Object, default: () => ({}) },
         mostrar: {
             type: Boolean,
             required: true

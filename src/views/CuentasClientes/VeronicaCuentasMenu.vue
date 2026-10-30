@@ -1068,7 +1068,7 @@ button, .action-button { cursor: pointer; }
 .reporte-semanal-btn { background: #fff7ed; color: #92400e; border-color: #e8b58e; }
 .reporte-semanal-btn:hover { background: #ffedd5; }
 .registros-encabezado { margin-bottom: 18px; }
-.filter-container { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; padding: 16px; margin-bottom: 20px; background: #f3f5f7; border: 1px solid #e1e5eb; border-radius: 8px; }
+.filter-container { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 16px; padding: 16px; margin-bottom: 20px; background: #f3f5f7; border: 1px solid #e1e5eb; border-radius: 8px; }
 .filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .filter-group label { flex-basis: 100%; color: #475569; font-size: 12px; font-weight: 700; }
 .filter-container select, .filter-medida-input, .ajuste-input { min-height: 42px; width: 100%; min-width: 0; padding: 9px 12px; border: 1px solid #b6c0cc; border-radius: 6px; background: #fff; color: #243047; }
@@ -1093,7 +1093,7 @@ button, .action-button { cursor: pointer; }
 .lock-on { background: #f1f5f9; color: #475569; }
 .lock-off { background: #eff6ff; color: #1d4ed8; }
 .precio-venta-vacio { display: inline-block; margin-top: 10px; padding: 8px 12px; border: 1px solid #f5cd74; border-radius: 6px; background: #fffbeb; color: #854d0e; font-size: 13px; font-weight: 650; }
-.observacion-container { display: flex; align-items: start; gap: 12px; padding: 12px; margin-top: 12px; background: #fff7ed; border-left: 3px solid #d97706; border-radius: 6px; }
+.observacion-container { display: flex; align-items: flex-start; gap: 12px; padding: 12px; margin-top: 12px; background: #fff7ed; border-left: 3px solid #d97706; border-radius: 6px; }
 .observacion-texto { flex: 1; white-space: pre-wrap; margin: 0; color: #92400e; font-size: 14px; }
 .delete-observacion-btn { min-width: 36px; min-height: 36px; border: 0; border-radius: 6px; background: #fff; color: #9f1239; font-size: 22px; }
 .abonos-info { margin-top: 14px; padding: 12px 14px; background: #f0fdf4; border-radius: 6px; }

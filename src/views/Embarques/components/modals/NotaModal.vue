@@ -11,7 +11,7 @@
             <label for="notaInput">Nota:</label>
             <textarea
                 id="notaInput"
-                v-model="notaLocal"
+                v-model="notaLocal" v-campo-colaborativo="colaboracion"
                 class="form-control"
                 placeholder="Ingrese la nota"
                 rows="5"
@@ -34,14 +34,17 @@
 </template>
 
 <script>
+import campoColaborativo from '@/directives/campoColaborativo';
 import BaseModal from '../BaseModal.vue';
 
 export default {
+    directives: { campoColaborativo },
     name: 'NotaModal',
     components: {
         BaseModal
     },
     props: {
+        colaboracion: { type: Object, default: () => ({}) },
         mostrar: {
             type: Boolean,
             required: true

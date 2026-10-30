@@ -56,6 +56,7 @@ async function escenario(fn) {
         },
       });
       vm._dbPrueba = db;
+      vm._programarSubidaReal = embarqueSyncMixin.methods.programarSubidaEnVivo.bind(vm);
       vm._controlPrueba = control;
       editores.push(vm);
     }
@@ -166,4 +167,19 @@ test('onSnapshot real actualiza otro editor y no incorpora cambios ajenos a undo
   assert.equal(a.embarque.productos[0].kilos[1],77);
   await Vue.nextTick();a.undo();await Vue.nextTick();
   assert.equal(a.embarque.productos[0].precio,100);assert.equal(a.embarque.productos[0].kilos[1],77);
+}));
+
+test('la escritura continua llega al otro editor antes de abandonar el campo', { timeout: 15000 }, () => escenario(async ({ a,b }) => {
+  a.programarSubidaEnVivo = a._programarSubidaReal;
+  await b.cargarEmbarque(b.embarqueId); await Vue.nextTick();
+  let recibidoDuranteCaptura=false;
+  for(let n=30;n<46;n++){
+    a.$set(a.embarque.productos[0].kilos,0,n);
+    await new Promise(resolve=>setTimeout(resolve,150));
+    if(b.embarque.productos[0].kilos[0]!==20) recibidoDuranteCaptura=true;
+  }
+  assert.equal(recibidoDuranteCaptura,true,'el receptor debe actualizarse sin esperar al último input ni al blur');
+  const hasta=Date.now()+5000;
+  while((a.hasPendingChanges || b.embarque.productos[0].kilos[0]!==45) && Date.now()<hasta) await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(a.hasPendingChanges,false);assert.equal(b.embarque.productos[0].kilos[0],45);
 }));

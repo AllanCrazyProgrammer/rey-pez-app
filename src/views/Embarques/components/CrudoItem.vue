@@ -15,7 +15,7 @@
                             :pedido-referencia="pedidoReferenciaCrudos && item.talla ? (pedidoReferenciaCrudos[item.talla] || item.pedidoReferencia) : item.pedidoReferencia"
                             :total-taras="totalTarasPorTalla[item.talla] || 0"
                         />
-                        <select :value="item.talla" class="form-control talla-select" @change="seleccionarTalla(item, $event)"
+                        <select :value="item.talla" v-campo-colaborativo="presenciaCampo(item, 'talla')" class="form-control talla-select" @change="seleccionarTalla(item, $event)"
                             :disabled="embarqueBloqueado">
                             <option value="">Elige talla</option>
                             <option v-for="talla in tallasDisponibles" :key="talla" :value="talla">
@@ -27,12 +27,12 @@
 
                     <!-- Checkbox de venta para Ozuna -->
                     <div v-if="isClienteOzuna" class="venta-checkbox-container" style="display: none;">
-                        <input type="checkbox" v-model="item.esVenta" class="form-check-input venta-checkbox"
+                        <input type="checkbox" v-model="item.esVenta" v-campo-colaborativo="presenciaCampo(item, 'esVenta')" class="form-check-input venta-checkbox"
                             :id="'ventaCrudo-' + crudoIndex + '-' + itemIndex" :disabled="embarqueBloqueado" @change="actualizarCrudo">
                         <label :for="'ventaCrudo-' + crudoIndex + '-' + itemIndex">Venta</label>
                     </div>
 
-                    <input type="text" v-model="item.barco" class="form-control barco-input" placeholder="Barco"
+                    <input type="text" v-model="item.barco" v-campo-colaborativo="presenciaCampo(item, 'barco')" class="form-control barco-input" placeholder="Barco"
                         :style="{ width: anchoBarco(item.barco) + 'px' }" :title="item.barco || 'Barco'"
                         :disabled="embarqueBloqueado" @input="actualizarCrudo">
                 </div>
@@ -42,7 +42,7 @@
                 <div v-if="itemEditandoMedida === item" class="medida-personalizada">
                     <label :for="'medida-crudo-' + clienteId + '-' + crudoIndex + '-' + itemIndex">Nombre de la medida</label>
                     <input :id="'medida-crudo-' + clienteId + '-' + crudoIndex + '-' + itemIndex"
-                        ref="nombreMedidaInput" v-model="nombreMedida" type="text" class="form-control"
+                        ref="nombreMedidaInput" v-model="nombreMedida" v-campo-colaborativo="presenciaCampo(item, 'talla')" type="text" class="form-control"
                         placeholder="Escribe el nombre" :disabled="embarqueBloqueado"
                         @keydown.enter.prevent="guardarMedidaPersonalizada(item)"
                         @keydown.esc.prevent="cancelarMedidaPersonalizada">
@@ -56,12 +56,12 @@
 
                 <div class="crudo-taras-container">
                     <div class="taras-wrapper">
-                        <input type="text" v-model="item.taras" class="form-control taras-input" placeholder="Taras"
+                        <input type="text" v-model="item.taras" v-campo-colaborativo="presenciaCampo(item, 'taras')" class="form-control taras-input" placeholder="Taras"
                             @input="actualizarCrudo" :disabled="embarqueBloqueado">
-                        <input v-if="item.mostrarSobrante" type="text" v-model="item.sobrante"
+                        <input v-if="item.mostrarSobrante" type="text" v-model="item.sobrante" v-campo-colaborativo="presenciaCampo(item, 'sobrante')"
                             class="form-control taras-input" placeholder="Sbrte" @input="actualizarCrudo"
                             :disabled="embarqueBloqueado">
-                        <input v-if="item.mostrarSobrante2" type="text" v-model="item.sobrante2"
+                        <input v-if="item.mostrarSobrante2" type="text" v-model="item.sobrante2" v-campo-colaborativo="presenciaCampo(item, 'sobrante2')"
                             class="form-control taras-input" placeholder="Sbrte 2" @input="actualizarCrudo"
                             :disabled="embarqueBloqueado">
                     </div>
@@ -86,17 +86,20 @@
 </template>
 
 <script>
+import campoColaborativo from '@/directives/campoColaborativo';
 import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
 import PedidoReferencia from './PedidoReferencia.vue';
 import { obtenerDetallePrecioParaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
+    directives: { campoColaborativo },
     name: 'CrudoItem',
     components: {
         PedidoReferencia
     },
     props: {
+        editoresColaboracion: { type: Array, default: () => [] },
         crudo: {
             type: Object,
             default: () => ({ items: [] })
@@ -237,6 +240,9 @@ export default {
     },
 
     methods: {
+        presenciaCampo(item, campo) {
+            return { campo: { tipo: 'crudo', crudoId: this.crudo.id, itemId: item.id, campo }, editores: this.editoresColaboracion };
+        },
         medirTextoCampo(texto) {
             // Medir los glifos evita crecer antes de que se agote el espacio del campo.
             const canvas = document.createElement('canvas');

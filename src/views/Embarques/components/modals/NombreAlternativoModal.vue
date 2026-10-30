@@ -2,7 +2,7 @@
     <BaseModal :mostrar="mostrar" titulo="Nombre para PDF" @cerrar="$emit('cerrar')" @confirmar="guardarNombre">
         <div class="form-group">
             <label for="nombreAlternativoPDF">Nombre que aparecerá en el PDF:</label>
-            <input type="text" id="nombreAlternativoPDF" v-model="nombreLocal" class="form-control"
+            <input type="text" id="nombreAlternativoPDF" v-model="nombreLocal" v-campo-colaborativo="colaboracion" class="form-control"
                 placeholder="Ingrese el nombre para el PDF" 
                 @keyup.enter="guardarNombre" 
                 @input="onInputUsuario"
@@ -17,14 +17,17 @@
 </template>
 
 <script>
+import campoColaborativo from '@/directives/campoColaborativo';
 import BaseModal from '../BaseModal.vue';
 
 export default {
+    directives: { campoColaborativo },
     name: 'NombreAlternativoModal',
     components: {
         BaseModal
     },
     props: {
+        colaboracion: { type: Object, default: () => ({}) },
         mostrar: {
             type: Boolean,
             required: true

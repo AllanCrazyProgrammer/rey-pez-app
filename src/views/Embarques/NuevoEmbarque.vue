@@ -1,5 +1,6 @@
 <template>
-  <div class="nuevo-embarque-container">
+  <div class="nuevo-embarque-container" @focusin="enfocarCampoColaborativo" @focusout="salirCampoColaborativo"
+    @input="escribirCampoColaborativo" @change="escribirCampoColaborativo">
     <!-- Sidebar Component -->
     <Sidebar 
       :embarque="embarque" 
@@ -15,6 +16,7 @@
     <div class="nuevo-embarque" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
       <!-- Header Component -->
       <header-embarque
+        :editores-colaboracion="editoresEmbarque"
         @open-offline-options="$emit('open-offline-options')"
         :modo-edicion="modoEdicion" 
         :embarque-bloqueado="embarqueBloqueado" 
@@ -23,7 +25,7 @@
         :pdf-type="pdfType" 
         :embarque-id="embarqueId"
         :has-pending-changes="hasPendingChanges"
-        :is-syncing="isSyncing"
+        :is-syncing="isSyncing || subiendoEnVivo"
         :sonidos-activados="sonidosActivados"
         @toggle-sonidos="alternarSonidosEmbarque"
         @sync-manual="sincronizarConNube"
@@ -43,14 +45,9 @@
         @ver-pedido-dia="mostrarModalPedidoDia = true"
       />
 
-      <!-- Aviso de edición colaborativa: quién más está editando este embarque -->
-      <div v-if="editoresEmbarque.length > 0" class="banner-colaboracion">
-        <span class="banner-colaboracion-icono">👥</span>
-        <span>
-          También editando ahora: <strong>{{ editoresEmbarque.join(', ') }}</strong>.
-          Los cambios de ambos se sincronizan en vivo.
-        </span>
-      </div>
+      <ColaboracionEmbarque v-if="embarqueId && embarqueId !== 'nuevo'" :editores="colaboradoresVisibles" :user-id="authStore.userId || ''"
+        :pendientes="hasPendingChanges" :subiendo="subiendoEnVivo" :online="redDisponible"
+        :error="errorSincronizacion" :presencia="estadoPresencia" />
 
       <!-- Slider de escala para el resumen PDF -->
       <div v-if="mostrarEscalaResumen" class="scale-control scale-control-resumen">
@@ -99,7 +96,7 @@
 
       <!-- Formulario Principal -->
       <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
-        <ClienteProductos 
+        <ClienteProductos :editores-colaboracion="editoresEmbarque"
           v-for="(clienteProductos, clienteId) in productosPorCliente" 
           :key="clienteId"
           :cliente-id="clienteId" 
@@ -130,8 +127,6 @@
           @incluirPrecios-change="handleIncluirPreciosChange"
           @cuentaEnPdf-change="handleCuentaEnPdfChange"
           @sumarKgCatarro-change="handleSumarKgCatarroChange"
-          @marcar-campo-edicion="marcarCampoEnEdicion"
-          @desmarcar-campo-edicion="desmarcarCampoEnEdicion"
           @eliminar-cliente="eliminarCliente" 
           @eliminar-producto="eliminarProducto" 
           @eliminar-crudo="eliminarCrudo"
@@ -172,7 +167,7 @@
       @agregar="agregarNuevoCliente"
     />
 
-    <NombreAlternativoModal 
+    <NombreAlternativoModal :colaboracion="presenciaModal('nombreAlternativoPDF', productoSeleccionado)"
       :mostrar="mostrarModalNombreAlternativo" 
       :nombre-original="productoSeleccionado?.medida || ''" 
       :nombre-alternativo="productoSeleccionado?.nombreAlternativoPDF || ''" 
@@ -180,7 +175,7 @@
       @guardar="guardarNombreAlternativo"
     />
 
-    <PrecioModal 
+    <PrecioModal :colaboracion="presenciaModal('precio', itemSeleccionado)"
       :mostrar="mostrarModalPrecio" 
       :precio="itemSeleccionado?.precio || ''" 
       :guardando="guardandoModal"
@@ -188,7 +183,7 @@
       @guardar="guardarPrecio"
     />
 
-    <HilosModal 
+    <HilosModal :colaboracion="presenciaModal('hilos', itemSeleccionado)"
       :mostrar="mostrarModalHilos" 
       :hilos="itemSeleccionado?.hilos || ''" 
       :guardando="guardandoModal"
@@ -196,7 +191,7 @@
       @guardar="guardarHilos"
     />
 
-    <NotaModal 
+    <NotaModal :colaboracion="presenciaModal('nota', itemSeleccionado)"
       :mostrar="mostrarModalNota" 
       :nota="itemSeleccionado?.nota || ''" 
       :guardando="guardandoModal"
@@ -204,7 +199,7 @@
       @guardar="guardarNota"
     />
 
-    <AltModal 
+    <AltModal :colaboracion="presenciaModal('textoAlternativo', itemSeleccionado)"
       :mostrar="mostrarModalAlt" 
       :alt="itemSeleccionado?.textoAlternativo || ''" 
       :guardando="guardandoModal"
@@ -264,6 +259,7 @@
 </template>
 
 <script>
+import ColaboracionEmbarque from './components/ColaboracionEmbarque.vue';
 import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, where, orderBy, runTransaction } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
@@ -353,6 +349,7 @@ export default {
   name: 'NuevoEmbarque',
   
   components: {
+    ColaboracionEmbarque,
     Rendimientos,
     Sidebar,
     HeaderEmbarque,
@@ -455,7 +452,6 @@ export default {
       productosEliminadosLocalmente: new Set(), // Set para rastrear productos eliminados localmente
       productosNuevosPendientes: new Map(), // Map para rastrear productos nuevos pendientes de sincronización
       agregandoProducto: false, // Bandera para indicar cuando estamos agregando un producto
-      camposEnEdicion: new Set(), // Set para rastrear qué campos están siendo editados activamente
       productoNombreAlternativoEnEdicionId: null,
       nombreAlternativoPendienteSync: new Map(),
       // Control de backoff para auto-guardado cuando hay errores de cuota
@@ -782,17 +778,6 @@ export default {
       if (mensaje) {
         this.mostrarError(mensaje);
       }
-    },
-
-    // Métodos para manejar campos en edición
-    marcarCampoEnEdicion(productoId, campo) {
-      const clave = `${productoId}-${campo}`;
-      this.camposEnEdicion.add(clave);
-    },
-
-    desmarcarCampoEnEdicion(productoId, campo) {
-      const clave = `${productoId}-${campo}`;
-      this.camposEnEdicion.delete(clave);
     },
 
     async triggerGuardadoInicial() {
@@ -1720,24 +1705,6 @@ export default {
 
 <style scoped>
 /* Aviso de edición colaborativa */
-.banner-colaboracion {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 12px;
-  padding: 10px 14px;
-  background-color: #e8f4fd;
-  border: 1px solid #7cc0ef;
-  border-left: 4px solid #2196f3;
-  border-radius: 6px;
-  color: #0d47a1;
-  font-size: 0.95rem;
-}
-
-.banner-colaboracion-icono {
-  font-size: 1.2rem;
-}
-
 /* Estilos base */
 .nuevo-embarque-container {
   position: relative;
@@ -2185,22 +2152,6 @@ input[type="number"]::-webkit-outer-spin-button {
 .nuevo-embarque form {
   position: relative;
   z-index: 1;
-}
-
-.banner-colaboracion {
-  margin: 0 0 18px;
-  padding: 14px 18px;
-  color: #bfefff;
-  background: linear-gradient(90deg, rgba(56, 217, 255, 0.16), rgba(56, 217, 255, 0.05));
-  border: 1px solid rgba(56, 217, 255, 0.28);
-  border-left: 3px solid var(--cian);
-  border-radius: 14px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18), inset 0 1px rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(16px);
-}
-
-.banner-colaboracion-icono {
-  filter: drop-shadow(0 0 8px var(--cian));
 }
 
 .botones-undo-redo {

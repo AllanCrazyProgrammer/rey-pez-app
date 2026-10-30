@@ -2,7 +2,7 @@
     <BaseModal :mostrar="mostrar" titulo="Establecer Precio" @cerrar="$emit('cerrar')" @confirmar="guardarPrecio">
         <div class="form-group">
             <label for="precioInput">Precio:</label>
-            <input type="number" id="precioInput" v-model="precioLocal" class="form-control"
+            <input type="number" id="precioInput" v-model="precioLocal" v-campo-colaborativo="colaboracion" class="form-control"
                 placeholder="Ingrese el precio" @keyup.enter="guardarPrecio" ref="precioInput" :disabled="guardando">
             <div v-if="guardando" class="guardando-indicador">
                 <div class="spinner"></div>
@@ -13,14 +13,17 @@
 </template>
 
 <script>
+import campoColaborativo from '@/directives/campoColaborativo';
 import BaseModal from '../BaseModal.vue';
 
 export default {
+    directives: { campoColaborativo },
     name: 'PrecioModal',
     components: {
         BaseModal
     },
     props: {
+        colaboracion: { type: Object, default: () => ({}) },
         mostrar: {
             type: Boolean,
             required: true
