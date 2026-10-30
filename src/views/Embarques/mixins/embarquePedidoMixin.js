@@ -1,3 +1,4 @@
+import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
 import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { normalizarMedidaCrudoEmbarque } from '@/utils/medidasPedidoCrudo';
@@ -312,6 +313,7 @@ export const embarquePedidoMixin = {
             clavesCrudos.add(claveCrudo);
             if (!nuevosCrudosPorCliente[clienteIdStr]) nuevosCrudosPorCliente[clienteIdStr] = [];
             nuevosCrudosPorCliente[clienteIdStr].push({
+              id: nuevoIdEdicion(),
               talla: definicion.medida || '',
               medida: definicion.medida || '',
               barco: '', taras: null, sobrante: null, mostrarSobrante: false,
@@ -371,7 +373,7 @@ export const embarquePedidoMixin = {
 
       Object.entries(nuevosCrudosPorCliente).forEach(([clienteId, crudos]) => {
         if (!this.clienteCrudos[clienteId]) this.$set(this.clienteCrudos, clienteId, []);
-        if (!this.clienteCrudos[clienteId].length) this.clienteCrudos[clienteId].push({ items: [] });
+        if (!this.clienteCrudos[clienteId].length) this.clienteCrudos[clienteId].push({ id: nuevoIdEdicion(), items: [] });
         if (!Array.isArray(this.clienteCrudos[clienteId][0].items)) {
           this.$set(this.clienteCrudos[clienteId][0], 'items', []);
         }

@@ -146,3 +146,49 @@ const DEBUG_MODE = true; // Para ver logs detallados
 ---
 
 *Última actualización: Solución completa para múltiples instancias y gestión de listeners*
+# Historial de edición de embarques
+
+Deshacer/Rehacer cubre fecha, carga, camión, altas/bajas de productos, campos
+individuales, filas de kilos/taras, taras extra, reportes taras/bolsas y grupos
+/items de crudos. El historial es local a la sesión (100 acciones); se reinicia
+al recargar o cambiar de embarque. No incluye Rendimientos, Costos ni historial
+persistente de versiones. No registra el reordenamiento de filas.
+
+Las pesadas tienen IDs paralelos a las listas numéricas existentes:
+`pesadasIds` identifica cada par tara/kilos, `reportesIds` cada par tara/bolsas,
+y `tarasExtraIds` cada tara extra. Grupos e items de crudos tienen `id`.
+Los documentos anteriores se identifican determinísticamente al cargar; las
+altas reciben UUID. Los eventos de agregar/borrar modifican IDs y valores juntos.
+Los cálculos y PDFs siguen consumiendo las listas numéricas habituales.
+
+El historial y la fusión usan el mismo árbol por identidad y cambios
+condicionales antes/después. Los snapshots remotos no crean acciones locales.
+Si otro editor cambió el mismo valor, o completó una fila que se intenta borrar,
+se conserva su estado. Deshacer no recrea padres eliminados. La pantalla muestra
+un aviso cuando una fusión o reversión omite operaciones en conflicto. Las
+transacciones existentes verifican la base del documento y reintentan después
+de combinar; no se escriben listas antiguas a ciegas. La lápida de un producto
+viaja en la misma transacción que su eliminación/restauración; `null` marca una
+restauración. Serializar no crea productos vacíos automáticamente.
+
+Todos los editores del embarque deben usar esta versión. Clientes antiguos no
+mantienen las identidades de las filas y no ofrecen esta protección. No es una
+migración de toda la base ni modifica reglas de acceso. La cola offline conserva
+los conflictos para revisión al reabrir el editor, y el editor recupera la base
+anterior al guardado pendiente para combinarla con el servidor.
+
+## Pruebas
+
+- `npm run test:embarques-historial`: operaciones por identidad, valores repetidos,
+  crudos, restauraciones, conflictos y watchers reales de Vue.
+- Emulador: `firebase emulators:start --only firestore --project demo-reypez-embarques --config scripts/firebase-embarques-test.json` (Java 21; usar una versión de Node compatible con la CLI).
+- Con `FIRESTORE_EMULATOR_HOST=127.0.0.1:8085`, ejecutar
+  `npm run test:embarques-colaboracion` y `node scripts/test-embarque-matriz.cjs`.
+  La primera suite rechaza destinos que no sean loopback y usa exclusivamente
+  el proyecto ficticio `demo-reypez-embarques`. Prueba dos clientes del SDK,
+  transacciones, listener onSnapshot, undo durante una confirmación en vuelo
+  y reapertura de una copia pendiente. Su almacenamiento offline es en memoria;
+  no valida IndexedDB, las reglas de producción ni navegadores/dispositivos reales.
+
+La aplicación local normal sigue conectada al Firebase configurado en el repo;
+la variable del emulador solo afecta estas pruebas aisladas.

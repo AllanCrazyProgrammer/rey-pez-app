@@ -5,6 +5,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const babel = require('@babel/core');
+const { loadSource } = require('./helpers/embarques-source.cjs');
+const colaboracion = loadSource('src/utils/embarqueColaboracion.js');
+const { embarqueUndoMixin } = loadSource('src/views/Embarques/mixins/embarqueUndoMixin.js');
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
   console.error('Rechazado: define FIRESTORE_EMULATOR_HOST. Este script no escribe en Firestore de producción.');
@@ -35,7 +38,7 @@ function partirHost(valor) {
 }
 
 (async () => {
-  const { initializeApp } = await import('firebase/app');
+  const { initializeApp, deleteApp } = await import('firebase/app');
   const firestoreReal = await import('firebase/firestore');
   const { getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc, getDocs, collection, deleteDoc } = firestoreReal;
   const alRealm = (value) => {
@@ -82,13 +85,14 @@ function partirHost(valor) {
     mergeSave(...args) { return this.real.mergeSave(...args); },
   };
   const mixin = compilar('src/views/Embarques/mixins/embarqueSyncMixin.js', (id) => {
+    if (id === '@/utils/embarqueColaboracion') return colaboracion;
     if (id === 'firebase/firestore') return firestore;
     if (id === '@/utils/embarqueRevision') return revision;
     if (id === 'uuid') return { v4: () => 'id' };
     if (id === '@/services/EmbarquesOfflineService') return puenteOffline;
     if (id === '@/utils/dateUtils') return { normalizarFechaISO: (v) => v, normalizarFechaValor: (v) => v, obtenerFechaActualISO: () => '2026-10-12' };
     if (id === '@/constants.js/embarque') return { crearNuevoProducto: () => ({}) };
-    if (id === '@/utils/embarqueContenido') return { embarqueTieneContenidoOperativoEstado: () => true, serializarEstable: (v) => JSON.stringify(v) };
+    if (id === '@/utils/embarqueContenido') return { embarqueTieneContenidoOperativoEstado: () => true };
     throw new Error('Mixin: ' + id);
   }, { navigator: { onLine: true } });
 
@@ -188,6 +192,7 @@ function partirHost(valor) {
     throw new Error(id);
   });
   const carga = compilar('src/views/Embarques/mixins/embarqueCargaMixin.js', (id) => {
+    if (id === '@/utils/embarqueColaboracion') return colaboracion;
     if (id === 'firebase/firestore') return firestore;
     if (id === 'uuid') return { v4: () => 'id' };
     if (id === '@/services/EmbarquesOfflineService') return puenteOffline;
@@ -243,6 +248,7 @@ function partirHost(valor) {
       ...(opciones.estado || {}),
     };
     Object.assign(ctx, mixin.embarqueSyncMixin.methods);
+    Object.assign(ctx, embarqueUndoMixin.methods);
     if (opciones.aplicarReal) Object.assign(ctx, carga.embarqueCargaMixin.methods);
     ctx.prepararDatosEmbarque = () => datos;
     ctx.programarSubidaEnVivo = () => {};
@@ -671,8 +677,6 @@ function partirHost(valor) {
         aplicarReal: true,
         estado: {
           embarque: { cargaCon: 'Chito', productos: [productoLocal], fecha: '2026-10-12' },
-          _cargaConBase: 'Porro',
-          _productosBase: new Map([[productoLocal.id, { obj: { ...productoLocal }, str: contenido.serializarEstable(productoLocal) }]]),
         },
       }
     );
@@ -712,6 +716,8 @@ function partirHost(valor) {
     for (const idDoc of creado) {
       await deleteDoc(doc(db, 'embarques', idDoc)).catch(() => {});
     }
+    await firestoreReal.terminate(db);
+    await deleteApp(app);
   }
 })().catch((error) => {
   console.error(error);

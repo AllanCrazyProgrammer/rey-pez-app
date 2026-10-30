@@ -133,7 +133,7 @@
                 @desmarcar-campo-edicion="$emit('desmarcar-campo-edicion', $event.productoId, $event.campo)" />
 
             <!-- Lista de crudos -->
-            <CrudoItem v-for="(crudo, index) in crudos" :key="'crudo-' + index" :crudo="crudo"
+            <CrudoItem v-for="(crudo, index) in crudos" :key="crudo.id" :crudo="crudo"
                 :embarque-bloqueado="embarqueBloqueado" :cliente-id="clienteId" :crudo-index="index"
                 :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque" :nombre-cliente="nombreCliente"
                 :pedido-referencia-crudos="pedidoReferenciaCrudosPorCliente[clienteId] || null"

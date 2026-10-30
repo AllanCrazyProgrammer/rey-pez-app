@@ -9,6 +9,8 @@
     "build": "vue-cli-service build && npx cap sync",
     "test:maria": "node --test scripts/test-maria.cjs",
     "test:embarques-offline": "node scripts/test-embarques-offline.cjs",
+    "test:embarques-historial": "node --test scripts/test-embarques-historial.cjs",
+    "test:embarques-colaboracion": "node --test scripts/test-embarques-colaboracion.cjs",
     "lint": "vue-cli-service lint",
     "electron:dev": "node scripts/dev-desktop.cjs",
     "electron:build": "node scripts/build-desktop.cjs",

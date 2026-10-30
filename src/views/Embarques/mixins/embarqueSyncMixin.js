@@ -1,9 +1,9 @@
 import { getFirestore, collection, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
-import { normalizarFechaISO, normalizarFechaValor, obtenerFechaActualISO } from '@/utils/dateUtils';
-import { crearNuevoProducto } from '@/constants.js/embarque';
-import { embarqueTieneContenidoOperativoEstado, serializarEstable } from '@/utils/embarqueContenido';
+import { normalizarFechaISO } from '@/utils/dateUtils';
+import { identificarEstado } from '@/utils/embarqueColaboracion';
+import { embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 import {
   CAMPOS_AJENOS_AL_EDITOR,
   CAMPOS_EDITOR,
@@ -12,155 +12,6 @@ import {
   planearEscritura,
   seleccionarCampos,
 } from '@/utils/embarqueRevision';
-
-/**
- * Normaliza los datos de un embarque para escribirlos en Firestore.
- * Contiene la UNIÓN completa de los campos que manejan los distintos caminos
- * de sincronización (NuevoEmbarque y ListaEmbarques) para que ninguno borre
- * campos que el otro sí conserva al reescribir el documento completo.
- *
- * @param {Object} docData - Datos crudos del embarque (docData del snapshot offline).
- * @param {Object} record - Registro offline completo (fallback de campos).
- * @param {Object} contexto - { dataRemota, costoExtraDefault, fechaDefault }.
- */
-export function normalizarDocDataParaFirestore(docData, record = {}, contexto = {}) {
-  const dataCruda = docData ? JSON.parse(JSON.stringify(docData)) : {};
-
-  const parseFecha = (valor) => normalizarFechaValor(valor) || obtenerFechaActualISO();
-
-  const pickConRemoto = (key) => {
-    if (dataCruda[key] !== undefined && dataCruda[key] !== null) return dataCruda[key];
-    if (record && record[key] !== undefined && record[key] !== null) return record[key];
-    const remoto = contexto.dataRemota;
-    if (remoto && remoto[key] !== undefined && remoto[key] !== null) return remoto[key];
-    return undefined;
-  };
-
-  const data = {
-    cargaCon: dataCruda.cargaCon || record.cargaCon || '',
-    camionNumero: dataCruda.camionNumero || record.camionNumero || 1,
-    kilosCrudos: dataCruda.kilosCrudos || record.kilosCrudos || {},
-    clientes: Array.isArray(dataCruda.clientes)
-      ? dataCruda.clientes
-      : (Array.isArray(record.clientes) ? record.clientes : []),
-    clientesJuntarMedidas: dataCruda.clientesJuntarMedidas || record.clientesJuntarMedidas || {},
-    clientesReglaOtilio: dataCruda.clientesReglaOtilio || record.clientesReglaOtilio || {},
-    clientesIncluirPrecios: dataCruda.clientesIncluirPrecios || record.clientesIncluirPrecios || {},
-    clientesCuentaEnPdf: dataCruda.clientesCuentaEnPdf || record.clientesCuentaEnPdf || {},
-    clientesSumarKgCatarro: dataCruda.clientesSumarKgCatarro || record.clientesSumarKgCatarro || {},
-    clientesPersonalizados: Array.isArray(dataCruda.clientesPersonalizados)
-      ? dataCruda.clientesPersonalizados
-      : (Array.isArray(record.clientesPersonalizados) ? record.clientesPersonalizados : []),
-    embarqueBloqueado: Boolean(record.embarqueBloqueado ?? dataCruda.embarqueBloqueado ?? false),
-    noEnviadoMexico: Boolean(pickConRemoto('noEnviadoMexico') ?? false),
-    costosPorMedida: dataCruda.costosPorMedida || record.costosPorMedida || {},
-    aplicarCostoExtra: dataCruda.aplicarCostoExtra || record.aplicarCostoExtra || {},
-    costoExtra: typeof dataCruda.costoExtra === 'number'
-      ? dataCruda.costoExtra
-      : (typeof record.costoExtra === 'number' ? record.costoExtra : (contexto.costoExtraDefault || 18)),
-    medidasConfiguracion: Array.isArray(dataCruda.medidasConfiguracion)
-      ? dataCruda.medidasConfiguracion
-      : (Array.isArray(record.medidasConfiguracion) ? record.medidasConfiguracion : []),
-    preciosActuales: Array.isArray(dataCruda.preciosActuales)
-      ? dataCruda.preciosActuales
-      : (Array.isArray(record.preciosActuales) ? record.preciosActuales : []),
-    medidaOculta: dataCruda.medidaOculta || record.medidaOculta || {},
-    analizarGanancia: dataCruda.analizarGanancia || record.analizarGanancia || {},
-    analizarGananciaCrudos: dataCruda.analizarGananciaCrudos || record.analizarGananciaCrudos || {},
-    analizarMaquilaGanancia: dataCruda.analizarMaquilaGanancia || record.analizarMaquilaGanancia || {},
-    precioMaquila: dataCruda.precioMaquila || record.precioMaquila || {},
-    pesoTaraCosto: typeof dataCruda.pesoTaraCosto === 'number' ? dataCruda.pesoTaraCosto : (record.pesoTaraCosto ?? 19),
-    pesoTaraVenta: typeof dataCruda.pesoTaraVenta === 'number' ? dataCruda.pesoTaraVenta : (record.pesoTaraVenta ?? 20),
-    nombresMedidasPersonalizados: dataCruda.nombresMedidasPersonalizados || record.nombresMedidasPersonalizados || {},
-    notaRendimientos: dataCruda.notaRendimientos || record.notaRendimientos || '',
-    fecha: parseFecha(dataCruda.fecha || record.fecha || contexto.fechaDefault),
-  };
-
-  // Campos del flujo del editor: conservarlos si existen local o remotamente
-  // para no borrarlos al reescribir el documento completo con setDoc.
-  ['borrador'].forEach((key) => {
-    const valor = pickConRemoto(key);
-    if (valor !== undefined) {
-      data[key] = valor;
-    }
-  });
-
-  // Campos de Rendimientos, Costos, Fletes y la lista. Si el documento
-  // remoto existe, su valor gana: el espejo offline del editor suele traer
-  // una copia vieja (kilosCrudos, pagos, ganancias) que no debe resucitar.
-  const pickSoloRemotoSiHayDoc = (key) => {
-    const remoto = contexto.dataRemota;
-    if (remoto) {
-      return Object.prototype.hasOwnProperty.call(remoto, key) ? remoto[key] : undefined;
-    }
-    return pickConRemoto(key);
-  };
-  CAMPOS_AJENOS_AL_EDITOR.forEach((key) => {
-    const valor = pickSoloRemotoSiHayDoc(key);
-    if (contexto.dataRemota && valor === undefined) {
-      delete data[key];
-      return;
-    }
-    if (valor !== undefined) data[key] = valor;
-  });
-
-  // Señal de cambio para los editores en vivo: cada sincronización cuenta
-  // como una revisión nueva sobre lo remoto.
-  data.rev = (Number(pickSoloRemotoSiHayDoc('rev')) || 0) + 1;
-
-  // Lápidas de borrado de productos: unión de lo local y lo remoto para que
-  // una sincronización no reviva productos borrados por otro editor.
-  data.productosEliminados = {
-    ...((contexto.dataRemota && contexto.dataRemota.productosEliminados) || {}),
-    ...(dataCruda.productosEliminados || record.productosEliminados || {})
-  };
-
-  data.clientes = data.clientes.map(cliente => ({
-    ...cliente,
-    productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
-      ...producto,
-      restarTaras: producto.restarTaras || false,
-      noSumarKilos: producto.noSumarKilos || false,
-    })) : [],
-    crudos: Array.isArray(cliente.crudos) ? cliente.crudos : [],
-  }));
-
-  // Colaboración: este payload se escribe con setDoc(merge:false), y el
-  // registro offline puede estar REZAGADO respecto al documento remoto. Los
-  // productos que otros editores agregaron después y que no tienen lápida se
-  // conservan (unión por id) — sin esto, sincronizar un registro viejo
-  // borraba el trabajo ajeno.
-  const remotoColab = contexto.dataRemota;
-  if (remotoColab && Array.isArray(remotoColab.clientes)) {
-    const idsEnPayload = new Set();
-    data.clientes.forEach((cliente) => {
-      (Array.isArray(cliente.productos) ? cliente.productos : []).forEach((producto) => {
-        if (producto && producto.id) idsEnPayload.add(producto.id);
-      });
-    });
-    const lapidas = data.productosEliminados || {};
-
-    remotoColab.clientes.forEach((clienteRemoto) => {
-      const productosFaltantes = (Array.isArray(clienteRemoto.productos) ? clienteRemoto.productos : [])
-        .filter((producto) => producto && producto.id &&
-          !idsEnPayload.has(producto.id) && !lapidas[producto.id]);
-      if (productosFaltantes.length === 0) return;
-
-      const clienteDestino = data.clientes.find(c => String(c.id) === String(clienteRemoto.id));
-      if (clienteDestino) {
-        clienteDestino.productos = [...(clienteDestino.productos || []), ...productosFaltantes];
-      } else {
-        data.clientes.push({
-          ...clienteRemoto,
-          productos: productosFaltantes,
-          crudos: Array.isArray(clienteRemoto.crudos) ? clienteRemoto.crudos : []
-        });
-      }
-    });
-  }
-
-  return data;
-}
 
 export const embarqueSyncMixin = {
   beforeDestroy() {
@@ -275,7 +126,7 @@ export const embarqueSyncMixin = {
     },
 
     capturarBaseEditor(data) {
-      this._baseCamposEditor = fotoCampos(data || {}, CAMPOS_EDITOR);
+      this._baseCamposEditor = JSON.parse(JSON.stringify(fotoCampos(data || {}, CAMPOS_EDITOR)));
     },
 
     aplicarCamposAjenos(ajenos) {
@@ -393,32 +244,6 @@ export const embarqueSyncMixin = {
         }
       }
       return Promise.resolve();
-    },
-
-    /**
-     * Registra el documento recién escrito en la nube como la "última versión
-     * sincronizada" para las fusiones de 3 vías (productos, crudos por
-     * cliente y cargaCon). Debe recibir el payload ESCRITO, nunca el estado
-     * vivo: el estado vivo puede contener ediciones posteriores a la captura
-     * del payload que aún no están en la nube.
-     */
-    actualizarBasesSincronizadas(docData) {
-      const clientes = Array.isArray(docData && docData.clientes) ? docData.clientes : [];
-      this._productosBase = new Map(
-        clientes
-          .flatMap(c => (Array.isArray(c.productos) ? c.productos : []))
-          .map(p => [
-            p.id,
-            { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
-          ])
-      );
-      this._crudosBase = new Map(
-        clientes.map(c => [
-          String(c.id),
-          serializarEstable(Array.isArray(c.crudos) ? c.crudos : [])
-        ])
-      );
-      this._cargaConBase = (docData && docData.cargaCon) || '';
     },
 
     programarSubidaEnVivo(retrasoMs) {
@@ -585,13 +410,6 @@ export const embarqueSyncMixin = {
         // escrita (la transacción habría detectado conflicto si no): ya es
         // obsoleto en ambos casos de abajo.
         this._snapshotRemotoDiferido = null;
-        // La nueva base de fusión de 3 vías es EXACTAMENTE lo que se escribió
-        // en la nube (el payload congelado), NO el estado vivo. El estado
-        // vivo puede traer ya teclas nuevas que no se subieron; registrarlas
-        // como "sincronizadas" hacía que el siguiente snapshot remoto las
-        // pisara: el campo que se estaba capturando se borraba solo.
-        this.actualizarBasesSincronizadas(docData);
-
         if ((Number(this._dirtyGen) || 0) === genCapturada) {
           this.hasPendingChanges = false;
           await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced', docData });
@@ -649,9 +467,10 @@ export const embarqueSyncMixin = {
     },
 
     prepararDatosEmbarque() {
+      identificarEstado({ ...this.embarque, clienteCrudos: this.clienteCrudos }, this.$set);
       // Lápidas de borrado: registro de productos eliminados para que los
       // demás editores en vivo los quiten en lugar de "preservarlos" como si
-      // fueran productos nuevos del otro lado. Se depuran a los 7 días.
+      // fueran productos nuevos del otro lado. Se conservan para identificar restauraciones.
       const productosEliminados = { ...(this._productosEliminadosDoc || {}) };
       const ahora = Date.now();
       if (this.productosEliminadosLocalmente) {
@@ -661,11 +480,6 @@ export const embarqueSyncMixin = {
           }
         });
       }
-      Object.keys(productosEliminados).forEach((idProducto) => {
-        if (ahora - Number(productosEliminados[idProducto] || 0) > 7 * 24 * 60 * 60 * 1000) {
-          delete productosEliminados[idProducto];
-        }
-      });
       this._productosEliminadosDoc = productosEliminados;
 
       const embarqueData = {
@@ -690,36 +504,11 @@ export const embarqueSyncMixin = {
 
       const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
 
-      if (Object.keys(this.productosPorCliente).length === 0 && this.clientesPredefinidos.length > 0) {
-        const primerClienteId = this.clientesPredefinidos[0].id.toString();
-        const primerCliente = this.clientesPredefinidos[0];
-        const nuevoProducto = crearNuevoProducto(primerClienteId);
-        nuevoProducto.nombreCliente = primerCliente.nombre;
-        this.embarque.productos.push(nuevoProducto);
-        this.clienteActivo = primerClienteId;
-        this.$forceUpdate();
-      }
-
-      const clientesDisponiblesIds = this.clientesDisponibles
-        .filter(c => c.id !== 'otro')
-        .map(c => c.id.toString());
-
-      clientesDisponiblesIds.forEach(clienteId => {
-        const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
-        if (!existeProducto) {
-          const clienteInfo = clientesPredefinidosMap.get(clienteId) ||
-                              this.clientesDisponibles.find(c => c.id.toString() === clienteId);
-          if (clienteInfo) {
-            const nuevoProducto = crearNuevoProducto(clienteId);
-            nuevoProducto.nombreCliente = clienteInfo.nombre;
-            this.setTipoDefaultParaCliente(nuevoProducto);
-            this.embarque.productos.push(nuevoProducto);
-            console.log(`Se ha creado un producto para el cliente ${nuevoProducto.nombreCliente} que no tenía ninguno.`);
-          }
-        }
-      });
-
-      Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
+      // Serializar nunca crea productos: deshacer el último alta debe dejar
+      // el cliente vacío, sin introducir otra fila fuera del historial.
+      const porCliente = { ...this.productosPorCliente };
+      Object.keys(this.clienteCrudos || {}).forEach(id => { if (!porCliente[id]) porCliente[id] = []; });
+      Object.entries(porCliente).forEach(([clienteId, productos]) => {
         const clientePredefinido = clientesPredefinidosMap.get(clienteId);
         const crudosCliente = this.clienteCrudos[clienteId] || [];
         const clienteData = {

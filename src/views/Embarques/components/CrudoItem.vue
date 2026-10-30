@@ -3,7 +3,7 @@
         <h2 class="crudo-header">Crudos</h2>
 
         <div class="crudo-items">
-            <div v-for="(item, itemIndex) in crudoData.items || []" :key="'item-' + itemIndex" class="crudo-item"
+            <div v-for="(item, itemIndex) in crudoData.items || []" :key="item.id" class="crudo-item"
                 :data-es-venta="item.esVenta">
                 <div class="crudo-talla-container">
                     <button @click="abrirModalPrecio(item)" class="btn-precio" :class="{ 'tiene-precio': item.precio }"
@@ -86,6 +86,7 @@
 </template>
 
 <script>
+import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
 import PedidoReferencia from './PedidoReferencia.vue';
 import { obtenerDetallePrecioParaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
@@ -319,6 +320,7 @@ export default {
             }
             
             const nuevoItem = {
+                id: nuevoIdEdicion(),
                 talla: '',
                 barco: '',
                 taras: '',

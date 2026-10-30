@@ -77,11 +77,12 @@
       </div>
 
       <!-- Botones Undo/Redo -->
+      <p v-if="mensajeHistorial" role="status" class="alert alert-info">{{ mensajeHistorial }}</p>
       <div class="botones-undo-redo">
         <button 
           type="button" 
           @click="undo" 
-          :disabled="undoStack.length <= 1"
+          :disabled="undoStack.length === 0 || embarqueBloqueado"
           class="btn btn-secondary btn-sm"
         >
           Deshacer
@@ -89,7 +90,7 @@
         <button 
           type="button" 
           @click="redo" 
-          :disabled="redoStack.length === 0"
+          :disabled="redoStack.length === 0 || embarqueBloqueado"
           class="btn btn-secondary btn-sm"
         >
           Rehacer
@@ -325,7 +326,7 @@ import {
 } from '@/utils/dateUtils';
 import { obtenerPrecioMaquilaOzunaDefault } from '@/utils/preciosHistoricos';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 
 // Después de las imports existentes, agregar:
 import EmbarquesSync from '@/services/EmbarquesSync';
@@ -794,133 +795,6 @@ export default {
       this.camposEnEdicion.delete(clave);
     },
 
-    esCampoEnEdicion(productoId, campo) {
-      const clave = `${productoId}-${campo}`;
-      return this.camposEnEdicion.has(clave);
-    },
-
-    // Método para hacer merge de productos preservando campos en edición
-    mergeProductosConCamposEnEdicion(productosServidor, productosFiltrados) {
-      const productosLocales = this.embarque.productos || [];
-      const productosFinales = [];
-
-      // Primero, agregar productos del servidor, pero preservando campos en edición
-      productosFiltrados.forEach(productoServidor => {
-        const productoLocal = productosLocales.find(p => p.id === productoServidor.id);
-        
-        if (!productoLocal) {
-          // Producto no existe localmente, usar el del servidor
-          productosFinales.push(productoServidor);
-          return;
-        }
-
-        // Hacer merge del producto preservando campos en edición
-        const productoMergeado = { ...productoServidor };
-        
-
-        // Verificar si hay campos de kilos en edición
-        if (productoLocal.kilos && Array.isArray(productoLocal.kilos)) {
-          productoLocal.kilos.forEach((kilo, index) => {
-            if (this.esCampoEnEdicion(productoServidor.id, `kilos-${index}`)) {
-              console.log(`[MERGE] Preservando kilo en edición: ${productoServidor.id}-kilos-${index}`);
-              if (!productoMergeado.kilos) productoMergeado.kilos = [];
-              productoMergeado.kilos[index] = kilo;
-            }
-          });
-        }
-
-        // Verificar si hay campos de taras en edición
-        if (productoLocal.taras && Array.isArray(productoLocal.taras)) {
-          productoLocal.taras.forEach((tara, index) => {
-            if (this.esCampoEnEdicion(productoServidor.id, `taras-${index}`)) {
-              console.log(`[MERGE] Preservando tara en edición: ${productoServidor.id}-taras-${index}`);
-              if (!productoMergeado.taras) productoMergeado.taras = [];
-              productoMergeado.taras[index] = tara;
-            }
-          });
-        }
-
-        if (this.esCampoEnEdicion(productoServidor.id, 'nombreAlternativoPDF')) {
-          if (Object.prototype.hasOwnProperty.call(productoLocal, 'nombreAlternativoPDF')) {
-            productoMergeado.nombreAlternativoPDF = productoLocal.nombreAlternativoPDF;
-          } else {
-            delete productoMergeado.nombreAlternativoPDF;
-          }
-        } else if (Object.prototype.hasOwnProperty.call(productoLocal, 'nombreAlternativoPDF')) {
-          // Fallback: si hay un valor local presente y difiere del servidor, preferir el local
-          if (productoLocal.nombreAlternativoPDF !== productoServidor.nombreAlternativoPDF) {
-            productoMergeado.nombreAlternativoPDF = productoLocal.nombreAlternativoPDF;
-          }
-        }
-
-        if (this.nombreAlternativoPendienteSync.has(productoServidor.id)) {
-          const valorPendiente = this.nombreAlternativoPendienteSync.get(productoServidor.id);
-          if (valorPendiente) {
-            productoMergeado.nombreAlternativoPDF = valorPendiente;
-          } else {
-            delete productoMergeado.nombreAlternativoPDF;
-          }
-
-          const valorServidor = productoServidor.nombreAlternativoPDF || null;
-          if ((valorPendiente || null) === valorServidor) {
-            this.nombreAlternativoPendienteSync.delete(productoServidor.id);
-          }
-        }
-
-        
-        productosFinales.push(productoMergeado);
-      });
-
-      // Placeholder redundante: renglón vacío de un cliente que ya tiene
-      // productos en el servidor (cada editor crea el suyo; preservarlos
-      // duplica renglones vacíos entre colaboradores).
-      const clientesConProductosEnServidor = new Set(
-        productosServidor.map(p => String(p.clienteId))
-      );
-      const esPlaceholderRedundante = (producto) =>
-        !productoTieneContenido(producto) &&
-        clientesConProductosEnServidor.has(String(producto.clienteId));
-
-      // Lápidas de borrado: productos eliminados por algún editor no se
-      // preservan (sin esto, el borrado de la otra persona "revivía" aquí).
-      const eliminadosRemotos = this._productosEliminadosDoc || {};
-
-      // Preservar productos nuevos pendientes de sincronización
-      const productosNuevosAPreservar = [];
-      if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
-        this.productosNuevosPendientes.forEach((producto, id) => {
-          const existeEnServidor = productosServidor.some(p => p.id === id);
-          // Preservar la versión local VIVA (lo que se está tecleando), no la
-          // copia tomada al crear el producto: la copia vieja pisaba lo escrito.
-          // Las filas creadas por el usuario se preservan aunque estén vacías;
-          // el descarte de placeholders aplica solo a renglones auto-creados.
-          const productoVivo = productosLocales.find(p => p.id === id) || producto;
-          if (!existeEnServidor && !eliminadosRemotos[id]) {
-            productosNuevosAPreservar.push(productoVivo);
-            this.productosNuevosPendientes.set(id, { ...productoVivo });
-          } else {
-            this.productosNuevosPendientes.delete(id);
-          }
-        });
-      }
-
-      // También preservar productos locales con UUID no sincronizados
-      productosLocales.forEach(productoLocal => {
-        if (esUUIDValido(productoLocal.id) &&
-            !productosServidor.some(p => p.id === productoLocal.id) &&
-            !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
-            !esPlaceholderRedundante(productoLocal) &&
-            !eliminadosRemotos[productoLocal.id]) {
-          productosNuevosAPreservar.push(productoLocal);
-          if (!this.productosNuevosPendientes.has(productoLocal.id)) {
-            this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
-          }
-        }
-      });
-
-      return [...productosFinales, ...productosNuevosAPreservar];
-    },
-    
     async triggerGuardadoInicial() {
       // Solo proceder si es un nuevo embarque sin ID
       if (this.embarqueId) {
@@ -1175,41 +1049,11 @@ export default {
 
       console.log(`[ELIMINAR-PRODUCTO] ✅ Producto eliminado exitosamente. Productos restantes: ${this.embarque.productos.length}`);
 
-      // Publicar la lápida en una transacción. Si Rendimientos (u otra
-      // pantalla) subió `rev` con otros campos, se fusiona: no se rebobina
-      // la revisión ni se tocan esos campos. Si alguien más ya marcó este
-      // mismo producto, se pide recargar en lugar de pisar a ciegas.
-      const publicarLapida = async () => {
-        const marcaLapida = Date.now();
-        if (this.embarqueId && navigator.onLine) {
-          try {
-            const db = getFirestore();
-            const ruta = `productosEliminados.${producto.id}`;
-            const resultado = await escribirCamposEmbarque(db, this.embarqueId, {
-              baseRev: Number(this._revBase) || 0,
-              baseCampos: { [ruta]: undefined },
-              campos: { [ruta]: marcaLapida },
-            });
-            const mapaRemoto = (resultado.remoto && resultado.remoto.productosEliminados) || {};
-            this._productosEliminadosDoc = {
-              ...mapaRemoto,
-              ...(this._productosEliminadosDoc || {}),
-              [producto.id]: marcaLapida
-            };
-            if (!resultado.fusiono && !resultado.omitida) {
-              this._revBase = resultado.rev;
-            }
-          } catch (error) {
-            if (esErrorConflictoEmbarque(error)) {
-              if (pedirRecargaPorConflicto(error)) window.location.reload();
-              return;
-            }
-            console.warn('[ELIMINAR-PRODUCTO] No se pudo publicar la lápida de inmediato (se subirá con el guardado normal):', error);
-          }
-        }
-        if (this.embarqueId) this.guardarCambiosEnTiempoReal();
-      };
-      publicarLapida();
+      // La eliminación y su lápida viajan juntas por la misma transacción.
+      // Publicarla por separado permitía que una respuesta tardía anulase undo.
+      this._productosEliminadosDoc = { ...(this._productosEliminadosDoc || {}), [producto.id]: Date.now() };
+      this.productosNuevosPendientes.delete(producto.id);
+      if (this.embarqueId) this.guardarCambiosEnTiempoReal();
 
       // Actualizar las medidas usadas después de eliminar
       this.actualizarMedidasUsadas();
@@ -1644,18 +1488,15 @@ export default {
     },
     embarque: {
       handler(nuevoValor) {
-        if (this.isUndoRedo) {
-          this.isUndoRedo = false;
-          return;
-        }
-        
         // Evitar guardado excesivo durante la inicialización
         if (this._inicializandoEmbarque) {
+          this.registrarEdicionHistorial(nuevoValor, true);
           return;
         }
 
         // Si estamos aplicando cambios remotos, no dispare guardado inmediato
         if (this._aplicandoRemoto) {
+          this.registrarEdicionHistorial(nuevoValor, true);
           return;
         }
         
@@ -1665,10 +1506,7 @@ export default {
         } catch (error) {
           console.warn('[watch embarque] No se pudo guardar el embarque en localStorage:', error);
         }
-        this.undoStack.push(snapshot);
-        // Bound full-document history so long editing sessions do not retain unbounded copies.
-        if (this.undoStack.length > 100) this.undoStack.shift();
-        this.redoStack = [];
+        this.registrarEdicionHistorial(nuevoValor);
 
         // Disparar auto-guardado si hay productos con medida válida (tipo opcional)
         const hayProductosConMedida = (nuevoValor.productos || []).some(p => 
@@ -1684,6 +1522,7 @@ export default {
     },
     clienteCrudos: {
       handler() {
+        this.registrarEdicionHistorial(this.embarque, Boolean(this._inicializandoEmbarque || this._aplicandoRemoto));
         // No marcar cambios pendientes cuando lo que cambió vino del servidor
         // (aplicarDocRemoto): eso creaba un bucle de subidas sin cambios.
         if (this._inicializandoEmbarque || this._aplicandoRemoto) {

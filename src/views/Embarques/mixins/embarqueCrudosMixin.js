@@ -1,3 +1,4 @@
+import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
 import { crearNuevoCrudoItem } from '@/constants.js/embarque';
 
 export const embarqueCrudosMixin = {
@@ -6,7 +7,7 @@ export const embarqueCrudosMixin = {
       if (!this.clienteCrudos[clienteId]) {
         this.$set(this.clienteCrudos, clienteId, []);
       }
-      this.clienteCrudos[clienteId].push({ items: [crearNuevoCrudoItem()] });
+      this.clienteCrudos[clienteId].push({ id: nuevoIdEdicion(), items: [crearNuevoCrudoItem()] });
       this.guardarCambiosEnTiempoReal();
     },
 
@@ -15,7 +16,7 @@ export const embarqueCrudosMixin = {
         this.$set(this.clienteCrudos, clienteId, []);
       }
       if (!this.clienteCrudos[clienteId][index]) {
-        this.$set(this.clienteCrudos[clienteId], index, { items: [] });
+        this.$set(this.clienteCrudos[clienteId], index, { id: nuevoIdEdicion(), items: [] });
       }
       if (!Array.isArray(this.clienteCrudos[clienteId][index].items)) {
         this.$set(this.clienteCrudos[clienteId][index], 'items', []);
@@ -39,7 +40,7 @@ export const embarqueCrudosMixin = {
       }
       this.clienteCrudos[clienteId][crudoIndex].items.splice(itemIndex, 1);
       if (this.clienteCrudos[clienteId][crudoIndex].items.length === 0) {
-        this.eliminarCrudo(clienteId, crudoIndex);
+        this.eliminarCrudo(crudoIndex, clienteId);
       }
       this.guardarCambiosEnTiempoReal();
     },

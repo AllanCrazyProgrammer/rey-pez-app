@@ -243,7 +243,7 @@
                         <label>-3</label>
                     </div>
                 </div>
-                <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
+                <div v-for="(tara, taraIndex) in producto.taras" :key="producto.pesadasIds[taraIndex]" class="input-group">
                     <input v-model.number="producto.taras[taraIndex]" type="tel" class="form-control tara-input"
                         ref="taraInputs"
                         placeholder="Tara" :size="String(producto.taras[taraIndex] || '').length || 1"
@@ -255,7 +255,7 @@
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
                         tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
-                <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex"
+                <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="producto.tarasExtraIds[taraExtraIndex]"
                     class="input-group">
                     <input v-model.number="producto.tarasExtra[taraExtraIndex]" type="tel"
                         class="form-control tara-input" placeholder="Tara Extra"
@@ -275,7 +275,7 @@
             </div>
             <div class="columna">
                 <h5>Kilos</h5>
-                <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
+                <div v-for="(kilo, kiloIndex) in producto.kilos" :key="producto.pesadasIds[kiloIndex]" class="input-group">
                     <input v-model.number="producto.kilos[kiloIndex]" type="tel" class="form-control kilo-input"
                         ref="kiloInputs"
                         placeholder="Kilos" :size="String(producto.kilos[kiloIndex] || '').length || 1"
@@ -292,7 +292,7 @@
         <div class="reporte-taras-bolsas">
             <div class="reporte-item">
                 <h5>Taras</h5>
-                <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
+                <div v-for="(tara, index) in producto.reporteTaras" :key="producto.reportesIds[index]" class="input-group mb-2">
                     <input type="tel" v-model="producto.reporteTaras[index]" class="form-control reporte-input"
                         ref="reporteTaraInputs"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
@@ -308,7 +308,7 @@
             </div>
             <div class="reporte-item">
                 <h5>Bolsas</h5>
-                <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
+                <div v-for="(bolsa, index) in producto.reporteBolsas" :key="producto.reportesIds[index]" class="input-group mb-2">
                     <input type="tel" v-model="producto.reporteBolsas[index]" class="form-control reporte-input"
                         ref="reporteBolsaInputs"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
@@ -328,6 +328,7 @@
 
 
 <script>
+import { insertarFilaProducto, eliminarFilaProducto } from '@/utils/embarqueColaboracion';
 import PedidoReferencia from './PedidoReferencia.vue';
 import {
     obtenerDetallePrecioParaMedida,
@@ -953,8 +954,7 @@ export default {
 
         // Métodos para taras
         agregarTara() {
-            this.producto.taras.push(null);
-            this.producto.kilos.push(null);
+            insertarFilaProducto(this.producto, 'pesadasIds', this.$set);
             this.actualizarProducto();
             this.$nextTick(() => {
                 const inputs = this.$refs.taraInputs;
@@ -966,8 +966,7 @@ export default {
         },
 
         eliminarTara(index) {
-            this.producto.taras.splice(index, 1);
-            this.producto.kilos.splice(index, 1);
+            eliminarFilaProducto(this.producto, 'pesadasIds', index, this.$set);
             this.actualizarProducto();
         },
 
@@ -975,7 +974,7 @@ export default {
             if (!Array.isArray(this.producto.tarasExtra)) {
                 this.$set(this.producto, 'tarasExtra', []);
             }
-            this.producto.tarasExtra.push(null);
+            insertarFilaProducto(this.producto, 'tarasExtraIds', this.$set);
             this.actualizarProducto();
             this.$nextTick(() => {
                 const inputs = this.$refs.taraExtraInputs;
@@ -987,7 +986,7 @@ export default {
         },
 
         eliminarTaraExtra(index) {
-            this.producto.tarasExtra.splice(index, 1);
+            eliminarFilaProducto(this.producto, 'tarasExtraIds', index, this.$set);
             this.actualizarProducto();
         },
 
@@ -999,8 +998,7 @@ export default {
             if (!Array.isArray(this.producto.reporteBolsas)) {
                 this.$set(this.producto, 'reporteBolsas', []);
             }
-            this.producto.reporteTaras.push(null);
-            this.producto.reporteBolsas.push(null);
+            insertarFilaProducto(this.producto, 'reportesIds', this.$set);
             this.actualizarProducto();
             this.$nextTick(() => {
                 const inputs = this.$refs.reporteTaraInputs;
@@ -1012,8 +1010,7 @@ export default {
         },
 
         eliminarReporteTara(index) {
-            this.producto.reporteTaras.splice(index, 1);
-            this.producto.reporteBolsas.splice(index, 1);
+            eliminarFilaProducto(this.producto, 'reportesIds', index, this.$set);
             this.actualizarProducto();
         },
 

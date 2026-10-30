@@ -45,6 +45,9 @@ export function crearNuevoProducto(clienteId) {
     tipo: "",
     tipoPersonalizado: "",
     nota: "", // Campo para sellado/kileado
+    pesadasIds: [],
+    reportesIds: [],
+    tarasExtraIds: [],
     taras: [],
     kilos: [],
     reporteTaras: [],
@@ -66,6 +69,7 @@ export function crearNuevoProducto(clienteId) {
 // Estructura para un nuevo crudo item
 export function crearNuevoCrudoItem() {
   return {
+    id: uuidv4(),
     talla: "",
     barco: "",
     taras: null,
