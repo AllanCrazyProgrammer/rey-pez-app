@@ -122,7 +122,7 @@
                 <button type="button" class="medida-movil-chip" :aria-pressed="!medidaMovilSeleccionada ? 'true' : 'false'"
                     @click="medidaMovilActiva = null">Todas</button>
                 <button v-for="opcion in opcionesMedidasMovil" :key="opcion.clave" type="button" class="medida-movil-chip"
-                    :class="opcion.cubierto ? 'medida-cubierta' : 'medida-pendiente'"
+                    :class="{ hecho: 'medida-cubierta', 'falta-reportar': 'medida-falta-reportar', pendiente: 'medida-pendiente' }[opcion.grupo]"
                     :aria-pressed="medidaMovilActiva === opcion.clave ? 'true' : 'false'" @click="medidaMovilActiva = opcion.clave">
                     <span>{{ opcion.medida }}</span>
                     <small class="medida-tipo" :class="'tipo-' + opcion.categoria">{{ opcion.tipo }}</small>
@@ -176,6 +176,7 @@
 </template>
 
 <script>
+import { ordenarMedidasMovil } from '@/utils/medidasMovilOrden';
 import { claveReferenciaProducto, estadoPedido, estadoMedidaProducto, tarasCrudoPorTalla, referenciaPedidoProducto } from '@/utils/embarquePedidoEstado';
 import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
 
@@ -327,7 +328,7 @@ export default {
                 ...estadoPedido(referenciasCrudo[i.talla] || i.pedidoReferencia, { totalTaras: totales[String(i.talla || i.medida || '').trim()] || 0, totalKilos: 0 }),
             }));
             });
-            return [...productos, ...crudos].sort((a, b) => Number(a.cubierto) - Number(b.cubierto));
+            return ordenarMedidasMovil([...productos, ...crudos]);
         },
         medidaMovilSeleccionada() {
             return this.opcionesMedidasMovil.find(o => o.clave === this.medidaMovilActiva) || null;
@@ -1085,6 +1086,8 @@ button:disabled {
     .medida-movil-chip.medida-cubierta { border: 2px solid #4ade80; }
     .medida-pendiente .medida-estado { color: #fda4af; }
     .medida-cubierta .medida-estado { color: #86efac; }
+    .medida-movil-chip.medida-falta-reportar { border: 2px solid #facc15; }
+    .medida-falta-reportar .medida-estado { color: #fde047; }
     .medida-movil-chip .medida-tipo { display: inline-block; padding: 2px 6px; margin: 4px 0; border-radius: 5px; font-weight: 700; }
     .medida-tipo.tipo-sin-agua { color: #e9d5ff; background: #581c87; }
     .medida-tipo.tipo-con-agua { color: #bae6fd; background: #075985; }
