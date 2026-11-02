@@ -20,7 +20,7 @@
         <i class="hint-icon">👇</i>
         <p>Selecciona un barco para activar las opciones</p>
       </div>
-      <router-link 
+      <router-link v-if="!esOtros" 
         :to="barcoSeleccionado ? `/barcos/deudas/lista?barco=${barcoSeleccionado}` : '#'" 
         :class="['btn-action', 'btn-lista', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
         :aria-label="barcoSeleccionado ? 'Ver lista de deudas del barco' : 'Selecciona un barco primero'"
@@ -30,7 +30,7 @@
         <span>Lista de Deudas</span>
       </router-link>
       
-      <router-link 
+      <router-link v-if="!esOtros" 
         :to="barcoSeleccionado ? `/barcos/deudas/nueva?barco=${barcoSeleccionado}` : '#'" 
         :class="['btn-action', 'btn-nueva', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
         :aria-label="barcoSeleccionado ? 'Crear nueva deuda para el barco' : 'Selecciona un barco primero'"
@@ -49,7 +49,7 @@
         <span>Reporte Mensual</span>
       </router-link>
       
-      <router-link 
+      <router-link v-if="!esOtros" 
         :to="barcoSeleccionado ? `/barcos/tripulantes?barco=${barcoSeleccionado}` : '#'" 
         :class="['btn-action', 'btn-tripulantes', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
         :aria-label="barcoSeleccionado ? 'Gestionar tripulantes del barco' : 'Selecciona un barco primero'"
@@ -69,7 +69,7 @@
         <span>Entrada de Producto</span>
       </router-link>
 
-      <button
+      <button v-if="!esOtros"
         @click="barcoSeleccionado ? openProveedoresModal() : null"
         :class="['btn-action', 'btn-config', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
         :aria-label="barcoSeleccionado ? 'Configurar proveedores de barcos' : 'Selecciona un barco primero'"
@@ -99,6 +99,14 @@
         >
           <i class="barco-icon">🛥️</i>
           <span>María Guadalupe</span>
+        </button>
+        <button 
+          :class="['barco-btn', 'barco-otros', { active: barcoSeleccionado === 'otros' }]"
+          @click="seleccionarBarco('otros')"
+        >
+          <i class="barco-icon">📦</i>
+          <span>Otros</span>
+          <small class="barco-sub">Proveedores</small>
         </button>
       </div>
     </div>
@@ -275,23 +283,30 @@ export default {
     };
   },
   computed: {
+    esOtros() {
+      return this.barcoSeleccionado === 'otros';
+    },
     // Colores dinámicos según el barco seleccionado
     colorPrimario() {
+      if (this.esOtros) return '#e67e22';
       return this.barcoSeleccionado === 'maria-guadalupe' 
         ? '#27ae60'  // Verde para María Guadalupe
         : '#3498db';  // Azul para Galileo
     },
     colorSecundario() {
+      if (this.esOtros) return '#d35400';
       return this.barcoSeleccionado === 'maria-guadalupe' 
         ? '#2ecc71'  // Verde claro para María Guadalupe
         : '#2980b9';  // Azul oscuro para Galileo
     },
     colorHover() {
+      if (this.esOtros) return 'rgba(230, 126, 34, 0.2)';
       return this.barcoSeleccionado === 'maria-guadalupe' 
         ? 'rgba(39, 174, 96, 0.2)'  // Verde con transparencia
         : 'rgba(52, 152, 219, 0.2)';  // Azul con transparencia
     },
     gradientePrimario() {
+      if (this.esOtros) return 'linear-gradient(135deg, #e67e22 0%, #d35400 100%)';
       return this.barcoSeleccionado === 'maria-guadalupe' 
         ? 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)'
         : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
@@ -441,7 +456,7 @@ export default {
 
 .barcos-buttons {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 15px;
 }
 
@@ -476,6 +491,23 @@ export default {
   background: linear-gradient(135deg, #3498db 0%, #2980b9 100%) !important;
   color: white;
   border-color: #3498db !important;
+}
+
+/* Otros (proveedores) */
+.barco-otros:hover {
+  border-color: #e67e22 !important;
+  box-shadow: 0 4px 12px rgba(230, 126, 34, 0.2) !important;
+}
+
+.barco-otros.active {
+  background: linear-gradient(135deg, #e67e22 0%, #d35400 100%) !important;
+  color: white;
+  border-color: #e67e22 !important;
+}
+
+.barco-sub {
+  font-size: 0.75em;
+  opacity: 0.8;
 }
 
 /* Estilos específicos para María Guadalupe */
@@ -571,8 +603,8 @@ export default {
   }
   
   .barcos-buttons {
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 600px;
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 800px;
     margin: 0 auto;
   }
 }
@@ -694,6 +726,14 @@ export default {
 
 .barco-theme-maria-guadalupe.btn-entrada {
   background: linear-gradient(135deg, #16a085 0%, #48c9b0 100%) !important;
+}
+
+.barco-theme-otros.btn-entrada {
+  background: linear-gradient(135deg, #e67e22 0%, #d35400 100%) !important;
+}
+
+.barco-theme-otros.btn-reporte {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%) !important;
 }
 
 /* Modal Styles */
