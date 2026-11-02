@@ -4,6 +4,8 @@ import { generarResumenTarasPDF } from "@/utils/pdf/resumenTaras";
 import { generarResumenEmbarquePDF } from "@/utils/pdf/resumenEmbarque";
 import { nombreArchivoNota, periodoNota } from '@/utils/pdf/filename';
 import { useUIStore } from '@/stores/ui';
+import { sincronizarCuentaOzunaParaNota } from '@/utils/services/EmbarqueCuentasService';
+import { OZUNA_CLIENTE_ID } from '@/utils/ozunaCuentaNota';
 import { generarRendimientosParaResumen } from '@/services/RendimientosReport';
 import { encolarNotaDrive, driveNotasDisponible, agruparRespaldoDrive } from '@/services/DriveNotasSync';
 
@@ -72,6 +74,24 @@ export default {
         kilosCrudos: this.embarque.kilosCrudos || {},
       };
 
+      // Nota de Ozuna: crear/actualizar la cuenta del día y agregarla como página.
+      let cuentaOzuna = null;
+      let aviso = '';
+      if (String(clienteId) === OZUNA_CLIENTE_ID) {
+        const embarqueId = String(this.embarqueId || this.embarque.id || this.$route?.params?.id || '');
+        try {
+          const r = await sincronizarCuentaOzunaParaNota(
+            { ...embarqueCliente, clienteCrudos: { [OZUNA_CLIENTE_ID]: clienteCrudos } },
+            embarqueId
+          );
+          cuentaOzuna = r.datos;
+          aviso = r.aviso || '';
+        } catch (error) {
+          console.error('No se pudo crear la cuenta de Ozuna para la nota:', error);
+          aviso = `La nota se generó sin la cuenta del día: ${error.message}`;
+        }
+      }
+
       // Llamar directamente (importación estática) – funciona sin internet
       await generarNotaVentaPDF(
         embarqueCliente,
@@ -80,8 +100,10 @@ export default {
         this.clientesReglaOtilio,
         this.clientesIncluirPrecios,
         this.clientesSumarKgCatarro,
-        this.clientesCuentaEnPdf
+        this.clientesCuentaEnPdf,
+        cuentaOzuna ? { cuentaOzuna } : {}
       );
+      if (aviso) useUIStore().showPdfAlert(aviso);
     },
 
     async generarPDFTodosClientes() {
