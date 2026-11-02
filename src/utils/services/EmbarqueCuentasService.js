@@ -1,4 +1,5 @@
-import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction } from 'firebase/firestore';
+import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction, updateDoc } from 'firebase/firestore';
+import { sincronizarCuentaOzunaNota } from '../ozunaCuentaNota';
 import {
   formatDate,
   normalizarFechaISO,
@@ -1777,6 +1778,26 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
 };
 
 /**
+ * Cuenta del día de Ozuna para la nota PDF: la crea la primera vez y solo la
+ * reescribe si cambiaron los datos del embarque (ver ozunaCuentaNota.js).
+ */
+export const sincronizarCuentaOzunaParaNota = async (embarqueData, embarqueId) => {
+  const fecha = normalizarFechaISO(embarqueData?.fecha);
+  const nueva = { ...(await prepararDatosCuentaOzuna({ ...embarqueData, fecha })), fecha };
+  const db = getFirestore();
+  return sincronizarCuentaOzunaNota({
+    embarqueId,
+    nueva,
+    repo: {
+      buscarPorFecha: async (f) => (await getDocs(query(collection(db, 'cuentasOzuna'), where('fecha', '==', f))))
+        .docs.map((d) => ({ id: d.id, data: d.data() })),
+      crear: (f, datos) => crearCuentaSegura('cuentasOzuna', f, datos, 'Ozuna'),
+      actualizar: (id, datos) => updateDoc(doc(db, 'cuentasOzuna', id), datos),
+    },
+  });
+};
+
+/**
  * Crea una cuenta de cliente Otilio a partir de los datos de un embarque
  * @param {Object} embarqueData - Datos del embarque
  * @param {Object} router - Router de Vue para navegar después de crear la cuenta
@@ -2365,6 +2386,7 @@ export default {
   crearCuentaJoselito,
   crearCuentaCatarro,
   crearCuentaOzuna,
+  sincronizarCuentaOzunaParaNota,
   crearCuentaOtilio,
   crearCuentaVeronica
 }; 

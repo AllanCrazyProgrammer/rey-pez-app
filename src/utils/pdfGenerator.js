@@ -1,3 +1,4 @@
+import { paginaCuentaOzunaPdf } from './ozunaCuentaNota';
 //Generador de Notas de Venta Pdf
 
 import pdfMake from 'pdfmake/build/pdfmake';
@@ -397,6 +398,10 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ...contenidoSinPrecios,
         ...(esNotaVeronica
           ? [{ text: '', pageBreak: 'before' }, ...contenidoTerceraLorenaVeronicaReferencia]
+          : []),
+        // Cuenta del día de Ozuna (solo nota de Ozuna desde embarques)
+        ...(options.cuentaOzuna
+          ? [{ text: '', pageBreak: 'before' }, ...paginaCuentaOzunaPdf(options.cuentaOzuna)]
           : [])
       ],
       styles: {
