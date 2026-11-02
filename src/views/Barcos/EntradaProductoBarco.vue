@@ -18,12 +18,49 @@
 
     <!-- ============ VISTA LISTA (por descarga) ============ -->
     <template v-if="currentView === 'lista'">
-      <div class="resumen-cards">
+      <!-- Otros: proveedor -->
+      <div v-if="esOtros" class="proveedor-otros-card">
+        <h3 class="proveedor-otros-titulo">🏷️ Proveedor</h3>
+        <div class="proveedor-otros-fila">
+          <select
+            class="proveedor-otros-select"
+            v-model="proveedorId"
+            aria-label="Proveedor"
+            @change="seleccionarProveedor(proveedorId)"
+          >
+            <option value="">— Selecciona un proveedor —</option>
+            <option v-for="p in proveedoresOtros" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+          </select>
+          <button v-if="!creandoProveedor" class="btn-proveedor-nuevo" @click="creandoProveedor = true">
+            ➕ Nuevo proveedor
+          </button>
+        </div>
+        <div v-if="creandoProveedor" class="proveedor-otros-fila proveedor-nuevo-form">
+          <input
+            v-model="nombreProveedorNuevo"
+            class="proveedor-otros-input"
+            type="text"
+            placeholder="Nombre del proveedor"
+            aria-label="Nombre del proveedor nuevo"
+            @keyup.enter="crearProveedor"
+          >
+          <button class="btn-proveedor-guardar" :disabled="guardandoProveedor" @click="crearProveedor">
+            {{ guardandoProveedor ? 'Guardando...' : 'Guardar' }}
+          </button>
+          <button class="btn-proveedor-cancelar" @click="cancelarProveedor">Cancelar</button>
+        </div>
+        <p v-if="errorProveedor" class="proveedor-otros-error">{{ errorProveedor }}</p>
+        <p v-if="!proveedorActual && !creandoProveedor" class="proveedor-otros-hint">
+          Elige o crea un proveedor para registrar la entrada de su producto.
+        </p>
+      </div>
+
+      <div v-if="!esOtros || proveedorActual" class="resumen-cards">
         <div class="resumen-card barco-card" :style="{ background: gradientePrimario }">
-          <i class="card-icon">{{ barcoSeleccionado === 'galileo' ? '🚢' : '🛥️' }}</i>
+          <i class="card-icon">{{ iconoBarco }}</i>
           <div class="card-content">
             <h3>{{ nombreBarco }}</h3>
-            <p>Barco seleccionado</p>
+            <p>{{ esOtros ? 'Proveedor seleccionado' : 'Barco seleccionado' }}</p>
           </div>
         </div>
 
@@ -53,7 +90,8 @@
       </div>
 
       <!-- Cargando -->
-      <div v-if="cargando" class="estado-mensaje">
+      <div v-if="esOtros && !proveedorActual"></div>
+      <div v-else-if="cargando" class="estado-mensaje">
         <p>Cargando descargas...</p>
       </div>
 
@@ -275,7 +313,7 @@
       <!-- Resumen total -->
       <div v-if="resumenActivo" class="resumen-total-card">
         <div class="resumen-barco-banner" :style="{ background: gradientePrimario }">
-          <i class="resumen-barco-icon">{{ barcoSeleccionado === 'galileo' ? '🚢' : '🛥️' }}</i>
+          <i class="resumen-barco-icon">{{ iconoBarco }}</i>
           <span class="resumen-barco-nombre">{{ nombreBarco }}</span>
         </div>
         <h3 class="section-title">
@@ -349,6 +387,17 @@ import BackButton from '@/components/BackButton.vue';
 import SelectorColoresHilo from '@/components/Barcos/SelectorColoresHilo.vue';
 import { normalizarColoresHilo, estiloColoresHilo, descripcionColoresHilo } from '@/utils/coloresHilo';
 import { formatNumber } from '@/utils/formatters';
+import {
+  COLECCION_PROVEEDORES_OTROS,
+  esOtros,
+  infoBarco,
+  nombreEntrada,
+  validarProveedorNuevo,
+  construirEntrada,
+  filtrarDescargas
+} from '@/utils/barcosEntrada';
+
+const LS_PROVEEDOR_OTROS = 'proveedorOtrosSeleccionado';
 
 const COLECCION = 'entradasProductoBarcos';
 
@@ -369,6 +418,12 @@ export default {
       medidaActivaIndex: 0,
       resumenActivo: false,
       mostrarExito: false,
+      proveedoresOtros: [],
+      proveedorId: '',
+      creandoProveedor: false,
+      nombreProveedorNuevo: '',
+      guardandoProveedor: false,
+      errorProveedor: '',
       form: {
         fecha: new Date().toISOString().split('T')[0],
         medidas: []
@@ -376,13 +431,20 @@ export default {
     };
   },
   computed: {
+    esOtros() {
+      return esOtros(this.barcoSeleccionado);
+    },
     gradientePrimario() {
-      return this.barcoSeleccionado === 'maria-guadalupe'
-        ? 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)'
-        : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+      return infoBarco(this.barcoSeleccionado).gradiente;
+    },
+    iconoBarco() {
+      return infoBarco(this.barcoSeleccionado).icono;
+    },
+    proveedorActual() {
+      return this.proveedoresOtros.find(p => p.id === this.proveedorId) || null;
     },
     nombreBarco() {
-      return this.barcoSeleccionado === 'galileo' ? 'El Galileo' : 'María Guadalupe';
+      return nombreEntrada(this.barcoSeleccionado, this.proveedorActual);
     },
     fechaFormateadaForm() {
       return this.formatearFecha(this.form.fecha);
@@ -403,6 +465,10 @@ export default {
   mounted() {
     const urlParams = new URLSearchParams(window.location.search);
     this.barcoSeleccionado = urlParams.get('barco') || localStorage.getItem('barcoSeleccionado') || 'galileo';
+    if (this.esOtros) {
+      this.proveedorId = urlParams.get('proveedor') || localStorage.getItem(LS_PROVEEDOR_OTROS) || '';
+      this.cargarProveedoresOtros();
+    }
     this.cargarDescargas();
   },
   methods: {
@@ -439,7 +505,54 @@ export default {
     totalTarasDescarga(descarga) {
       return (descarga.medidas || []).reduce((s, m) => s + this.sumaTaras(m), 0);
     },
+    async cargarProveedoresOtros() {
+      try {
+        const snap = await getDocs(query(collection(db, COLECCION_PROVEEDORES_OTROS), orderBy('nombre')));
+        this.proveedoresOtros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (this.proveedorId && !this.proveedorActual) this.proveedorId = '';
+      } catch (error) {
+        console.error('Error al cargar proveedores de Otros:', error);
+        alert('Error al cargar proveedores');
+      }
+    },
+    seleccionarProveedor(id) {
+      this.proveedorId = id || '';
+      this.errorProveedor = '';
+      localStorage.setItem(LS_PROVEEDOR_OTROS, this.proveedorId);
+      this.cargarDescargas();
+    },
+    cancelarProveedor() {
+      this.creandoProveedor = false;
+      this.nombreProveedorNuevo = '';
+      this.errorProveedor = '';
+    },
+    async crearProveedor() {
+      if (this.guardandoProveedor) return;
+      const v = validarProveedorNuevo(this.nombreProveedorNuevo, this.proveedoresOtros);
+      if (!v.ok) {
+        this.errorProveedor = v.error;
+        if (v.existente) this.seleccionarProveedor(v.existente.id);
+        return;
+      }
+      this.guardandoProveedor = true;
+      try {
+        const ref = await addDoc(collection(db, COLECCION_PROVEEDORES_OTROS), { nombre: v.nombre, createdAt: new Date() });
+        this.proveedoresOtros = [...this.proveedoresOtros, { id: ref.id, nombre: v.nombre }]
+          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        this.cancelarProveedor();
+        this.seleccionarProveedor(ref.id);
+      } catch (error) {
+        console.error('Error al crear proveedor:', error);
+        this.errorProveedor = 'Error al crear el proveedor';
+      } finally {
+        this.guardandoProveedor = false;
+      }
+    },
     async cargarDescargas() {
+      if (this.esOtros && !this.proveedorId) {
+        this.descargas = [];
+        return;
+      }
       this.cargando = true;
       try {
         const q = query(
@@ -448,15 +561,15 @@ export default {
           orderBy('fecha', 'desc')
         );
         const snapshot = await getDocs(q);
-        this.descargas = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        this.descargas = filtrarDescargas(snapshot.docs.map(d => ({ id: d.id, ...d.data() })), this.barcoSeleccionado, this.proveedorId);
       } catch (error) {
         console.error('Error al cargar descargas:', error);
         // Fallback sin orderBy por si falta el índice
         try {
           const q2 = query(collection(db, COLECCION), where('barco', '==', this.barcoSeleccionado));
           const snapshot2 = await getDocs(q2);
-          this.descargas = snapshot2.docs
-            .map(d => ({ id: d.id, ...d.data() }))
+          this.descargas = filtrarDescargas(snapshot2.docs
+            .map(d => ({ id: d.id, ...d.data() })), this.barcoSeleccionado, this.proveedorId)
             .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
         } catch (error2) {
           console.error('Error en fallback al cargar descargas:', error2);
@@ -474,6 +587,10 @@ export default {
       };
     },
     nuevaDescarga() {
+      if (this.esOtros && !this.proveedorActual) {
+        this.errorProveedor = 'Selecciona un proveedor primero';
+        return;
+      }
       this.editandoId = null;
       this.form = {
         fecha: new Date().toISOString().split('T')[0],
@@ -586,12 +703,12 @@ export default {
       this.guardando = true;
       try {
         const data = {
-          barco: this.barcoSeleccionado,
-          nombreBarco: this.nombreBarco,
-          fecha: this.form.fecha,
-          medidas,
-          totalTaras: medidas.reduce((s, m) => s + m.totalTaras, 0),
-          totalKilos: medidas.reduce((s, m) => s + m.totalKilos, 0),
+          ...construirEntrada({
+            barco: this.barcoSeleccionado,
+            proveedor: this.proveedorActual,
+            fecha: this.form.fecha,
+            medidas
+          }),
           updatedAt: new Date()
         };
 
@@ -616,12 +733,12 @@ export default {
       this.guardando = true;
       try {
         const data = {
-          barco: this.barcoSeleccionado,
-          nombreBarco: this.nombreBarco,
-          fecha: this.form.fecha,
-          medidas,
-          totalTaras: medidas.reduce((s, m) => s + m.totalTaras, 0),
-          totalKilos: medidas.reduce((s, m) => s + m.totalKilos, 0),
+          ...construirEntrada({
+            barco: this.barcoSeleccionado,
+            proveedor: this.proveedorActual,
+            fecha: this.form.fecha,
+            medidas
+          }),
           updatedAt: new Date()
         };
 
@@ -658,6 +775,42 @@ export default {
 </script>
 
 <style scoped>
+.proveedor-otros-card {
+  background: white;
+  border-radius: 15px;
+  padding: 20px 25px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-left: 5px solid #e67e22;
+}
+.proveedor-otros-titulo { margin: 0 0 12px; color: #2c3e50; font-size: 1.15em; }
+.proveedor-otros-fila { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.proveedor-nuevo-form { margin-top: 12px; }
+.proveedor-otros-select, .proveedor-otros-input {
+  flex: 1 1 280px;
+  min-width: 0;
+  max-width: 480px;
+  padding: 12px 14px;
+  font-size: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  background: white;
+}
+.proveedor-otros-select:focus, .proveedor-otros-input:focus { outline: none; border-color: #e67e22; }
+.btn-proveedor-nuevo, .btn-proveedor-guardar, .btn-proveedor-cancelar {
+  padding: 12px 18px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.btn-proveedor-nuevo, .btn-proveedor-guardar { background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); color: white; }
+.btn-proveedor-guardar:disabled { opacity: 0.6; cursor: default; }
+.btn-proveedor-cancelar { background: #ecf0f1; color: #34495e; }
+.proveedor-otros-error { color: #c0392b; margin: 10px 0 0; font-weight: 600; }
+.proveedor-otros-hint { color: #7f8c8d; margin: 10px 0 0; }
+@media (max-width: 640px) {
+  .proveedor-otros-card { padding: 16px; }
+  .proveedor-otros-select, .proveedor-otros-input { flex-basis: 100%; max-width: none; }
+  .btn-proveedor-nuevo, .btn-proveedor-guardar, .btn-proveedor-cancelar { flex: 1 1 auto; }
+}
+
 .entrada-producto-barco {
   padding: 20px;
   max-width: 1200px;
