@@ -5,7 +5,10 @@
       <div class="bg-grid" aria-hidden="true"></div>
       <div class="cuentas-mexico-container">
         <h1>Cuentas México</h1>
-        
+
+        <div class="layout-principal">
+          <SaldosCuentas class="columna-saldos" />
+          <div class="columna-menu">
         <!-- Botón de Agenda de Transacciones destacado arriba -->
         <div class="agenda-container">
           <div class="card agenda" @click="abrirAgenda()">
@@ -59,6 +62,8 @@
           </router-link>
           <!-- Agrega más botones aquí si es necesario -->
         </div>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -74,12 +79,14 @@
 <script>
 import TransaccionesAgendaModal from '@/components/TransaccionesAgendaModal.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+import SaldosCuentas from '@/components/Cuentas/SaldosCuentas.vue';
 
 export default {
   name: 'CuentasMexico',
   components: {
     TransaccionesAgendaModal,
-    PreciosHistorialModal
+    PreciosHistorialModal,
+    SaldosCuentas
   },
   data() {
     return {
@@ -160,12 +167,23 @@ export default {
 
 .cuentas-mexico-container {
   width: 100%;
-  max-width: 1000px;
+  max-width: 720px;
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
   z-index: 1;
+}
+
+.layout-principal,
+.columna-menu {
+  width: 100%;
+}
+
+.columna-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 h1 {
@@ -353,6 +371,56 @@ h1 {
   margin-bottom: 20px;
   display: flex;
   justify-content: center;
+}
+
+@media (max-width: 420px) {
+  .content-wrap {
+    padding: 12px;
+  }
+
+  h1 {
+    font-size: 2rem;
+    letter-spacing: 1px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .content-wrap {
+    align-items: flex-start;
+    padding: 28px 32px 48px;
+  }
+
+  .cuentas-mexico-container {
+    max-width: 1180px;
+    align-items: stretch;
+  }
+
+  .layout-principal {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 520px;
+    column-gap: 32px;
+    align-items: start;
+  }
+
+  .columna-menu {
+    grid-column: 1;
+    grid-row: 1;
+    align-items: stretch;
+  }
+
+  .columna-saldos {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .agenda-container,
+  .precios-container {
+    max-width: none;
+  }
+
+  .boton-cuenta {
+    min-width: 0;
+  }
 }
 
 @media (max-width: 600px) {
