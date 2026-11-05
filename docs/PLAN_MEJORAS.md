@@ -8,9 +8,9 @@ fórmulas). Cada paso se verificó contra una línea base tomada antes de tocar 
 
 | Medida | Antes (`master`) | Después |
 |---|---|---|
-| JS+CSS que se descarga al abrir la app | 2.99 MB (697 KB gzip) | 1.86 MB (462 KB gzip) |
+| JS+CSS que se descarga al abrir la app | 2.99 MB (697 KB gzip) | 1.54 MB (387 KB gzip) |
 | `dist/` | 16 MB | 12 MB |
-| Avisos de seguridad en dependencias de producción (`npm audit`) | 60 | 26 |
+| Avisos de seguridad en dependencias de producción (`npm audit`) | 60 (6 críticos) | 15 (0 críticos) |
 | `npm run lint` | no funcionaba | 0 errores, 220 advertencias |
 | `tests/` | 102 de 104 | 110 de 110 |
 | Rutas del build que abren sin errores (`scripts/recorrer-rutas.cjs`) | 82 de 82 | 82 de 82 |
@@ -37,6 +37,23 @@ fórmulas). Cada paso se verificó contra una línea base tomada antes de tocar 
 17. **Respaldo diario de Firestore** listo (apagado hasta configurar el bucket) y **reglas de seguridad propuestas** con plan por fases: `docs/SEGURIDAD_Y_RESPALDOS.md`.
 18. **Vue CLI 5 / webpack 5**: rutas, service worker offline, PDFs, escritorio y Android verificados.
 
+### Segunda ronda (investigación propia)
+
+19. **moment solo con español**: −62 KB gzip al abrir (traía ~130 idiomas).
+20. **Storage y Functions de Firebase** se cargan solo en Bitácoras, Journal y Asesor: −13 KB gzip.
+21. **Seguridad de dependencias**: `@capacitor/cli` a devDependencies, uuid 11.1.1 y transitivos
+    (websocket-driver, postcss, fflate) dentro de su rango: 26 → 15 avisos, sin críticos.
+22. **Sacadas**: un computed reordenaba los datos reactivos; ahora ordena una copia (mismo orden en pantalla).
+23. **Pruebas recuperadas** (fallaban en master por arneses viejos, no por la app): precios por alias
+    (18/18), embarques sin conexión (conflictos, borrado con respaldo, edición offline), transferencias,
+    sacadas por zona horaria, resumen sin conexión, PDF local/entrega/escritorio (7/7), Android
+    inventarios y Marea. En el caso de conflicto se agregó que se conserve la edición local y no se
+    sobrescriba al otro equipo.
+24. **Revisado sin cambios necesarios**: listeners de Firestore (todos se cancelan al salir), props
+    mutadas (solo propiedades del objeto compartido, diseño del editor), seguridad de Electron
+    (aislamiento, sandbox, navegación restringida) y el modelo del Asesor (`claude-opus-4-8` sigue
+    vigente; pasar a `claude-opus-5-5` es opcional y más barato).
+
 ## Pendiente (requiere decisiones o equipos que no hay en el contenedor)
 
 1. **Seguridad de Firebase** (lo más importante): seguir `docs/SEGURIDAD_Y_RESPALDOS.md`.
@@ -46,8 +63,14 @@ fórmulas). Cada paso se verificó contra una línea base tomada antes de tocar 
    instaladores de escritorio, abrir un embarque sin internet y guardar.
 4. **Pruebas que necesitan el emulador de Firestore** (asistente, embarques, sacadas): el
    contenedor no puede descargarlo; correrlas en una máquina con `firebase emulators`.
-5. **`test-desktop-pdf`**: el caso del PDF de Rendimientos falla igual en `master`; revisar.
+5. **Pesadas en celular**: `pesadas.css` (línea 144) fuerza `overflow: visible` en la tabla del día
+   para que encabezados y nombres queden fijos; en 390 px la página se desplaza a lo ancho y
+   `test-pesadas-ui` lo marca. Decidir cuál comportamiento se quiere.
 6. **Vue 3**: Vue 2 ya no tiene soporte. Siguiente etapa: reemplazar BootstrapVue (usa poco:
    modales, layout y formularios) y migrar por módulos con `@vue/compat`.
-7. Seguir partiendo archivos grandes (`PedidoLimpioImpresion.vue`, `StashModalV2.vue`, `Sacadas.vue`
+7. `test-bitacoras-fotos` describe la versión anterior de las fotos (antes del rediseño con
+   compresión y subida reanudable); hay que reescribirla.
+8. Encabezados de caché en `static.json`: todo usa `max-age=0`; los archivos con hash podrían
+   cachearse un año (`immutable`). Cambio de despliegue: probar en Heroku.
+9. Seguir partiendo archivos grandes (`PedidoLimpioImpresion.vue`, `StashModalV2.vue`, `Sacadas.vue`
    tienen métodos puros listos para extraer) y bajar las 220 advertencias de lint.
