@@ -1,9 +1,10 @@
-const { app, BrowserWindow, shell, ipcMain, dialog, safeStorage } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog, safeStorage, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { initGoogleDrive } = require('./googleDrive');
 const { renderHtmlPdf } = require('./printHtml');
+const { identificarPeticionesDeAuth } = require('./authReferer');
 
 // A separate profile supports isolated QA without touching real shipments.
 const profile = app.commandLine.getSwitchValue('user-data-dir');
@@ -159,6 +160,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on('before-quit', () => { quitting = true; });
   app.whenReady().then(() => {
+    identificarPeticionesDeAuth(session.defaultSession);
     createMainWindow();
     app.on('activate', () => { if (!mainWindow) createMainWindow(); });
   });
