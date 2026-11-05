@@ -329,8 +329,8 @@ import { db } from '@/firebase';
 import { collection, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import moment from 'moment';
 import { formatearFecha, formatNumber } from '@/utils/formatters';
-import FondoMatrix from '@/components/FondoMatrix.vue';
-import AlertasExistenciasLimpios from '@/components/AlertasExistenciasLimpios.vue';
+import FondoMatrix from '@/components/layout/FondoMatrix.vue';
+import AlertasExistenciasLimpios from '@/components/Existencias/AlertasExistenciasLimpios.vue';
 
 export default {
   name: 'Existencias',

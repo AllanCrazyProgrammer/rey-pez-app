@@ -199,8 +199,8 @@ import {
 import { db } from '@/firebase';
 import { functions } from '@/firebaseFunctions';
 import { construirContextoInventario } from '@/utils/contextoInventario';
-import BackButton from '@/components/BackButton.vue';
-import FondoMatrix from '@/components/FondoMatrix.vue';
+import BackButton from '@/components/layout/BackButton.vue';
+import FondoMatrix from '@/components/layout/FondoMatrix.vue';
 
 export default {
   name: 'AsesorExperto',

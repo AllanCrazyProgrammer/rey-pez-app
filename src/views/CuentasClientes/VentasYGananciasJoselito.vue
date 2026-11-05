@@ -75,7 +75,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {

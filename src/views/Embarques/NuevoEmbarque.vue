@@ -273,10 +273,10 @@ import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import { useAuthStore } from '@/stores/auth'
 import { getSaveManager } from '@/services/SaveManager'
-import SaveStatusIndicator from '@/components/SaveStatusIndicator.vue'
-import AuthErrorNotification from '@/components/AuthErrorNotification.vue'
+import SaveStatusIndicator from '@/components/layout/SaveStatusIndicator.vue'
+import AuthErrorNotification from '@/components/layout/AuthErrorNotification.vue'
 import authDiagnostic from '@/utils/authDiagnostic.js'
-import Sidebar from '@/components/Sidebar.vue'
+import Sidebar from '@/components/layout/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
 import pdfGenerationMixin from './mixins/pdfGenerationMixin';
 import calculosMixin from './mixins/calculosMixin';
@@ -298,7 +298,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Importar constantes y utilidades
 import { esClienteCatarro } from '@/constants/clientesConfig';
-import { CLIENTES_PREDEFINIDOS, crearNuevoProducto } from '@/constants.js/embarque';
+import { CLIENTES_PREDEFINIDOS, crearNuevoProducto } from '@/constants/embarque';
 
 // Importar componentes modaless
 import NuevoClienteModal from './components/modals/NuevoClienteModal.vue';

@@ -4,7 +4,7 @@ import { generarResumenTarasPDF } from "@/utils/pdf/resumenTaras";
 import { generarResumenEmbarquePDF } from "@/utils/pdf/resumenEmbarque";
 import { nombreArchivoNota, periodoNota } from '@/utils/pdf/filename';
 import { useUIStore } from '@/stores/ui';
-import { sincronizarCuentaOzunaParaNota } from '@/utils/services/EmbarqueCuentasService';
+import { sincronizarCuentaOzunaParaNota } from '@/services/EmbarqueCuentasService';
 import { OZUNA_CLIENTE_ID } from '@/utils/ozunaCuentaNota';
 import { generarRendimientosParaResumen } from '@/services/RendimientosReport';
 import { encolarNotaDrive, driveNotasDisponible, agruparRespaldoDrive } from '@/services/DriveNotasSync';

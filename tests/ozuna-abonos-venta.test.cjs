@@ -47,7 +47,7 @@ function cargarServicio() {
     return module.exports;
   }
   return {
-    servicio: load(path.resolve(__dirname, '../src/utils/services/EmbarqueCuentasService.js')),
+    servicio: load(path.resolve(__dirname, '../src/services/EmbarqueCuentasService.js')),
     cuenta: () => cuenta
   };
 }

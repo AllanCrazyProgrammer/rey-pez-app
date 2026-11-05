@@ -383,7 +383,7 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import SelectorColoresHilo from '@/components/Barcos/SelectorColoresHilo.vue';
 import { normalizarColoresHilo, estiloColoresHilo, descripcionColoresHilo } from '@/utils/coloresHilo';
 import { formatNumber } from '@/utils/formatters';

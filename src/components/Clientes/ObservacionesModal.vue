@@ -55,7 +55,7 @@
 </template>
 
 <script>
-import { otilioCuentas } from '@/services/cuentas.service';
+import { otilioCuentas } from '@/services/cuentas.service.js';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {

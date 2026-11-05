@@ -146,7 +146,7 @@
 
 <script>
 import campoColaborativo from '@/directives/campoColaborativo';
-import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+import PreciosHistorialModal from '@/components/Precios/PreciosHistorialModal.vue';
 import GenerarEsqueletoEmbarqueButton from './GenerarEsqueletoEmbarqueButton.vue';
 import { useUIStore } from '@/stores/ui';
 

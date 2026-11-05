@@ -476,7 +476,7 @@
 import { db } from '@/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import moment from 'moment';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import { formatNumber } from '@/utils/formatters';
 
 export default {

@@ -111,7 +111,7 @@ test('account service existing normalization remains compatible before/after can
   for (const [oldName,newName] of pairs) for (const renamed of [false,true]) {
     const catalog=fixture(oldName,newName).map(p=>({...p,producto:renamed?prices.normalizarNombreProductoPrecio(p.producto):p.producto})).sort((a,b)=>prices.compararPreciosMasAntiguosPrimero(b,a));
     const firestore={getFirestore:()=>({}),collection:()=>({}),query:()=>({}),orderBy:()=>({}),getDocs:async()=>({docs:catalog.map(p=>({data:()=>p}))})};
-    const service=load('src/utils/services/EmbarqueCuentasService.js',{'firebase/firestore':firestore},'\nexport { normalizarMedida, obtenerPreciosVenta };');
+    const service=load('src/services/EmbarqueCuentasService.js',{'firebase/firestore':firestore},'\nexport { normalizarMedida, obtenerPreciosVenta };');
     assert.equal(service.normalizarMedida(oldName),service.normalizarMedida(newName));
     const general=await service.obtenerPreciosVenta('desconocido','2026-10-03');
     const specific=await service.obtenerPreciosVenta('joselito','2026-10-03');
@@ -123,7 +123,7 @@ test('price panel groups the same aliases without changing records, identities, 
   const docs=fixture(...pairs[0]).map((p,i)=>({...p,id:'price-'+i}));
   const snapshot=JSON.stringify(docs);
   const firestore={collection:()=>({}),getDocs:async()=>({docs:docs.map(p=>({id:p.id,data:()=>p}))})};
-  const panel=load('src/components/PreciosHistorialModal.vue',{'firebase/firestore':firestore,'@/firebase':{db:{}}}).default;
+  const panel=load('src/components/Precios/PreciosHistorialModal.vue',{'firebase/firestore':firestore,'@/firebase':{db:{}}}).default;
   const ctx={normalizarNombreProducto:panel.methods.normalizarNombreProducto,sincronizarFormMaquilaOzuna(){}};
   await panel.methods.cargarPreciosActuales.call(ctx);
   assert.equal(ctx.preciosActuales.length,3);

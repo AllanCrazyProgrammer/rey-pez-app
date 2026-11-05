@@ -13,7 +13,7 @@ const executablePath = process.env.REYPEZ_DESKTOP_EXECUTABLE || path.join(root, 
 
 // Exercise the real inventory report function with isolated Firebase reads.
 async function inventoryHtml() {
-  const source = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/components/Existencias.vue'), 'utf8')).script.content;
+  const source = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/components/Existencias/Existencias.vue'), 'utf8')).script.content;
   const component = new Module(path.join(root, 'src/components/Existencias.print.test.js'), module);
   component.require = request => {
     if (request === 'vue') return {

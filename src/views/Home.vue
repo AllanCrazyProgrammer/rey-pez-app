@@ -10,7 +10,7 @@
 </template>
 
 <script>
-import Datos from "../datos.vue";
+import Datos from "../components/Home/Datos.vue";
 
 export default {
   name: "home",

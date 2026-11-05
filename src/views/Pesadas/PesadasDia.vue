@@ -53,7 +53,7 @@
 <script>
 import { nanoid } from 'nanoid';
 import { BModal } from 'bootstrap-vue';
-import Cuentas from '@/Cuentas.vue';
+import Cuentas from '@/components/Pesadas/Cuentas.vue';
 import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';

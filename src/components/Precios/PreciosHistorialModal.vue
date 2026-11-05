@@ -447,7 +447,7 @@ import {
   formatearFechaParaMostrar,
   esFechaValida 
 } from '@/utils/dateUtils';
-import PrecioActualEditorModal from '@/components/PrecioActualEditorModal.vue';
+import PrecioActualEditorModal from '@/components/Precios/PrecioActualEditorModal.vue';
 import {
   PRODUCTO_PRECIO_MAQUILA_OZUNA,
   obtenerPrecioMaquilaOzunaDefault,

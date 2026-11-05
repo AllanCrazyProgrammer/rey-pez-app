@@ -129,7 +129,7 @@ import { DOCUMENTO_CAPITAL_CUENTAS, capitalInicial } from '@/utils/saldosCuentas
 export default {
   name: 'CuentasMexico',
   components: {
-    TransaccionesAgendaModal: () => import('@/components/TransaccionesAgendaModal.vue'),
+    TransaccionesAgendaModal: () => import('@/components/Pedidos/TransaccionesAgendaModal.vue'),
     AccesoPreciosVenta,
     SaldosCuentas
   },

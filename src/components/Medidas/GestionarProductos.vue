@@ -80,7 +80,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { db } from '@/firebase';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
-import BackButton from './BackButton.vue';
+import BackButton from '../layout/BackButton.vue';
 import { formatNumber } from '@/utils/formatters';
 
 export default {

@@ -155,10 +155,10 @@
 <script>
 import { db } from '@/firebase';
 import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, limit } from 'firebase/firestore';
-import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import EmbarqueCuentasService from '@/services/EmbarqueCuentasService';
 import PapeleraService from '@/services/PapeleraService';
-import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModalV2 from '@/components/StashModalV2.vue';
+import PreciosHistorialModal from '@/components/Precios/PreciosHistorialModal.vue';
+import StashModalV2 from '@/components/Pedidos/StashModalV2.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 import { normalizarFechaValor } from '@/utils/dateUtils';
 import { sonMontosIguales } from '@/utils/dinero';

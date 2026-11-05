@@ -101,7 +101,7 @@ function componente(file) {
         '@/services/deudasCatarro.service': servicio,
         '@/utils/dateUtils': { ...cargarUtilidad('dateUtils'), obtenerFechaActualISO: () => '2026-10-16' },
         '@/utils/cuentasPendientesCatarro': cargarUtilidad('cuentasPendientesCatarro'),
-        '@/utils/services/EmbarqueCuentasService': {
+        '@/services/EmbarqueCuentasService': {
           async crearCuentaCatarro(datos) {
             if (window.fallarCreacion) { window.fallarCreacion = false; throw new Error('Sin conexión'); }
             window.cuentaCreada = datos;
@@ -124,9 +124,9 @@ function componente(file) {
         },
         '@/services/PapeleraService': {}, '@/utils/dinero': cargarUtilidad('dinero'),
         '@/utils/saldosCatarro': cargarUtilidad('saldosCatarro'),
-        '@/components/BackButton.vue': { template: '<span></span>' },
-        '@/components/PreciosHistorialModal.vue': { template: '<div><button class="precio-historial-btn">Precios</button></div>' },
-        '@/components/StashModalV2.vue': { template: '<span><button class="stash-button">Stash</button></span>' },
+        '@/components/layout/BackButton.vue': { template: '<span></span>' },
+        '@/components/Precios/PreciosHistorialModal.vue': { template: '<div><button class="precio-historial-btn">Precios</button></div>' },
+        '@/components/Pedidos/StashModalV2.vue': { template: '<span><button class="stash-button">Stash</button></span>' },
       };
       mocks['@/components/Cuentas/DeudasCatarro.vue'] = { ...load(componentes.deudas.script, mocks), template: componentes.deudas.template };
       mocks['@/components/Cuentas/ModalAbonosCatarro.vue'] = { template: '<div />' };

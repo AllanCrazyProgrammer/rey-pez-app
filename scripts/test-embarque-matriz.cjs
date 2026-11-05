@@ -91,7 +91,7 @@ function partirHost(valor) {
     if (id === 'uuid') return { v4: () => 'id' };
     if (id === '@/services/EmbarquesOfflineService') return puenteOffline;
     if (id === '@/utils/dateUtils') return { normalizarFechaISO: (v) => v, normalizarFechaValor: (v) => v, obtenerFechaActualISO: () => '2026-10-12' };
-    if (id === '@/constants.js/embarque') return { crearNuevoProducto: () => ({}) };
+    if (id === '@/constants/embarque') return { crearNuevoProducto: () => ({}) };
     if (id === '@/utils/embarqueContenido') return { embarqueTieneContenidoOperativoEstado: () => true };
     throw new Error('Mixin: ' + id);
   }, { navigator: { onLine: true } });
@@ -140,7 +140,7 @@ function partirHost(valor) {
     if (id === '@/utils/RendimientosPdf') return {};
     if (id === '@/utils/pdf/reportDelivery') return {};
     if (id === '@/utils/pdf/sacadas') return { normalizarGruposListaMedidasParaPdf: (valor) => valor };
-    if (id === '@/components/MedidasParaHoyCards.vue') return {};
+    if (id === '@/components/Existencias/MedidasParaHoyCards.vue') return {};
     if (id === '@/utils/formatters') return { formatearFecha: (valor) => valor };
     if (id === '@/utils/preciosHistoricos') return { normalizarNombreProductoPrecio: (valor) => valor, obtenerClavesBusquedaMedida: () => [] };
     if (id === '@/utils/renombrarMedidaRendimientos') return require('../src/utils/renombrarMedidaRendimientos');
@@ -158,7 +158,7 @@ function partirHost(valor) {
     window: { location: { reload() { alertas.push('reload'); } }, confirm: () => false },
     alert: (mensaje) => { alertas.push(mensaje); },
   }).default;
-  const Costos = compilar('src/components/GestionCostos.vue', (id) => {
+  const Costos = compilar('src/components/Costos/GestionCostos.vue', (id) => {
     if (id === 'firebase/firestore') return firestore;
     if (id === '@/services/embarqueEscritura') return escritura;
     if (id === '@/utils/embarqueRevision') return revision;
@@ -198,7 +198,7 @@ function partirHost(valor) {
     if (id === 'uuid') return { v4: () => 'id' };
     if (id === '@/services/EmbarquesOfflineService') return puenteOffline;
     if (id === '@/utils/dateUtils') return dateUtils;
-    if (id === '@/constants.js/embarque') return { crearNuevoProducto: () => ({}) };
+    if (id === '@/constants/embarque') return { crearNuevoProducto: () => ({}) };
     if (id === '@/utils/embarqueContenido') return contenido;
     if (id === '@/utils/embarqueRevision') return revision;
     if (id === '@/constants/clientesConfig') return compilar('src/constants/clientesConfig.js', () => { throw new Error('clientesConfig'); });

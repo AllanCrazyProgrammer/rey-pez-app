@@ -96,7 +96,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, query, orderBy, doc, onSnapshot, where, updateDoc, getDoc } from 'firebase/firestore';
-import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import EmbarqueCuentasService from '@/services/EmbarqueCuentasService';
 import { normalizarFechaValor } from '@/utils/dateUtils';
 import { INICIO_CUENTAS_PENDIENTES_CATARRO, cuentasPendientesCatarro, combinarEmbarquesCatarro } from '@/utils/cuentasPendientesCatarro';
 import PapeleraService from '@/services/PapeleraService';

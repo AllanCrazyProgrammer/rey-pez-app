@@ -186,7 +186,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy, doc, limit, runTransaction } from 'firebase/firestore';
-import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import EmbarqueCuentasService from '@/services/EmbarqueCuentasService';
 import PapeleraService from '@/services/PapeleraService';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 import { normalizarFechaValor } from '@/utils/dateUtils';
@@ -197,7 +197,7 @@ import {
   saldoAcumuladoAntesDeFecha,
   normalizarFechaOzuna as normalizarFechaSaldo
 } from '@/utils/ozunaCuentasSaldo';
-import StashModalV2 from '@/components/StashModalV2.vue';
+import StashModalV2 from '@/components/Pedidos/StashModalV2.vue';
 
 export default {
   name: 'OzunaCuentasMenu',

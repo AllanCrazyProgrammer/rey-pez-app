@@ -1,5 +1,5 @@
 import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
-import { crearNuevoCrudoItem } from '@/constants.js/embarque';
+import { crearNuevoCrudoItem } from '@/constants/embarque';
 
 export const embarqueCrudosMixin = {
   methods: {

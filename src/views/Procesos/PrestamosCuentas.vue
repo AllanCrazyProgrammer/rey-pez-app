@@ -316,7 +316,7 @@ import { db } from '@/firebase';
 import { collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { movimientosCuenta, fechaMovimiento } from '@/utils/prestamos';
 import { cargarCuentasPrestamos, eliminarCuentaPrestamos } from '@/services/prestamosService';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 import { TIPOS_PRESTAMO } from './prestamosTipos';
 

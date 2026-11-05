@@ -86,7 +86,7 @@
 </template>
 
 <script>
-import Cuentas from "./Cuentas.vue";
+import Cuentas from "../Pesadas/Cuentas.vue";
 
 export default {
   name: "Datos",

@@ -482,7 +482,7 @@
 import { db } from '@/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { formatNumber } from '@/utils/formatters';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 
 // Proveedores que trabajan producto de terceros: se reportan aparte.
 const MAQUILAS = ['Ozuna', 'Joselito'];

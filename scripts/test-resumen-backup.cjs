@@ -38,7 +38,7 @@ test('summary asks each time, previews without saving, and only queues PDFs with
     },
     '@/services/RendimientosReport': { generarRendimientosParaResumen: async () => ({ data: new Uint8Array([37,80,68,70]), name: 'rendimientos.pdf' }) },
     '@/utils/pdf/resumenEmbarque': summary, '@/utils/pdf/filename': filenames,
-    '@/utils/services/EmbarqueCuentasService': { sincronizarCuentaOzunaParaNota: async () => ({ datos: null }) },
+    '@/services/EmbarqueCuentasService': { sincronizarCuentaOzunaParaNota: async () => ({ datos: null }) },
     '@/utils/ozunaCuentaNota': { OZUNA_CLIENTE_ID: '4' },
     '@/services/DriveNotasSync': { agruparRespaldoDrive: async work => { batches++; return work(); }, driveNotasDisponible: () => true, encolarNotaDrive: async data => queued.push(data) }
   }).default;

@@ -90,7 +90,7 @@ test('Catarro se reconoce por su id fijo y no por el nombre', () => {
   const mixin = loadAlias(path.resolve(__dirname, '../src/views/Embarques/mixins/embarqueCuentasMixin.js'), {
     '@/constants/clientesConfig': { esClienteCatarro, ID_CLIENTE_CATARRO },
     '@/stores/ui': {},
-    '@/utils/services/EmbarqueCuentasService': {},
+    '@/services/EmbarqueCuentasService': {},
     '@/services/cuentas.service': {},
     '@/utils/dateUtils': {},
     '@/utils/cuentasResumenEmbarque': { CUENTAS_AUTOMATICAS_RESUMEN: [], cuentasFaltantesParaResumen() { return []; } },

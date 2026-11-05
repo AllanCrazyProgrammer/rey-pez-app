@@ -443,10 +443,10 @@ import {
   orderBy,
   limit
 } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
-import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModalV2 from '@/components/StashModalV2.vue';
-import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
+import PreciosHistorialModal from '@/components/Precios/PreciosHistorialModal.vue';
+import StashModalV2 from '@/components/Pedidos/StashModalV2.vue';
+import PreciosClienteButton from '@/components/Precios/PreciosClienteButton.vue';
 import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import { redondearCentavos, sumarMontos } from '@/utils/dinero';
@@ -461,7 +461,7 @@ import {
   validarAbonosCatarro,
 } from '@/utils/fechaAbonoCatarro';
 import SelectorMetodoPagoCatarro from '@/components/Cuentas/SelectorMetodoPagoCatarro.vue';
-import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/utils/services/EmbarqueCuentasService';
+import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/services/EmbarqueCuentasService';
 import {
   joselitoCuentas,
   veronicaCuentas,

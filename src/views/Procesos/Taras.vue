@@ -137,7 +137,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import TarasMovimientosTable from '@/components/Taras/TarasMovimientosTable.vue';
 
 export default {

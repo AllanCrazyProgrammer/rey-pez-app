@@ -467,9 +467,9 @@
 import { db } from '@/firebase';
 import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { guardarDiaLimpio } from '@/services/sacadas.service';
-import BackButton from '../components/BackButton.vue';
-import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
-import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
+import BackButton from '../components/layout/BackButton.vue';
+import ListaMedidasPedidoModal from '@/components/Medidas/ListaMedidasPedidoModal.vue';
+import MedidasParaHoyCards from '@/components/Existencias/MedidasParaHoyCards.vue';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import { momentoInventario, inicioDiaInventario, finDiaInventario } from '@/utils/momentoInventario';
 import { formatNumber } from '@/utils/formatters';

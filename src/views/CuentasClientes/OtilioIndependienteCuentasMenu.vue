@@ -135,8 +135,8 @@
 import { db } from '@/firebase';
 import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
 import PapeleraService from '@/services/PapeleraService';
-import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModalV2 from '@/components/StashModalV2.vue';
+import PreciosHistorialModal from '@/components/Precios/PreciosHistorialModal.vue';
+import StashModalV2 from '@/components/Pedidos/StashModalV2.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 import { sonMontosIguales } from '@/utils/dinero';
 

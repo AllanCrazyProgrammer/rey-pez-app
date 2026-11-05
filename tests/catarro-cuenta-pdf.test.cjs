@@ -76,7 +76,7 @@ function cargarServicio({ previas = [], precios = [], mismaFecha = [], alLeerSal
   };
 
   const servicio = loadModule(
-    path.resolve(__dirname, '../src/utils/services/EmbarqueCuentasService.js'),
+    path.resolve(__dirname, '../src/services/EmbarqueCuentasService.js'),
     { 'firebase/firestore': firestore, window }
   );
   return {

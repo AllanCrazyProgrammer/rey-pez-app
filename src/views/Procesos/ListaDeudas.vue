@@ -479,7 +479,7 @@ import {
   totalProducto
 } from '@/utils/deudas';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import PreciosProveedorPanel from '@/components/Deudas/Precios/PreciosProveedorPanel.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
 import AbonoGeneralModal from '@/components/Deudas/AbonoGeneralModal.vue';

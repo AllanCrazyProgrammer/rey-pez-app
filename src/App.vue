@@ -35,13 +35,13 @@
 </template>
 
 <script>
-import DriveBackupNotice from './components/DriveBackupNotice.vue';
-import PdfPreview from './components/PdfPreview.vue';
-import WebUpdateNotice from './components/WebUpdateNotice.vue';
+import DriveBackupNotice from './components/layout/DriveBackupNotice.vue';
+import PdfPreview from './components/layout/PdfPreview.vue';
+import WebUpdateNotice from './components/layout/WebUpdateNotice.vue';
 import EmbarquesSync from './services/EmbarquesSync';
-import EmbarquesOfflineStatus from './components/EmbarquesOfflineStatus.vue';
-import Navbar from "./NavBar.vue";
-import Footer from './Footer.vue';
+import EmbarquesOfflineStatus from './components/layout/EmbarquesOfflineStatus.vue';
+import Navbar from "./components/layout/NavBar.vue";
+import Footer from './components/layout/Footer.vue';
 import { useAuthStore } from './stores/auth';
 import { useUIStore } from './stores/ui';
 
