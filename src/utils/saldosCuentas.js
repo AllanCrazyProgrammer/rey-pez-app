@@ -17,6 +17,12 @@ const COLORES_CUENTA = {
 const COLECCION_SALDOS_CUENTAS = 'saldosCuentas'
 const DOCUMENTO_SALDOS_CUENTAS = 'actual'
 const DEBOUNCE_GUARDADO_MS = 500
+const SEPARADOR_WHATSAPP = '━━━━━━━━━━━━━━━━━━━━'
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+]
 
 const CUENTAS_INICIALES = [
   { id: 'bancomer-1', nombre: 'BANCOMER 1', color: COLOR_AZUL, saldo: 0 },
@@ -95,10 +101,10 @@ function totalSaldos(cuentas) {
   return desdeCentavos(centavos)
 }
 
-function formatearFechaSaldos(fecha = new Date()) {
+function partesCalendarioSaldos(fecha) {
   if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
     const partes = fecha.split('-')
-    return `${partes[2]}/${partes[1]}/${partes[0]}`
+    return { year: Number(partes[0]), month: Number(partes[1]), day: Number(partes[2]) }
   }
   const base = fecha instanceof Date ? fecha : new Date(fecha)
   const valida = Number.isNaN(base.getTime()) ? new Date() : base
@@ -108,18 +114,63 @@ function formatearFechaSaldos(fecha = new Date()) {
     month: '2-digit',
     year: 'numeric'
   }).formatToParts(valida)
-  const valor = (tipo) => partes.find((parte) => parte.type === tipo).value
-  return `${valor('day')}/${valor('month')}/${valor('year')}`
+  const valor = (tipo) => Number(partes.find((parte) => parte.type === tipo).value)
+  return { year: valor('year'), month: valor('month'), day: valor('day') }
 }
 
-function textoSaldosWhatsApp(cuentas, fecha = new Date()) {
+function formatearFechaSaldos(fecha = new Date()) {
+  const { year, month, day } = partesCalendarioSaldos(fecha)
+  const dd = String(day).padStart(2, '0')
+  const mm = String(month).padStart(2, '0')
+  return `${dd}/${mm}/${year}`
+}
+
+function formatearFechaLargaSaldos(fecha = new Date()) {
+  const { year, month, day } = partesCalendarioSaldos(fecha)
+  const indice = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+  return `${DIAS_SEMANA[indice]} ${day} de ${MESES[month - 1]} ${year}`
+}
+
+function emojiCuenta(color) {
+  const valor = String(color == null ? '' : color).trim().toLowerCase()
+  if (valor === COLOR_AZUL) return '🔵'
+  if (valor === COLOR_ROJO) return '🔴'
+  if (valor === COLOR_VERDE) return '🟢'
+  return '⚪'
+}
+
+function cuentasNombradas(cuentas) {
   const lista = Array.isArray(cuentas) ? cuentas : []
-  const lineas = [`*Saldos al ${formatearFechaSaldos(fecha)}*`]
-  lista.forEach((cuenta) => {
-    const nombre = String(cuenta && cuenta.nombre != null ? cuenta.nombre : '').trim()
-    lineas.push(`${nombre}: $${formatearMonto(cuenta && cuenta.saldo)}`)
+  return lista.filter((cuenta) => String(cuenta && cuenta.nombre != null ? cuenta.nombre : '').trim())
+}
+
+/** Bloque monoespaciado para que los montos queden en columna en el celular. */
+function lineasCuentasWhatsApp(lista) {
+  const filas = lista.map((cuenta) => ({
+    emoji: emojiCuenta(cuenta && cuenta.color),
+    nombre: String(cuenta.nombre).trim(),
+    monto: `$${formatearMonto(cuenta && cuenta.saldo)}`
+  }))
+  const anchoNombre = filas.reduce((max, fila) => Math.max(max, fila.nombre.length), 0)
+  const anchoMonto = filas.reduce((max, fila) => Math.max(max, fila.monto.length), 0)
+  const cuerpo = filas.map((fila) => {
+    const nombre = fila.nombre.padEnd(anchoNombre, ' ')
+    const monto = fila.monto.padStart(anchoMonto, ' ')
+    return `${fila.emoji} ${nombre}  ${monto}`
   })
-  lineas.push(`*TOTAL: $${formatearMonto(totalSaldos(lista))}*`)
+  return ['```', ...cuerpo, '```']
+}
+
+/** Las cuentas sin nombre no se listan ni suman al total del mensaje. */
+function textoSaldosWhatsApp(cuentas, fecha = new Date()) {
+  const lista = cuentasNombradas(cuentas)
+  const lineas = [
+    '🏦 *SALDOS DE CUENTAS*',
+    `📅 ${formatearFechaLargaSaldos(fecha)}`,
+    SEPARADOR_WHATSAPP
+  ]
+  if (lista.length) lineas.push(...lineasCuentasWhatsApp(lista))
+  lineas.push(SEPARADOR_WHATSAPP, `💰 *TOTAL: $${formatearMonto(totalSaldos(lista))}*`)
   return lineas.join('\n')
 }
 

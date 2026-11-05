@@ -39,19 +39,43 @@ test('arma el texto y el enlace de WhatsApp', () => {
   const fecha = new Date('2026-11-04T18:00:00Z')
   const texto = saldos.textoSaldosWhatsApp(imagen, fecha)
   assert.equal(texto, [
-    '*Saldos al 04/11/2026*',
-    'BANCOMER 1: $190,034.00',
-    'BANCOMER 2: $2,926.00',
-    'BANORTE: $215,746.45',
-    'ESTUARDO AFIRME: $97,578.76',
-    'ALLAN AFIRME: $1,363.79',
-    '*TOTAL: $507,649.00*'
+    '🏦 *SALDOS DE CUENTAS*',
+    '📅 miércoles 4 de noviembre 2026',
+    '━━━━━━━━━━━━━━━━━━━━',
+    '```',
+    '🔵 BANCOMER 1       $190,034.00',
+    '🔵 BANCOMER 2         $2,926.00',
+    '🔴 BANORTE          $215,746.45',
+    '🟢 ESTUARDO AFIRME   $97,578.76',
+    '🟢 ALLAN AFIRME       $1,363.79',
+    '```',
+    '━━━━━━━━━━━━━━━━━━━━',
+    '💰 *TOTAL: $507,649.00*'
   ].join('\n'))
   assert.equal(saldos.formatearFechaSaldos('2026-11-04'), '04/11/2026')
   assert.equal(saldos.formatearFechaSaldos(new Date('2026-11-04T05:00:00Z')), '03/11/2026')
   const enlace = saldos.enlaceWhatsAppSaldos(texto)
   assert.equal(enlace, `https://wa.me/?text=${encodeURIComponent(texto)}`)
-  assert.match(decodeURIComponent(enlace.split('text=')[1]), /\*TOTAL: \$507,649\.00\*/)
+  assert.match(decodeURIComponent(enlace.split('text=')[1]), /💰 \*TOTAL: \$507,649\.00\*/)
+})
+
+test('omite cuentas sin nombre y usa círculo blanco si el color no es azul, rojo ni verde', () => {
+  const fecha = new Date('2026-11-04T18:00:00Z')
+  const texto = saldos.textoSaldosWhatsApp([
+    { nombre: 'CAJA', color: '#123456', saldo: 10 },
+    { nombre: '   ', color: saldos.COLOR_AZUL, saldo: 99 },
+    { nombre: null, saldo: 1 }
+  ], fecha)
+  assert.equal(texto, [
+    '🏦 *SALDOS DE CUENTAS*',
+    '📅 miércoles 4 de noviembre 2026',
+    '━━━━━━━━━━━━━━━━━━━━',
+    '```',
+    '⚪ CAJA  $10.00',
+    '```',
+    '━━━━━━━━━━━━━━━━━━━━',
+    '💰 *TOTAL: $10.00*'
+  ].join('\n'))
 })
 
 test('las cuentas iniciales traen color y saldo en cero', () => {
