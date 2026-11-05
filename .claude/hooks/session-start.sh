@@ -24,10 +24,13 @@ LOG=/tmp/session-start-hook.log
 echo "[session-start] Instalando dependencias del proyecto..." >&2
 npm install >>"$LOG" 2>&1
 
-# Playwright para las capturas de preview (no se guarda en package.json
-# para no afectar el build/despliegue de la app).
-echo "[session-start] Instalando Playwright para previews..." >&2
-npm install playwright --no-save >>"$LOG" 2>&1 || true
+# Playwright ya viene en devDependencies con la versión fijada en
+# package-lock.json, que coincide con el Chromium preinstalado. No instalar
+# "playwright" suelto: traería la última versión y buscaría otro navegador.
+if ! node -e "require.resolve('playwright')" >/dev/null 2>&1; then
+  echo "[session-start] Playwright no quedó instalado; reintentando npm install..." >&2
+  npm install >>"$LOG" 2>&1 || true
+fi
 
 # Detectar el Chromium preinstalado del entorno (Playwright no puede
 # descargar navegadores aqui por la politica de red).
