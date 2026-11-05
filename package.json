@@ -6,6 +6,8 @@
   "scripts": {
     "start": "vue-cli-service serve",
     "build:web": "vue-cli-service build",
+    "deploy:web": "npm run build:web && firebase deploy --only hosting",
+    "deploy:web:preview": "npm run build:web && firebase hosting:channel:deploy preview --expires 7d",
     "build": "vue-cli-service build && npx cap sync",
     "test:maria": "node --test scripts/test-maria.cjs",
     "test:embarques-offline": "node scripts/test-embarques-offline.cjs",
