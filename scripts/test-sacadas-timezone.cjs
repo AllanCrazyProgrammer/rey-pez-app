@@ -50,6 +50,7 @@ function load(file) {
     if (name === '@/utils/momentoInventario') return load('src/utils/momentoInventario.js');
     if (name === '@/utils/fechasInventario') return load('src/utils/fechasInventario.js');
     if (name === './dateUtils') return load('src/utils/dateUtils.js');
+    if (name === '@/utils/kilosDisponiblesFifo') return require('../src/utils/kilosDisponiblesFifo.js');
     return {};
   }, message => alerts.push(message));
   return exports;

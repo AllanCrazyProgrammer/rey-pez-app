@@ -50,23 +50,31 @@ test('Electron preserves bytes, period, cancellation and one save; renders only 
   assert.equal(renders, 1); assert.equal(calls.length, 2);
   await assert.rejects(load('src/utils/pdf/delivery.js', { window: { desktop: {} } }).entregarPdf(noRender, 'nota.pdf'), /actualiza ReyPez/);
 });
-test('real clean summary renders once and its web download equals the Drive bytes', async () => {
-  const b = browser(), queued = []; let renders = 0;
+test('real clean summary renders once and its preview equals the Drive bytes', async () => {
+  // Flujo actual: pregunta si sube a Drive, muestra vista previa (no descarga sola) y sube resumen + reportes.
+  const b = browser(), queued = [], previews = []; let renders = 0;
   const real = require('pdfmake/build/pdfmake'), wrapped = Object.create(real);
   wrapped.createPdf = (...args) => { const pdf = real.createPdf(...args), get = pdf.getBuffer.bind(pdf); pdf.getBuffer = (...args) => { renders++; return get(...args); }; return pdf; };
-  const summary = load('src/utils/pdf/resumenEmbarque.js', b.globals, { 'pdfmake/build/pdfmake': wrapped });
+  const ui = { useUIStore: () => ({ showPdfPreview: (data, name) => previews.push({ data, name }), showPdfAlert: text => { throw new Error('alerta inesperada: ' + text); } }) };
+  const summary = load('src/utils/pdf/resumenEmbarque.js', b.globals, { 'pdfmake/build/pdfmake': wrapped, '@/stores/ui': ui });
   const mixin = load('src/views/Embarques/mixins/pdfGenerationMixin.js', b.globals, {
     '@/utils/pdfGenerator': { generarNotaVentaPDF: async () => ({ data: new Uint8Array([37]), name: 'nota.pdf' }) }, '@/utils/pdf/resumenTaras': { generarResumenTarasPDF: async () => ({ data: new Uint8Array([37]), name: 'taras.pdf' }) },
     '@/services/RendimientosReport': { generarRendimientosParaResumen: async () => ({ data: new Uint8Array([37]), name: 'rendimientos.pdf' }) },
     '@/utils/pdf/reportDelivery': { guardarYRespaldarReporte: async () => {} },
     '@/utils/pdf/resumenEmbarque': summary, '@/utils/pdf/filename': load('src/utils/pdf/filename.js'), '@/utils/pdf/delivery': load('src/utils/pdf/delivery.js', b.globals),
-    '@/services/DriveNotasSync': { agruparRespaldoDrive: async work => work(), driveNotasDisponible: () => true, encolarNotaDrive: async data => queued.push(data) }
+    '@/services/DriveNotasSync': { agruparRespaldoDrive: async work => work(), driveNotasDisponible: () => true, encolarNotaDrive: async data => queued.push(data) },
+    '@/stores/ui': ui,
+    '@/utils/services/EmbarqueCuentasService': { sincronizarCuentaOzunaParaNota: async () => { throw new Error('no debe sincronizar cuentas en esta prueba'); } },
+    '@/utils/ozunaCuentaNota': load('src/utils/ozunaCuentaNota.js')
   }).default;
   const products = [{ clienteId: '1', medida: 'Golfo', tipo: 's/h20', taras: [3], kilos: [85], restarTaras: true, precio: 170, reporteTaras: [1,2], reporteBolsas: [26,25] }];
-  const instance = { ...mixin.methods, embarque: { id: 'qa-summary', fecha: '2026-10-12', cargaCon: 'QA', productos: products }, clienteCrudos: {}, productosPorCliente: { '1': products }, clientesDisponibles: [{ id: '1', nombre: 'Joselito' }], obtenerNombreCliente: () => 'Joselito' };
+  const instance = { ...mixin.methods, embarque: { id: 'qa-summary', fecha: '2026-10-12', cargaCon: 'QA', productos: products }, clienteCrudos: {}, productosPorCliente: { '1': products }, clientesDisponibles: [{ id: '1', nombre: 'Joselito' }], obtenerNombreCliente: () => 'Joselito', $refs: { subirResumen: { solicitar: async () => true } } };
   await instance.generarPDFResumen(100);
   assert.equal(renders, 1, 'must not render mutated canvas a second time');
-  assert.equal(queued.length, 2); assert.equal(b.blobs.length, 1); assert.equal(b.links.length, 1); assert.equal(b.links[0].clicks, 1);
-  assert.deepEqual(Buffer.from(await b.blobs[0].arrayBuffer()), Buffer.from(queued[0].data));
-  assert.equal(b.links[0].download, queued[0].name); assert.equal(Buffer.from(queued[0].data).subarray(0,5).toString(), '%PDF-');
+  assert.equal(previews.length, 1, 'one preview, no automatic download');
+  assert.equal(b.links.length, 0, 'the preview does not download by itself');
+  assert.deepEqual(queued.slice(0, 3).map(n => n.id.split('-')[0]), ['resumen', 'taras', 'rendimientos']);
+  assert.equal(queued.length, 4, 'resumen, taras, rendimientos y la nota del cliente');
+  assert.deepEqual(Buffer.from(previews[0].data), Buffer.from(queued[0].data), 'Drive receives the exact bytes shown');
+  assert.equal(previews[0].name, queued[0].name); assert.equal(Buffer.from(queued[0].data).subarray(0,5).toString(), '%PDF-');
 });
