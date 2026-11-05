@@ -11,8 +11,10 @@ El push a `master` dispara el despliegue.
 - `npm run build:web` — build de producción a `dist/`.
 - `npm run lint` — ESLint directo con eslint-plugin-vue 7 (0 errores; la deuda
   conocida sale como advertencias).
-- No hay framework de pruebas configurado (los archivos `test-*.js` de la raíz
-  son scripts sueltos, no una suite).
+- Pruebas: `node --test tests/*.test.cjs` y los `scripts/test-*.cjs` (cada uno se
+  corre con `node` o `node --test`). Los scripts de diagnóstico contra la base
+  real (solo lectura, requieren `admin-key.json`) están en `scripts/admin/`.
+- Documentos históricos de cambios: `docs/historial/`.
 
 ## Vista previa con capturas ("muéstrame cómo se ve")
 
