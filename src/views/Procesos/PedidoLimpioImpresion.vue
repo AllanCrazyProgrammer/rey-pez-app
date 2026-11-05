@@ -1118,7 +1118,7 @@ export default {
         // El acomodo automático usa 1.2 cuando una salida del Resumen del Día
         // todavía no tiene rendimiento. Los valores capturados por el usuario
         // se respetan y no se reemplazan.
-        ;(this.resumenSacadaHoy.salidasClientes || []).forEach((fila) => {
+        (this.resumenSacadaHoy.salidasClientes || []).forEach((fila) => {
           if (!(Number(this.rendimientosResumen[fila.key]) > 0)) {
             this.$set(this.rendimientosResumen, fila.key, 1.2)
           }

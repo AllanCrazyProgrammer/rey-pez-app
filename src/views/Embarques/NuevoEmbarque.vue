@@ -277,7 +277,7 @@ import { getSaveManager } from '@/services/SaveManager'
 import SaveStatusIndicator from '@/components/SaveStatusIndicator.vue'
 import AuthErrorNotification from '@/components/AuthErrorNotification.vue'
 import authDiagnostic from '@/utils/authDiagnostic.js'
-import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import { ref as vueRef, onMounted, onUnmounted } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
 import pdfGenerationMixin from './mixins/pdfGenerationMixin';
@@ -322,7 +322,6 @@ import PedidoDelDiaModal from './components/PedidoDelDiaModal.vue';
 
 
 // Lazy loaded components
-const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
 
 // Importar utilidades de fecha y precios
 import { 
@@ -359,7 +358,6 @@ export default {
   
   components: {
     ColaboracionEmbarque,
-    Rendimientos,
     Sidebar,
     HeaderEmbarque,
         ClienteProductos,
