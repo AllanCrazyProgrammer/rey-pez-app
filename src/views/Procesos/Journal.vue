@@ -93,7 +93,8 @@
 </template>
 
 <script>
-import { db, storage } from '@/firebase'
+import { db } from '@/firebase'
+import { storage } from '@/firebaseStorage'
 import { collection, addDoc, getDocs, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 

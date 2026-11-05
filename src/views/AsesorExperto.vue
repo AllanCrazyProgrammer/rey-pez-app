@@ -196,7 +196,8 @@ import {
   orderBy,
   limit
 } from 'firebase/firestore';
-import { db, functions } from '@/firebase';
+import { db } from '@/firebase';
+import { functions } from '@/firebaseFunctions';
 import { construirContextoInventario } from '@/utils/contextoInventario';
 import BackButton from '@/components/BackButton.vue';
 import FondoMatrix from '@/components/FondoMatrix.vue';

@@ -9,8 +9,6 @@ import {
   persistentSingleTabManager
 } from "firebase/firestore";
 import { getDatabase, ref, onDisconnect, set } from "firebase/database";
-import { getFunctions } from "firebase/functions";
-import { getStorage } from "firebase/storage";
 
 // Tu configuración de Firebase
 const firebaseConfig = {
@@ -64,9 +62,9 @@ const db = initFirestore();
 // Inicializar Realtime Database
 const rtdb = getDatabase(app);
 
-// Cloud Functions (asesor experto)
-const functions = getFunctions(app);
-const storage = getStorage(app);
+// Storage (fotos de Bitácoras/Journal) y Cloud Functions (asesor experto) viven en
+// src/firebaseStorage.js y src/firebaseFunctions.js: así su código solo se descarga al
+// abrir esas pantallas y no al iniciar la app.
 
 // Función para manejar la presencia de usuarios
 const handleUserPresence = async (userId, username) => {
@@ -93,4 +91,4 @@ const handleUserPresence = async (userId, username) => {
   }
 };
 
-export { db, rtdb, functions, storage, handleUserPresence };
+export { app, db, rtdb, handleUserPresence };
