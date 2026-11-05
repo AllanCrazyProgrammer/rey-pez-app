@@ -9,7 +9,8 @@ El push a `master` dispara el despliegue.
 - `npm install` — instala dependencias.
 - `npm start` — dev server en http://localhost:8080 (hot reload).
 - `npm run build:web` — build de producción a `dist/`.
-- `npm run lint` — ESLint (vue-cli-service lint).
+- `npm run lint` — ESLint directo con eslint-plugin-vue 7 (0 errores; la deuda
+  conocida sale como advertencias).
 - No hay framework de pruebas configurado (los archivos `test-*.js` de la raíz
   son scripts sueltos, no una suite).
 

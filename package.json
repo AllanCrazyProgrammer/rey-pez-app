@@ -76,6 +76,7 @@
     "eslint-plugin-vue": "^7.20.0",
     "fake-indexeddb": "^6.2.5",
     "firebase-tools": "^15.33.0",
+    "jsdom": "^20.0.3",
     "playwright": "^1.63.0",
     "vue-template-compiler": "^2.6.11",
     "wait-on": "^9.0.3"

@@ -13,7 +13,7 @@ npm install
 
 ## Node version
 ```
-14.16.0
+20.15.0
 ```
 
 ### Compiles and hot-reloads for development
@@ -26,10 +26,13 @@ npm run start
 npm run build
 ```
 
-### Lints and fixes files
+### Lints files
 ```
 npm run lint
 ```
+
+## Plan de mejoras
+Ver [docs/PLAN_MEJORAS.md](docs/PLAN_MEJORAS.md).
 
 ### Customize configuration
 See [Configuration Reference](https://cli.vuejs.org/config/).
