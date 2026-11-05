@@ -5,6 +5,11 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium, _electron: electron } = require('playwright');
 const os = require('node:os');
+// Chrome indicado por variable, el de macOS si existe, o el Chromium de Playwright.
+const chromeLocal = preferido => {
+  const ruta = preferido || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  return require('fs').existsSync(ruta) ? { executablePath: ruta } : {};
+};
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const source = {
@@ -24,7 +29,7 @@ let browser, desktop;
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+  browser = await chromium.launch({headless:true,...chromeLocal(process.env.CHROME_PATH)});
   const context = await browser.newContext();
   await context.route(/https?:\/\/(?!127\.0\.0\.1)/, route => route.abort());
   const page = await context.newPage();

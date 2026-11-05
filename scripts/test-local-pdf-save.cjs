@@ -15,7 +15,9 @@ test('local shipment PDFs overwrite the same path without a confirmation; invali
     dialog: { showMessageBox: () => { throw new Error('Unexpected confirmation'); } }
   };
   const context = vm.createContext({
-    require: name => name === 'electron' ? electron : name === './googleDrive' ? { initGoogleDrive() {} } : require(name),
+    // ./printHtml solo usa módulos de Node; se carga el real desde electron/.
+    require: name => name === 'electron' ? electron : name === './googleDrive' ? { initGoogleDrive() {} }
+      : name === './printHtml' ? require(path.resolve(__dirname, '../electron/printHtml')) : require(name),
     __dirname: path.resolve(__dirname, '../electron'), Uint8Array, Buffer, URL, process
   });
   const source = fs.readFileSync(path.join(__dirname, '../electron/main.js'), 'utf8');

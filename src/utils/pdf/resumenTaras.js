@@ -1,7 +1,10 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+// Desde jspdf-autotable 5 importar el paquete ya no agrega doc.autoTable a jsPDF;
+// applyPlugin lo hace explícito (también funciona con la versión 3).
+import { applyPlugin } from 'jspdf-autotable';
 import { periodoNota, nombreArchivoReporte } from './filename';
 import { useUIStore } from '@/stores/ui';
+applyPlugin(jsPDF);
 
 // Agregar constantes para los colores de los clientes
 const COLORES_CLIENTES = {

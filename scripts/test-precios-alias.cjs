@@ -10,16 +10,18 @@ function load(file, mocks = {}, suffix = '') {
   let source = fs.readFileSync(path.join(root, file), 'utf8');
   if (file.endsWith('.vue')) source = source.match(/<script>([\s\S]*?)<\/script>/)[1];
   const code = babel.transformSync(source + suffix, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code;
-  const context = { exports: {}, console: quiet, navigator: { onLine: true }, require(name) {
+  const module = { exports: {} };
+  // module: algunos utils (p. ej. renombrarMedidaRendimientos) usan module.exports.
+  const context = { module, exports: module.exports, console: quiet, navigator: { onLine: true }, require(name) {
     if (Object.hasOwn(mocks, name)) return mocks[name];
     if (name.endsWith('.vue')) return {};
     const resolved = name.startsWith('@/') ? 'src/' + name.slice(2) : name.startsWith('.') ? path.join(path.dirname(file), name) : null;
     if (resolved) return load(resolved.endsWith('.js') ? resolved : resolved + '.js', mocks);
-    if (name === 'moment' || name.startsWith('moment/')) return require(name);
+    if (name === 'moment' || name.startsWith('moment/') || name === 'uuid') return require(name);
     throw new Error('Unexpected dependency: ' + name);
   } };
   vm.runInNewContext(code, context, { filename: file });
-  return context.exports;
+  return context.module.exports;
 }
 const prices = load('src/utils/preciosHistoricos.js');
 const pairs = [['Med Esp c/c', 'Med-Esp c/c'], ['Med Gde c/c', 'Med-Gde c/c']];

@@ -175,7 +175,7 @@ import ConfirmModal from '@/components/Descargas/ConfirmModal.vue';
 import DaysMenu from '@/components/Descargas/DaysMenu.vue';
 import CamionetaTabs from '@/components/Descargas/CamionetaTabs.vue';
 import ResumenDescarga from '@/components/Descargas/ResumenDescarga.vue';
-import { loadDays, saveDays, createNewDay, createNewCamioneta, sanitizeCamioneta, getDaysKey, MAX_LOG } from '@/utils/contadorStorage';
+import { loadDays, saveDays, createNewDay, createNewCamioneta, getDaysKey, MAX_LOG } from '@/utils/contadorStorage';
 
 export default {
   name: 'Descargas',

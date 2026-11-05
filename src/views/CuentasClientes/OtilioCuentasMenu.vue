@@ -235,12 +235,10 @@ import { db } from '@/firebase';
 import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, limit, writeBatch } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import PapeleraService from '@/services/PapeleraService';
-import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import ObservacionesModal from '@/components/ObservacionesModal.vue';
 
-import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 import { normalizarFechaValor } from '@/utils/dateUtils';
 
 import ReporteCuentasOtilioButton from '@/components/Cuentas/ReporteCuentasOtilioButton.vue';
@@ -252,7 +250,6 @@ import 'vue2-datepicker/index.css';
 export default {
   name: 'OtilioCuentasMenu',
   components: {
-    BackButton,
     PreciosHistorialModal,
     StashModalV2,
     ObservacionesModal,
@@ -318,10 +315,6 @@ export default {
     }
   },
   methods: {
-
-    formatNumber,
-    formatDate,
-
     normalizarFechaValor,
     tieneContenidoProducto(producto = {}) {
       return Boolean(

@@ -213,11 +213,14 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+// Desde jspdf-autotable 5 importar el paquete ya no agrega doc.autoTable a jsPDF;
+// applyPlugin lo hace explícito (también funciona con la versión 3).
+import { applyPlugin } from 'jspdf-autotable';
 import { formatNumber } from '@/utils/formatters';
+applyPlugin(jsPDF);
 
 export default {
   name: 'ResumenMensualBarcos',

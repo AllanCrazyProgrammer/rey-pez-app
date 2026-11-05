@@ -45,7 +45,8 @@ const { normalizarNombreMedida, renombrarMedidaRendimientos: renombrar } = util;
   const modulo = { exports: {} };
   vm.runInNewContext(code, {
     module: modulo, exports: modulo.exports, console,
-    require: id => id === '@/utils/renombrarMedidaRendimientos' ? util : {},
+    require: id => id === '@/utils/renombrarMedidaRendimientos' ? util
+      : id === '@/utils/rendimientosCalculos' ? require('../src/utils/rendimientosCalculos') : {},
     prompt() { throw new Error('Electron no soporta prompt'); },
   });
   const component = modulo.exports.default;

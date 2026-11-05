@@ -4,6 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require('playwright');
+// Chrome indicado por variable, el de macOS si existe, o el Chromium de Playwright.
+const chromeLocal = preferido => {
+  const ruta = preferido || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  return require('fs').existsSync(ruta) ? { executablePath: ruta } : {};
+};
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const qaService = read('src/services/EmbarquesOfflineService.js');
@@ -28,7 +33,7 @@ const server = http.createServer((req, res) => {
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const browser = await chromium.launch({headless:true, executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+  const browser = await chromium.launch({headless:true, ...chromeLocal(process.env.CHROME_PATH)});
   try {
     const context = await browser.newContext();
     // Isolate all real external services, including presence.
@@ -75,8 +80,14 @@ const server = http.createServer((req, res) => {
       duringWrite = () => offline.save({...sample,cargaCon:'Caminante',docData:{...sample.docData,cargaCon:'Caminante'}},{pendingSync:true});
       await sync.sync();
       check((await offline.getById(sample.id)).pendingSync, 'late acknowledgement erased newer edit');
+      // La edición "Porro" era igual a la del servidor: no se escribe ni sube la versión (sin conflicto falso).
+      check(Number(rows.get(sample.id).rev) === 1, 'identical upload must not bump the remote revision');
+      // Otro equipo cambia el embarque (rev 2) mientras este tiene "Caminante" pendiente sobre rev 1.
+      rows.set(sample.id, { ...rows.get(sample.id), cargaCon: 'OtroEquipo', rev: 2 });
       await sync.sync();
       check((await offline.getById(sample.id)).syncState === 'conflict', 'remote conflict not retained');
+      check((await offline.getById(sample.id)).cargaCon === 'Caminante', 'conflict must keep the local edit');
+      check(rows.get(sample.id).cargaCon === 'OtroEquipo', 'conflict must not overwrite the other device');
       const fresh = {id:'qa-new',fecha:'2026-09-25',docData:{fecha:'2026-09-25',clientes:[],cargaCon:'Porro'}};
       await offline.save(fresh,{pendingSync:true});
       await sync.sync();

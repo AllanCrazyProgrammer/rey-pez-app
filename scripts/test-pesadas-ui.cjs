@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const http = require('node:http');
 const webpack = require('webpack');
-const VueLoaderPlugin = require('vue-loader/lib/plugin');
+const VueLoaderPlugin = require('@vue/vue-loader-v15/lib/plugin');
 const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'pesadas-ui-'));
@@ -24,9 +24,9 @@ async function run() {
     } },
     module: { rules: [
       { test: /\.mjs$/, type: 'javascript/auto' },
-      { test: /\.vue$/, loader: 'vue-loader' },
+      { test: /\.vue$/, loader: '@vue/vue-loader-v15' },
       { test: /\.js$/, exclude: /node_modules/, loader: 'babel-loader', options: { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-optional-chaining'] } },
-      { test: /\.css$/, use: ['vue-style-loader', 'css-loader'] }
+      { test: /\.css$/, use: ['vue-style-loader', { loader: 'css-loader', options: { esModule: false } }] }
     ] },
     plugins: [new VueLoaderPlugin()],
     devtool: false

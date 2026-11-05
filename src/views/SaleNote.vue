@@ -295,13 +295,11 @@
       </div>
     </div>
   </div>
-  </div>
 </template>
 <script>
 import BackButton from '@/components/BackButton.vue';
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
-import AddClient from '@/components/AddClient.vue';
 import PreciosNotaVentaModal from '@/components/PreciosNotaVentaModal.vue';
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, setDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
@@ -317,7 +315,6 @@ import { formatNumber } from '@/utils/formatters';
 export default {
   components: {
     DatePicker,
-    AddClient,
     BackButton,
     PreciosNotaVentaModal
   },

@@ -478,7 +478,7 @@ import {
   validarProducto,
   totalProducto
 } from '@/utils/deudas';
-import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosProveedorPanel from '@/components/Deudas/Precios/PreciosProveedorPanel.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';

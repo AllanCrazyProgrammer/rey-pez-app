@@ -54,7 +54,7 @@ export default {
         if (success) {
           this.$router.push(window.desktop ? '/embarques' : '/')
         } else {
-          this.error = 'Usuario o contraseña incorrectos'
+          this.error = authStore.errorLogin || 'Usuario o contraseña incorrectos'
         }
       } catch (err) {
         console.error('Error en login:', err)

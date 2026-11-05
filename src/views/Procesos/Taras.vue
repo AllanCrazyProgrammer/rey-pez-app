@@ -440,8 +440,9 @@ export default {
       try {
         this.generandoPdf = true;
         const jsPDFModule = await import('jspdf');
-        await import('jspdf-autotable');
+        const { applyPlugin } = await import('jspdf-autotable');
         const jsPDF = jsPDFModule.default || jsPDFModule.jsPDF;
+        applyPlugin(jsPDF);
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
 
         const filas = this.movimientos.map((movimiento) => ([

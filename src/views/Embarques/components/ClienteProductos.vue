@@ -60,7 +60,7 @@
                     <input type="checkbox" :id="'sumar-kg-catarro-' + clienteId"
                         v-model="clientesSumarKgCatarro[clienteId]" @change="handleSumarKgCatarroChange" @click.stop
                         :disabled="embarqueBloqueado">
-                    <label :for="'sumar-kg-catarro-' + clienteId" @click.stop">Sumar 1 kg</label>
+                    <label :for="'sumar-kg-catarro-' + clienteId" @click.stop>Sumar 1 kg</label>
                 </div>
                 
                 <button type="button" @click.stop="$emit('generar-pdf', 'cliente', clienteId)"

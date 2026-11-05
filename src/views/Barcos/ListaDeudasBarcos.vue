@@ -555,7 +555,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import BotonReporteMensual from '@/components/Barcos/BotonReporteMensual.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';

@@ -263,7 +263,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, doc, query, where } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PagosTripulante from './PagosTripulante.vue';
 

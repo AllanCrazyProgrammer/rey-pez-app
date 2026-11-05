@@ -1,3 +1,6 @@
+// Guardado local + respaldo en Drive para reportes (taras, rendimientos...).
+// Aún no lo llama ninguna pantalla; está listo y cubierto por
+// scripts/test-reportes-backup.cjs para cuando se conecte a los botones de reporte.
 import { nombreArchivoReporte, periodoNota } from './filename';
 import { driveNotasDisponible, encolarNotaDrive } from '@/services/DriveNotasSync';
 

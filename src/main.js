@@ -19,9 +19,21 @@ if (process.env.NODE_ENV === 'development') {
   }
 }
 
-import { BootstrapVue, IconsPlugin } from "bootstrap-vue";
+// Solo las piezas de BootstrapVue que usa la app (b-modal, b-row/b-col/b-container,
+// b-button, b-form-*, $bvModal y $bvToast). Registrar todo BootstrapVue + IconsPlugin
+// agregaba cientos de KB al arranque sin usarse.
+import {
+  ModalPlugin,
+  ToastPlugin,
+  LayoutPlugin,
+  ButtonPlugin,
+  FormGroupPlugin,
+  FormInputPlugin,
+  FormTextareaPlugin
+} from "bootstrap-vue";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-vue/dist/bootstrap-vue.css";
+import "./styles/bootstrap-vue-bs5.css";
 
 // Import Font Awesome
 import '@fortawesome/fontawesome-free/css/all.css';
@@ -44,8 +56,8 @@ const esWindows = desktopPlatform === 'win32' || /windows|win32|win64/i.test(bro
 document.documentElement.classList.toggle('platform-windows', esWindows);
 document.documentElement.classList.toggle('desktop-app', Boolean(window.desktop));
 
-Vue.use(BootstrapVue);
-Vue.use(IconsPlugin);
+[ModalPlugin, ToastPlugin, LayoutPlugin, ButtonPlugin, FormGroupPlugin, FormInputPlugin, FormTextareaPlugin]
+  .forEach(plugin => Vue.use(plugin));
 Vue.use(PiniaVuePlugin);
 
 const pinia = createPinia();
@@ -61,6 +73,8 @@ const app = new Vue({
     if (store) {
       const authStore = useAuthStore();
       authStore.checkAuth();
+      // Con VUE_APP_LOGIN_LOCAL=off exige sesión de Firebase Auth (no hace nada en la transición).
+      authStore.exigirSesionFirebase(router);
     }
   }
 }).$mount("#app");

@@ -49,7 +49,9 @@ let desktop;
 (async () => {
   try {
     const inventory = await inventoryHtml();
-    desktop = await electron.launch({ executablePath, args: [`--user-data-dir=${profile}`, '--proxy-server=http://127.0.0.1:9', '--host-resolver-rules=MAP * ~NOTFOUND'] });
+    desktop = await electron.launch({ executablePath, args: [
+      ...(process.env.REYPEZ_DESKTOP_UNPACKAGED ? [path.join(root, 'electron/main.js')] : []),
+      `--user-data-dir=${profile}`, '--proxy-server=http://127.0.0.1:9', '--host-resolver-rules=MAP * ~NOTFOUND'] });
     await desktop.evaluate(({ session, dialog, shell }, folder) => {
       session.defaultSession.enableNetworkEmulation({ offline: true });
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*', 'wss://*/*'] }, (_, cb) => cb({ cancel: true }));
@@ -62,7 +64,7 @@ let desktop;
     const alerts = [];
     page.on('dialog', d => { alerts.push(d.message()); d.dismiss(); });
     await page.locator('#username').fill('allan');
-    const auth = fs.readFileSync(path.join(root, 'src/stores/auth.js'), 'utf8');
+    const auth = fs.readFileSync(path.join(root, 'src/services/loginLocal.js') /* usuarios del login de transición */, 'utf8');
     await page.locator('#password').fill(auth.match(/username: 'allan', password: '([^']+)'/)[1]);
     await page.locator('button[type=submit]').click();
     await page.locator('.lista-embarques').waitFor();

@@ -679,7 +679,7 @@ import {
 } from '@/utils/calculosPedidoLimpio'
 import { db } from '@/firebase'
 import { useUIStore } from '@/stores/ui'
-import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore'
 
 const PDF_PREVIEW_MODAL_ID = 'pedido-limpio-pdf-preview'
 
@@ -1118,7 +1118,7 @@ export default {
         // El acomodo automático usa 1.2 cuando una salida del Resumen del Día
         // todavía no tiene rendimiento. Los valores capturados por el usuario
         // se respetan y no se reemplazan.
-        ;(this.resumenSacadaHoy.salidasClientes || []).forEach((fila) => {
+        (this.resumenSacadaHoy.salidasClientes || []).forEach((fila) => {
           if (!(Number(this.rendimientosResumen[fila.key]) > 0)) {
             this.$set(this.rendimientosResumen, fila.key, 1.2)
           }

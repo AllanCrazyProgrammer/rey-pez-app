@@ -25,6 +25,8 @@ function cargar({ online = true, consultar = async () => true, timers = {} } = {
       require(id) {
         if (id in mocks) return mocks[id];
         if (id.startsWith('@/')) return load(path.join(root, 'src', id.slice(2) + '.js'));
+        // Imports relativos se resuelven desde el archivo cargado (no desde scripts/).
+        if (id.startsWith('.')) return load(path.resolve(path.dirname(file), id.endsWith('.js') ? id : id + '.js'));
         return require(id);
       },
     }, { filename: file });

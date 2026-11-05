@@ -119,7 +119,6 @@
 import { db } from '@/firebase';
 import { collection, query, getDocs, where, orderBy } from 'firebase/firestore';
 import { formatNumber } from '@/utils/formatters';
-import { formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'ResumenVentasVeronicaModal',

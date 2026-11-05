@@ -1,0 +1,26 @@
+/*
+ * Compatibilidad BootstrapVue 2 (pensado para Bootstrap 4) con el CSS de Bootstrap 5.
+ * Bootstrap 5 oculta `.toast:not(.show)`, pero BootstrapVue muestra/oculta sus
+ * toasts con transiciones propias sin poner la clase `show`; por eso los avisos
+ * de $bvToast (p. ej. en Preparación) se creaban con display: none.
+ */
+.b-toast .toast {
+  display: block;
+}
+
+/* Botón × de toasts y modales: BootstrapVue usa la clase `close` de Bootstrap 4
+   (en Bootstrap 5 es `btn-close`), así que salía como un botón gris sin estilo. */
+.b-toast .toast-header .close,
+.modal-header .close {
+  margin-left: auto;
+  padding: 0 0.25rem;
+  background: transparent;
+  border: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  opacity: 0.6;
+}
+.b-toast .toast-header .close:hover,
+.modal-header .close:hover {
+  opacity: 1;
+}

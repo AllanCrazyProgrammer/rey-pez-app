@@ -135,7 +135,6 @@
 import { db } from '@/firebase';
 import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
 import PapeleraService from '@/services/PapeleraService';
-import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
@@ -144,7 +143,6 @@ import { sonMontosIguales } from '@/utils/dinero';
 export default {
   name: 'OtilioIndependienteCuentasMenu',
   components: {
-    BackButton,
     PreciosHistorialModal,
     StashModalV2
   },

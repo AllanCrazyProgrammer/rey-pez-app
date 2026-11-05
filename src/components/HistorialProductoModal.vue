@@ -104,7 +104,6 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
 import { formatearFecha as formatDate } from '@/utils/formatters';
 

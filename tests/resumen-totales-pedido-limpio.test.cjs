@@ -13,7 +13,7 @@ function load(file) {
   let source = fs.readFileSync(path.join(root, file), 'utf8')
   if (file.endsWith('.vue')) source = compiler.parseComponent(source).script.content
   const module = { exports: {} }
-  const requireMock = name => /^@\/utils\/(resumenTotalesPedidoLimpio|analisisPedidosLimpio|calculosPedidoLimpio|factorAgua)$/.test(name)
+  const requireMock = name => /^@\/utils\/(resumenTotalesPedidoLimpio|analisisPedidosLimpio|calculosPedidoLimpio|factorAgua|kilosRefrigerados)$/.test(name)
     ? load(`src/${name.slice(2)}.js`)
     : {}
   const code = transformSync(source, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code
@@ -64,7 +64,8 @@ test('reutiliza las conversiones de agua, rendimiento, taras y Sellado', () => {
   assert.deepEqual(resumen(pedido({
     otilio: [item(2, { esTara: true, tipo: '1.4' }), item(10, { tipo: 'C/H20', agua: 0.7 })],
     ozuna: [item(2, { esTara: true, nota: 'Sellado', esMaquila: true }), item(2, { esTara: true, tipo: 'C/H20', esMaquila: true })]
-  })), { venta: 63, maquila: 89, total: 152, tieneMaquila: true })
+  // Desde #179 las taras de Ozuna cuentan 25 kg: Sellado 2×25 = 50 y C/H20 2×25×0.65 = 32.5.
+  })), { venta: 63, maquila: 82.5, total: 145.5, tieneMaquila: true })
 })
 
 test('conserva decimales y el total coincide con la suma de las dos cantidades mostradas', () => {
@@ -88,7 +89,7 @@ test('redondea correctamente los medios centésimos tras convertir kilos con agu
 })
 
 test('mantiene la tarjeta Robalo y las claves de rendimiento del resumen por medida', () => {
-  const props = { pedidoOtilio: [item(500, { medida: 'Robalo' }), item(100)], pedidoOzuna: [item(50, { esMaquila: true, etiqueta: 'Honduras' })] }
+  const props = { pedidoOtilio: [item(500, { medida: 'Robalo' }), item(100)], pedidoOzuna: [item(50, { esMaquila: true, etiqueta: 'Honduras' })], kilosRefrigerados: {} }
   const cards = component.methods.calcularTotalesPorMedida.call(props)
   assert.deepEqual(cards, [
     { medida: '51/60', total: 100 }, { medida: '51/60 Maq Honduras', total: 50 }, { medida: 'Robalo', total: 500 }

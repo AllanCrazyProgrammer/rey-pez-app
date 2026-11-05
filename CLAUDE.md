@@ -1,6 +1,6 @@
 # Rey Pez — Notas para Claude
 
-App de gestión (Vue 2 + Vue CLI 4.5) con Firebase (Firestore + Realtime DB).
+App de gestión (Vue 2.7 + Vue CLI 5 / webpack 5) con Firebase (Firestore + Realtime DB).
 Se despliega en Heroku como sitio estático (buildpack nginx: `Procfile` + `static.json`).
 El push a `master` dispara el despliegue.
 
@@ -9,9 +9,21 @@ El push a `master` dispara el despliegue.
 - `npm install` — instala dependencias.
 - `npm start` — dev server en http://localhost:8080 (hot reload).
 - `npm run build:web` — build de producción a `dist/`.
-- `npm run lint` — ESLint (vue-cli-service lint).
-- No hay framework de pruebas configurado (los archivos `test-*.js` de la raíz
-  son scripts sueltos, no una suite).
+- `npm run lint` — ESLint directo con eslint-plugin-vue 7 (0 errores; la deuda
+  conocida sale como advertencias).
+- Pruebas: `node --test tests/*.test.cjs` y los `scripts/test-*.cjs` (cada uno se
+  corre con `node` o `node --test`). Los scripts de diagnóstico contra la base
+  real (solo lectura, requieren `admin-key.json`) están en `scripts/admin/`.
+- Documentos históricos de cambios: `docs/historial/`.
+
+## Verificación antes de subir
+
+- `node --test tests/*.test.cjs` y los `scripts/test-*.cjs` relevantes.
+- `node scripts/recorrer-rutas.cjs dist` (tras `npm run build:web`): abre las 82 rutas
+  del build de producción y reporta errores de JavaScript.
+- Cambios en librerías de PDF: `scripts/pdf-regresion/` (comparación pixel por pixel).
+- Cambios en el SDK de Firebase: `scripts/verificar-migracion-cache-firestore.mjs`.
+- Seguridad y respaldos de Firebase: `docs/SEGURIDAD_Y_RESPALDOS.md`.
 
 ## Vista previa con capturas ("muéstrame cómo se ve")
 

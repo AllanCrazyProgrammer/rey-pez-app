@@ -261,7 +261,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 import { formatearFecha } from '@/utils/formatters';
 
 export default {

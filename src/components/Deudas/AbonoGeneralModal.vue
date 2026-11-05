@@ -64,7 +64,7 @@
 <script>
 import { db } from '@/firebase';
 import { aplicarAbonoGeneral as aplicarAbonoGeneralDeudas } from '@/utils/deudas';
-import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {

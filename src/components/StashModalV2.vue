@@ -527,7 +527,7 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
-import { collection, addDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, limit, where, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, addDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, limit, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { formatearFecha, formatNumber } from '@/utils/formatters';
 

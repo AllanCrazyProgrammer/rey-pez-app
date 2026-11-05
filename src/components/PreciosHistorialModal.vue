@@ -439,7 +439,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { 
   obtenerFechaActualISO, 
   normalizarFechaISO, 

@@ -432,8 +432,16 @@
 <script>
 import { db } from '@/firebase';
 import {
-  collection, getDocs, doc, updateDoc, deleteDoc, getDoc, writeBatch,
-  query, where, orderBy, limit,
+  collection,
+  getDocs,
+  doc,
+  deleteDoc,
+  getDoc,
+  writeBatch,
+  query,
+  where,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';

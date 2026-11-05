@@ -5,8 +5,13 @@ const fs = require('node:fs');
 const os = require('node:os');
 const http = require('node:http');
 const webpack = require('webpack');
-const VueLoaderPlugin = require('vue-loader/lib/plugin');
+const VueLoaderPlugin = require('@vue/vue-loader-v15/lib/plugin');
 const { chromium } = require('playwright');
+// Chrome indicado por variable, el de macOS si existe, o el Chromium de Playwright.
+const chromeLocal = preferido => {
+  const ruta = preferido || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  return require('fs').existsSync(ruta) ? { executablePath: ruta } : {};
+};
 const root = path.resolve(__dirname, '..');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'inventarios-android-'));
 console.log('QA Android: ' + output);
@@ -23,11 +28,13 @@ async function run() {
     } },
     module: { rules: [
       { test: /\.mjs$/, type: 'javascript/auto' },
-      { test: /\.vue$/, loader: 'vue-loader' },
+      { test: /\.vue$/, loader: '@vue/vue-loader-v15' },
       { test: /\.js$/, exclude: /node_modules/, loader: 'babel-loader', options: { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-optional-chaining', '@babel/plugin-transform-nullish-coalescing-operator'] } },
-      { test: /\.css$/, use: ['vue-style-loader', 'css-loader'] },
-      { test: /\.(png|svg|woff2?|ttf)$/, loader: 'file-loader' }
-    ] }, plugins: [new VueLoaderPlugin()], devtool: false
+      { test: /\.css$/, use: ['vue-style-loader', { loader: 'css-loader', options: { esModule: false } }] },
+      { test: /\.(png|svg|woff2?|ttf)$/, type: 'asset/resource' }
+    ] }, plugins: [new VueLoaderPlugin(),
+      // Como Vue CLI: process.env.* se resuelve al compilar (en el navegador no existe process).
+      new webpack.DefinePlugin({ 'process.env': JSON.stringify({ NODE_ENV: 'development', BASE_URL: '/' }) })], devtool: false
   }, (error, stats) => error || stats.hasErrors() ? reject(error || new Error(stats.toString('errors-only'))) : resolve()));
   fs.writeFileSync(path.join(output, 'index.html'), '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script src="/app.js"></script></html>');
   const server = http.createServer((req, res) => {
@@ -42,7 +49,7 @@ async function run() {
   let browser;
   try {
     // Evitar artefactos de captura del compositor GPU de Chrome en macOS.
-    browser = await chromium.launch({ headless: true, args: ['--disable-gpu'], executablePath: process.env.INVENTARIOS_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+    browser = await chromium.launch({ headless: true, args: ['--disable-gpu'], ...chromeLocal(process.env.INVENTARIOS_CHROME_PATH) });
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'America/Monterrey' });
     await context.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
     const page = await context.newPage();
@@ -79,7 +86,7 @@ async function run() {
     await page.screenshot({ path: path.join(output, 'acceso-neon.png'), fullPage: true });
     await page.getByLabel('Usuario:', { exact: true }).fill('allan');
     // Usar el acceso existente sin publicar la contraseña en el resultado.
-    const authSource = fs.readFileSync(path.join(root, 'src/stores/auth.js'), 'utf8');
+    const authSource = fs.readFileSync(path.join(root, 'src/services/loginLocal.js') /* usuarios del login de transición */, 'utf8');
     const password = authSource.match(/username: 'allan', password: '([^']+)'/)[1];
     await page.getByLabel('Contraseña:', { exact: true }).fill(password);
     assert.equal(await page.evaluate(() => window.__audioPrueba.contextos), 0, 'Escribir en campos no genera sonidos');

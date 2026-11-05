@@ -107,7 +107,9 @@
 import { getFirestore, collection, getDocs, doc, addDoc, deleteDoc } from 'firebase/firestore';
 import { escribirCamposEmbarquesAtomico } from '@/services/embarqueEscritura';
 import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
-import html2pdf from 'html2pdf.js';
+// Se importa el código fuente de html2pdf.js: su dist/ trae empaquetadas copias viejas
+// de jsPDF (4.0.0) y DOMPurify; src/ usa las versiones instaladas en el proyecto.
+import html2pdf from 'html2pdf.js/src/index.js';
 
 import { formatearFecha } from '@/utils/formatters';
 import { obtenerFechaActualISO } from '@/utils/dateUtils';
