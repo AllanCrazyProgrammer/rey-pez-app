@@ -473,6 +473,7 @@ import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import { momentoInventario, inicioDiaInventario, finDiaInventario } from '@/utils/momentoInventario';
 import { formatNumber } from '@/utils/formatters';
+import { kilosDisponiblesFifo, mismoProveedor } from '@/utils/kilosDisponiblesFifo';
 import inventarioNavigation from '@/mobile/inventarioNavigation';
 
 export default {
@@ -1113,7 +1114,7 @@ export default {
         };
         
         // Si el proveedor de entrada es el mismo que el de salida, actualizar medidas disponibles para salidas
-        if (this.newSalida.proveedor === proveedorEntrada) {
+        if (mismoProveedor(this.newSalida.proveedor, proveedorEntrada)) {
           if (this.newSalida.tipo === 'proveedor') {
             this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
           } else if (this.newSalida.tipo === 'maquila') {
@@ -1230,10 +1231,6 @@ export default {
       this._sacadasCache = null;
     },
     async getKilosDisponibles(proveedor, medidaDisplay, cuartoSeleccionado = '') {
-      let kilosDisponibles = 0;
-      let totalEntradas = 0;
-      let totalSalidas = 0;
-
       const noEspecificadoLabel = 'No especificado';
       const { medidaBase, precio, cuartoFrio } = this.parseSalidaMedida(medidaDisplay);
       const cuartoParsed = this.normalizeCuarto(cuartoSeleccionado || cuartoFrio);
@@ -1243,7 +1240,7 @@ export default {
 
       // Comparar medida, precio y cuarto correctamente
       const coincideMovimiento = (movimiento) => {
-        const medidaCoincide = movimiento.proveedor === proveedor && movimiento.medida === medidaBase;
+        const medidaCoincide = mismoProveedor(movimiento.proveedor, proveedor) && movimiento.medida === medidaBase;
         const precioCoincide = precio === null ?
           (movimiento.precio === null || movimiento.precio === undefined) :
           movimiento.precio === precio;
@@ -1253,6 +1250,15 @@ export default {
 
         return medidaCoincide && precioCoincide && cuartoCoincide;
       };
+
+      // FIFO por medida+precio+cuarto, igual que Existencias y la lista de medidas:
+      // una salida que excede los lotes de ese momento no resta de más.
+      const movimientos = [];
+      const agregar = (tipo, lista) => lista.forEach((m) => {
+        if (coincideMovimiento(m)) {
+          movimientos.push({ tipo, kilos: m.kilos, cuarto: this.normalizeCuarto(m.cuartoFrio) });
+        }
+      });
 
       const fechaActual = finDiaInventario(this.currentDate);
       sacadasOrdenadas.forEach((sacada) => {
@@ -1264,38 +1270,19 @@ export default {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
 
         if (momentoInventario(sacadaFecha).isSameOrBefore(fechaActual)) {
-          sacada.entradas.forEach(entrada => {
-            if (coincideMovimiento(entrada)) {
-              kilosDisponibles += Number(entrada.kilos) || 0;
-              totalEntradas += Number(entrada.kilos) || 0;
-            }
-          });
-
-          sacada.salidas.forEach(salida => {
-            if (coincideMovimiento(salida)) {
-              kilosDisponibles -= Number(salida.kilos) || 0;
-              totalSalidas += Number(salida.kilos) || 0;
-            }
-          });
+          agregar('entrada', sacada.entradas || []);
+          agregar('salida', sacada.salidas || []);
         }
       });
 
       // Incluir los renglones locales del día aún no guardados
-      this.entradas.forEach(entrada => {
-        if (coincideMovimiento(entrada)) {
-          kilosDisponibles += Number(entrada.kilos) || 0;
-          totalEntradas += Number(entrada.kilos) || 0;
-        }
-      });
+      agregar('entrada', this.entradas);
+      agregar('salida', this.salidas);
 
-      this.salidas.forEach(salida => {
-        if (coincideMovimiento(salida)) {
-          kilosDisponibles -= Number(salida.kilos) || 0;
-          totalSalidas += Number(salida.kilos) || 0;
-        }
-      });
-
-      return Number(kilosDisponibles.toFixed(1));
+      return kilosDisponiblesFifo(
+        movimientos,
+        cuarto => sumarTodosLosCuartos || cuarto === cuartoParsed
+      );
     },
     editarEntrada(index) {
       this.entradaEditIndex = index;
@@ -1326,7 +1313,7 @@ export default {
         entrada.cuartoFrio = this.entradaEditData.cuartoFrio || '';
         
         // Si el proveedor es el mismo que el de salida, actualizar medidas disponibles
-        if (this.newSalida.proveedor === proveedorEntrada) {
+        if (mismoProveedor(this.newSalida.proveedor, proveedorEntrada)) {
           if (this.newSalida.tipo === 'proveedor') {
             this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
           } else if (this.newSalida.tipo === 'maquila') {
@@ -1343,7 +1330,7 @@ export default {
       this.entradas.splice(index, 1);
       
       // Si el proveedor eliminado es el mismo que el de salida, actualizar medidas disponibles
-      if (this.newSalida.proveedor === entradaEliminada.proveedor) {
+      if (mismoProveedor(this.newSalida.proveedor, entradaEliminada.proveedor)) {
         if (this.newSalida.tipo === 'proveedor') {
           this.medidasConPrecio = await this.getMedidasConPrecio(entradaEliminada.proveedor);
         } else if (this.newSalida.tipo === 'maquila') {
@@ -1358,7 +1345,7 @@ export default {
       this.salidas.splice(index, 1);
       
       // Si el proveedor eliminado es el mismo que el seleccionado, actualizar medidas disponibles
-      if (this.newSalida.proveedor === salidaEliminada.proveedor) {
+      if (mismoProveedor(this.newSalida.proveedor, salidaEliminada.proveedor)) {
         if (this.newSalida.tipo === 'proveedor') {
           this.medidasConPrecio = await this.getMedidasConPrecio(salidaEliminada.proveedor);
         } else if (this.newSalida.tipo === 'maquila') {
@@ -1556,13 +1543,13 @@ export default {
         if (momentSacada.isBefore(inicioDiaActual)) {
           
           sacada.entradas.forEach(entrada => {
-            if (entrada.proveedor === proveedor) {
+            if (mismoProveedor(entrada.proveedor, proveedor)) {
               actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, sacadaFecha, true, entrada.cuartoFrio || '');
             }
           });
 
           sacada.salidas.forEach(salida => {
-            if (salida.proveedor === proveedor) {
+            if (mismoProveedor(salida.proveedor, proveedor)) {
               actualizarBalance(salida.medida, salida.precio, salida.kilos, sacadaFecha, false, salida.cuartoFrio || '');
             }
           });
@@ -1571,14 +1558,14 @@ export default {
 
       // Procesar entradas y salidas del día actual SOLO desde arrays locales
       this.entradas.forEach((entrada) => {
-        if (entrada.proveedor === proveedor) {
+        if (mismoProveedor(entrada.proveedor, proveedor)) {
           const fechaHoy = this.currentDate.toDate();
           actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, fechaHoy, true, entrada.cuartoFrio || '');
         }
       });
 
       this.salidas.forEach((salida) => {
-        if (salida.proveedor === proveedor) {
+        if (mismoProveedor(salida.proveedor, proveedor)) {
           const fechaHoy = this.currentDate.toDate();
           actualizarBalance(salida.medida, salida.precio, salida.kilos, fechaHoy, false, salida.cuartoFrio || '');
         }
@@ -1735,26 +1722,26 @@ export default {
         }
 
         (sacada.entradas || []).forEach(entrada => {
-          if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
+          if (entrada.tipo === 'maquila' && mismoProveedor(entrada.proveedor, maquilaNombre)) {
             acumularKilos(entrada.medida, entrada.kilos, entrada.cuartoFrio);
           }
         });
 
         (sacada.salidas || []).forEach(salida => {
-          if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
+          if (salida.tipo === 'maquila' && mismoProveedor(salida.proveedor, maquilaNombre)) {
             acumularKilos(salida.medida, -(salida.kilos || 0), salida.cuartoFrio);
           }
         });
       });
 
       this.entradas.forEach(entrada => {
-        if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
+        if (entrada.tipo === 'maquila' && mismoProveedor(entrada.proveedor, maquilaNombre)) {
           acumularKilos(entrada.medida, entrada.kilos, entrada.cuartoFrio);
         }
       });
 
       this.salidas.forEach(salida => {
-        if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
+        if (salida.tipo === 'maquila' && mismoProveedor(salida.proveedor, maquilaNombre)) {
           acumularKilos(salida.medida, -(salida.kilos || 0), salida.cuartoFrio);
         }
       });
