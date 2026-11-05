@@ -143,6 +143,20 @@
                 <span v-if="tienePrecio && datos.precioPromedioGeneral" class="precio-promedio">
                   - Promedio General: ${{ datos.precioPromedioGeneral.toFixed(2) }}
                 </span>
+                <label class="precio-facturacion" @click.stop>
+                  <span>Precio de facturación: $</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputmode="decimal"
+                    placeholder="—"
+                    :value="preciosFacturacion[medidaKey] ?? ''"
+                    :aria-label="`Precio de facturación ${medidaKey}`"
+                    @change="guardarPrecioFacturacion(medidaKey, $event)"
+                    @keyup.enter="$event.target.blur()"
+                  />
+                </label>
               </span>
               <label class="agrupar-toggle">
                 <input type="checkbox" v-model="agruparMedidasIguales" />
@@ -326,7 +340,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
-import { collection, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import moment from 'moment';
 import { formatearFecha, formatNumber } from '@/utils/formatters';
 import FondoMatrix from '@/components/layout/FondoMatrix.vue';
@@ -354,6 +368,32 @@ export default {
     const tienePrecio = ref(false);
     const filtroCuarto = ref(false);
     const agruparMedidasIguales = ref(false);
+
+    // Precio de facturación por medida: editable, se guarda en Firestore y
+    // permanece hasta que se vuelva a cambiar (se comparte entre dispositivos).
+    const preciosFacturacion = ref({});
+    const PRECIOS_FACTURACION_DOC = doc(db, 'configuracion', 'preciosFacturacionLimpio');
+    const guardarPrecioFacturacion = async (medidaKey, event) => {
+      const texto = String(event.target.value || '').trim();
+      const valor = texto === '' ? null : Number(texto);
+      if (valor !== null && (!Number.isFinite(valor) || valor < 0)) {
+        event.target.value = preciosFacturacion.value[medidaKey] ?? '';
+        return;
+      }
+      const anterior = preciosFacturacion.value[medidaKey];
+      preciosFacturacion.value = { ...preciosFacturacion.value, [medidaKey]: valor };
+      try {
+        await setDoc(PRECIOS_FACTURACION_DOC, {
+          precios: { [medidaKey]: valor },
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (error) {
+        console.error('Error al guardar precio de facturación:', error);
+        preciosFacturacion.value = { ...preciosFacturacion.value, [medidaKey]: anterior };
+        event.target.value = anterior ?? '';
+        alert('No se pudo guardar el precio de facturación. Intenta de nuevo.');
+      }
+    };
     const deudas = ref([]);
     const salidasDiaSiguiente = ref([]);
 
@@ -1355,6 +1395,12 @@ export default {
             opacity: 0.7;
             margin-left: 3px;
           }
+          .precio-facturacion {
+            color: #e74c3c;
+            font-size: 13pt;
+            font-weight: bold;
+            margin-top: 3px;
+          }
           .precio-promedio {
             color: #27ae60;
             font-size: 14pt;
@@ -1945,6 +1991,7 @@ export default {
                         </div>
                       ` : ''}
                       ${tienePrecio.value && datos.precioPromedioGeneral ? `<span class="precio-promedio">- Promedio General: $${datos.precioPromedioGeneral.toFixed(2)}</span>` : ''}
+                      ${preciosFacturacion.value[medidaKey] != null ? `<div class="precio-facturacion">Precio de facturación: $${Number(preciosFacturacion.value[medidaKey]).toFixed(2)}</div>` : ''}
                     </h2>
                     ${Object.entries(datos.proveedores).map(([proveedor, proveedorData]) => `
                       <div class="proveedor-section">
@@ -2049,11 +2096,19 @@ export default {
         loadDeudas();
       });
       
-      // Guardar ambos unsubscribers
+      const unsubscribePreciosFacturacion = onSnapshot(PRECIOS_FACTURACION_DOC, (snap) => {
+        const precios = (snap.exists() && snap.data().precios) || {};
+        preciosFacturacion.value = Object.fromEntries(
+          Object.entries(precios).filter(([, v]) => v !== null && v !== undefined)
+        );
+      }, (error) => console.error('Error al leer precios de facturación:', error));
+
+      // Guardar los unsubscribers
       const originalUnsubscribe = unsubscribe;
       unsubscribe = () => {
         originalUnsubscribe();
         unsubscribeDeudas();
+        unsubscribePreciosFacturacion();
       };
     });
 
@@ -2096,6 +2151,8 @@ export default {
       promedioCombinado516141,
       tieneCuarto,
       agruparMedidasIguales,
+      preciosFacturacion,
+      guardarPrecioFacturacion,
       estiloAcento
     };
   }
@@ -2939,6 +2996,35 @@ h1 {
   margin-left: 10px;
   text-shadow: none;
   opacity: 0.9;
+}
+
+.precio-facturacion {
+  flex-basis: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--rojo);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-shadow: 0 0 8px rgba(255, 77, 77, 0.45);
+  cursor: text;
+}
+
+.precio-facturacion input {
+  width: 110px;
+  background: rgba(255, 77, 77, 0.08);
+  border: 1px solid rgba(255, 77, 77, 0.45);
+  border-radius: 4px;
+  color: var(--rojo);
+  font: inherit;
+  padding: 3px 6px;
+  text-shadow: none;
+}
+
+.precio-facturacion input:focus-visible {
+  outline: 2px solid var(--rojo);
+  outline-offset: 2px;
 }
 
 .precio-promedio-proveedor {
