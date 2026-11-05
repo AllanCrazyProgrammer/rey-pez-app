@@ -473,7 +473,7 @@ import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import { momentoInventario, inicioDiaInventario, finDiaInventario } from '@/utils/momentoInventario';
 import { formatNumber } from '@/utils/formatters';
-import { kilosDisponiblesFifo } from '@/utils/kilosDisponiblesFifo';
+import { kilosDisponiblesFifo, mismoProveedor } from '@/utils/kilosDisponiblesFifo';
 import inventarioNavigation from '@/mobile/inventarioNavigation';
 
 export default {
@@ -1114,7 +1114,7 @@ export default {
         };
         
         // Si el proveedor de entrada es el mismo que el de salida, actualizar medidas disponibles para salidas
-        if (this.newSalida.proveedor === proveedorEntrada) {
+        if (mismoProveedor(this.newSalida.proveedor, proveedorEntrada)) {
           if (this.newSalida.tipo === 'proveedor') {
             this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
           } else if (this.newSalida.tipo === 'maquila') {
@@ -1240,7 +1240,7 @@ export default {
 
       // Comparar medida, precio y cuarto correctamente
       const coincideMovimiento = (movimiento) => {
-        const medidaCoincide = movimiento.proveedor === proveedor && movimiento.medida === medidaBase;
+        const medidaCoincide = mismoProveedor(movimiento.proveedor, proveedor) && movimiento.medida === medidaBase;
         const precioCoincide = precio === null ?
           (movimiento.precio === null || movimiento.precio === undefined) :
           movimiento.precio === precio;
@@ -1313,7 +1313,7 @@ export default {
         entrada.cuartoFrio = this.entradaEditData.cuartoFrio || '';
         
         // Si el proveedor es el mismo que el de salida, actualizar medidas disponibles
-        if (this.newSalida.proveedor === proveedorEntrada) {
+        if (mismoProveedor(this.newSalida.proveedor, proveedorEntrada)) {
           if (this.newSalida.tipo === 'proveedor') {
             this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
           } else if (this.newSalida.tipo === 'maquila') {
@@ -1330,7 +1330,7 @@ export default {
       this.entradas.splice(index, 1);
       
       // Si el proveedor eliminado es el mismo que el de salida, actualizar medidas disponibles
-      if (this.newSalida.proveedor === entradaEliminada.proveedor) {
+      if (mismoProveedor(this.newSalida.proveedor, entradaEliminada.proveedor)) {
         if (this.newSalida.tipo === 'proveedor') {
           this.medidasConPrecio = await this.getMedidasConPrecio(entradaEliminada.proveedor);
         } else if (this.newSalida.tipo === 'maquila') {
@@ -1345,7 +1345,7 @@ export default {
       this.salidas.splice(index, 1);
       
       // Si el proveedor eliminado es el mismo que el seleccionado, actualizar medidas disponibles
-      if (this.newSalida.proveedor === salidaEliminada.proveedor) {
+      if (mismoProveedor(this.newSalida.proveedor, salidaEliminada.proveedor)) {
         if (this.newSalida.tipo === 'proveedor') {
           this.medidasConPrecio = await this.getMedidasConPrecio(salidaEliminada.proveedor);
         } else if (this.newSalida.tipo === 'maquila') {
@@ -1543,13 +1543,13 @@ export default {
         if (momentSacada.isBefore(inicioDiaActual)) {
           
           sacada.entradas.forEach(entrada => {
-            if (entrada.proveedor === proveedor) {
+            if (mismoProveedor(entrada.proveedor, proveedor)) {
               actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, sacadaFecha, true, entrada.cuartoFrio || '');
             }
           });
 
           sacada.salidas.forEach(salida => {
-            if (salida.proveedor === proveedor) {
+            if (mismoProveedor(salida.proveedor, proveedor)) {
               actualizarBalance(salida.medida, salida.precio, salida.kilos, sacadaFecha, false, salida.cuartoFrio || '');
             }
           });
@@ -1558,14 +1558,14 @@ export default {
 
       // Procesar entradas y salidas del día actual SOLO desde arrays locales
       this.entradas.forEach((entrada) => {
-        if (entrada.proveedor === proveedor) {
+        if (mismoProveedor(entrada.proveedor, proveedor)) {
           const fechaHoy = this.currentDate.toDate();
           actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, fechaHoy, true, entrada.cuartoFrio || '');
         }
       });
 
       this.salidas.forEach((salida) => {
-        if (salida.proveedor === proveedor) {
+        if (mismoProveedor(salida.proveedor, proveedor)) {
           const fechaHoy = this.currentDate.toDate();
           actualizarBalance(salida.medida, salida.precio, salida.kilos, fechaHoy, false, salida.cuartoFrio || '');
         }
@@ -1722,26 +1722,26 @@ export default {
         }
 
         (sacada.entradas || []).forEach(entrada => {
-          if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
+          if (entrada.tipo === 'maquila' && mismoProveedor(entrada.proveedor, maquilaNombre)) {
             acumularKilos(entrada.medida, entrada.kilos, entrada.cuartoFrio);
           }
         });
 
         (sacada.salidas || []).forEach(salida => {
-          if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
+          if (salida.tipo === 'maquila' && mismoProveedor(salida.proveedor, maquilaNombre)) {
             acumularKilos(salida.medida, -(salida.kilos || 0), salida.cuartoFrio);
           }
         });
       });
 
       this.entradas.forEach(entrada => {
-        if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
+        if (entrada.tipo === 'maquila' && mismoProveedor(entrada.proveedor, maquilaNombre)) {
           acumularKilos(entrada.medida, entrada.kilos, entrada.cuartoFrio);
         }
       });
 
       this.salidas.forEach(salida => {
-        if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
+        if (salida.tipo === 'maquila' && mismoProveedor(salida.proveedor, maquilaNombre)) {
           acumularKilos(salida.medida, -(salida.kilos || 0), salida.cuartoFrio);
         }
       });

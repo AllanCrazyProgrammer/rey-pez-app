@@ -27,3 +27,17 @@ test('cada cuarto consume solo sus lotes y se puede filtrar', () => {
   assert.equal(kilosDisponiblesFifo(movs, c => c === 'B'), 0)
   assert.equal(kilosDisponiblesFifo(movs), 100)
 })
+
+test('proveedor con mayúsculas distintas se trata como el mismo', () => {
+  const { mismoProveedor } = require('../src/utils/kilosDisponiblesFifo')
+  assert.ok(mismoProveedor('Rey mar', ' Rey Mar'))
+  assert.ok(!mismoProveedor('Rey mar', 'Selecta'))
+  const proveedor = 'Rey mar'
+  const movs = [
+    { p: 'Rey mar', tipo: 'entrada', kilos: 100, cuarto: 's/c' },
+    { p: 'Rey Mar', tipo: 'entrada', kilos: 478.3, cuarto: 's/c' },
+    { p: 'Rey Mar', tipo: 'salida', kilos: 116.8, cuarto: 's/c' },
+    { p: 'Rey mar', tipo: 'salida', kilos: 100, cuarto: 's/c' }
+  ].filter(m => mismoProveedor(m.p, proveedor))
+  assert.equal(kilosDisponiblesFifo(movs), 361.5)
+})

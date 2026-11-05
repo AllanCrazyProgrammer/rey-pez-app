@@ -35,4 +35,10 @@ function kilosDisponiblesFifo(movimientos, incluirCuarto = () => true) {
   return Number(total.toFixed(1))
 }
 
-module.exports = { kilosDisponiblesFifo }
+// Compara nombres de proveedor sin distinguir mayúsculas ni espacios sobrantes
+// ("Rey mar" == "Rey Mar ").
+function mismoProveedor(a, b) {
+  return String(a == null ? '' : a).trim().toLowerCase() === String(b == null ? '' : b).trim().toLowerCase()
+}
+
+module.exports = { kilosDisponiblesFifo, mismoProveedor }
