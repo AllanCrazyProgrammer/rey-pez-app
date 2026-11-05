@@ -1,34 +1,11 @@
 rules_version = '2';
+// PROPUESTA (no desplegada). Fase 1: solo usuarios con sesión de Firebase Auth.
+// Desplegar únicamente después de seguir docs/SEGURIDAD_Y_RESPALDOS.md
+// (cuentas creadas, TODAS las instalaciones web/escritorio/Android actualizadas).
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permitir acceso a todas las colecciones (reglas básicas para desarrollo)
     match /{document=**} {
-      allow read, write: if true;
-    }
-    
-    // Reglas específicas para historialPrecios (opcional, más restrictiva)
-    match /historialPrecios/{document} {
-      allow read, write: if true;
-    }
-    
-    // Reglas específicas para proveedoresDeuda
-    match /proveedoresDeuda/{document} {
-      allow read, write: if true;
-    }
-    
-    // Reglas específicas para deudas
-    match /deudas/{document} {
-      allow read, write: if true;
-      
-      // Subcollection products
-      match /productos/{productDocument} {
-        allow read, write: if true;
-      }
-      
-      // Subcollection abonos
-      match /abonos/{abonoDocument} {
-        allow read, write: if true;
-      }
+      allow read, write: if request.auth != null;
     }
   }
-} 
+}

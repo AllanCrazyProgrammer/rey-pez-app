@@ -1,18 +1,6 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true,
-    "status": {
-      "$uid": {
-        ".read": true,
-        ".write": true
-      }
-    },
-    "cambios": {
-      "$embarqueId": {
-        ".read": true,
-        ".write": true
-      }
-    }
+    ".read": "auth != null",
+    ".write": "auth != null"
   }
-} 
+}
