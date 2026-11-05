@@ -595,8 +595,9 @@ export default {
         const proveedor = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
         if (!proveedor) return [];
 
-        // Solo usar las medidas con precio que tienen existencias
-        return this.medidasConPrecio.sort((a, b) => {
+        // Solo usar las medidas con precio que tienen existencias.
+        // Se ordena una copia: un computed no debe reordenar los datos reactivos.
+        return [...this.medidasConPrecio].sort((a, b) => {
           const getMedidaBase = (nombre) => nombre.split(' ')[0];
           const baseCmp = getMedidaBase(a.nombre).localeCompare(getMedidaBase(b.nombre));
           if (baseCmp !== 0) return baseCmp;
