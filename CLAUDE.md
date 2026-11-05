@@ -47,3 +47,12 @@ Notas importantes del entorno:
 Entrada de producto por descarga: `src/views/Barcos/EntradaProductoBarco.vue`
 (ruta `/barcos/entrada-producto?barco=galileo|maria-guadalupe`). El neto se
 calcula como `kilos - taras * 3`. Colección Firestore: `entradasProductoBarcos`.
+
+## Saldos de cuentas (Cuentas México)
+
+Componente `src/components/Cuentas/SaldosCuentas.vue`, lógica pura en
+`src/utils/saldosCuentas.js` (pruebas: `node scripts/test-saldos-cuentas.cjs`).
+Documento `saldosCuentas/porCuenta` con un mapa `cuentas.{id}`; cada edición
+escribe solo su cuenta (`setDoc` con `merge`) más un renglón en
+`saldosCuentasHistorial`. Montos en pesos enteros. El documento viejo
+`saldosCuentas/actual` (arreglo) solo se lee una vez para migrar.
