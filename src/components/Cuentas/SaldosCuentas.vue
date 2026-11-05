@@ -39,6 +39,7 @@
                 autocomplete="off"
                 spellcheck="false"
                 :value="textoVisible(cuenta)"
+                placeholder="0.00"
                 @focus="enfocar(cuenta)"
                 @input="editarSaldo(cuenta, $event)"
                 @blur="desenfocar(cuenta)"
@@ -115,6 +116,7 @@ import {
   formatearMonto,
   fusionarCuentas,
   parsearMonto,
+  textoSaldoCampo,
   textoSaldosWhatsApp,
   totalSaldos
 } from '@/utils/saldosCuentas'
@@ -193,7 +195,7 @@ export default {
       if (this.focoId === cuenta.id && Object.prototype.hasOwnProperty.call(this.borradores, cuenta.id)) {
         return this.borradores[cuenta.id]
       }
-      return formatearMonto(cuenta.saldo)
+      return textoSaldoCampo(cuenta.saldo)
     },
     enfocar(cuenta) {
       this.focoId = cuenta.id
@@ -543,6 +545,10 @@ export default {
   background: #111111;
 }
 
+.input-monto::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
 .fila-total th {
   text-align: left;
   font-size: 1rem;
@@ -748,9 +754,17 @@ export default {
 
 @media (min-width: 1100px) {
   .saldos-cuentas {
-    max-width: 520px;
+    max-width: 560px;
     align-self: start;
     justify-self: end;
+  }
+
+  .col-accion {
+    width: 118px;
+  }
+
+  .col-saldo {
+    width: 34%;
   }
 
   .nombre-cuenta {

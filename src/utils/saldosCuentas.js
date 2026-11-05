@@ -95,6 +95,13 @@ function formatearMonto(valor) {
   return `${negativo ? '-' : ''}${conMiles}.${decimales}`
 }
 
+/** Texto del campo. Vacío o cero no se muestran; en el total y en WhatsApp siguen valiendo 0. */
+function textoSaldoCampo(saldo) {
+  const numero = typeof saldo === 'number' ? saldo : parsearMonto(saldo)
+  if (!Number.isFinite(numero) || aCentavos(numero) === 0) return ''
+  return formatearMonto(numero)
+}
+
 function totalSaldos(cuentas) {
   const lista = Array.isArray(cuentas) ? cuentas : []
   const centavos = lista.reduce((suma, cuenta) => suma + aCentavos(parsearMonto(cuenta && cuenta.saldo)), 0)
@@ -174,8 +181,14 @@ function textoSaldosWhatsApp(cuentas, fecha = new Date()) {
   return lineas.join('\n')
 }
 
+/**
+ * Enlace directo a api.whatsapp.com. wa.me no abre el chat: responde 302 y,
+ * al reescribir `text`, cambia cada emoji (UTF-8 de 4 bytes, %F0…) por
+ * %EF%BF%BD (U+FFFD). Los de 1 a 3 bytes, como ━ y é, sí sobreviven.
+ */
 function enlaceWhatsAppSaldos(texto) {
-  return `https://wa.me/?text=${encodeURIComponent(String(texto == null ? '' : texto))}`
+  const plano = String(texto == null ? '' : texto)
+  return `https://api.whatsapp.com/send?text=${encodeURIComponent(plano)}`
 }
 
 function colorValido(valor) {
@@ -272,6 +285,7 @@ module.exports = {
   cuentasIniciales,
   parsearMonto,
   formatearMonto,
+  textoSaldoCampo,
   totalSaldos,
   formatearFechaSaldos,
   textoSaldosWhatsApp,

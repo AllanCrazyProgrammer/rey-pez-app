@@ -55,8 +55,60 @@ test('arma el texto y el enlace de WhatsApp', () => {
   assert.equal(saldos.formatearFechaSaldos('2026-11-04'), '04/11/2026')
   assert.equal(saldos.formatearFechaSaldos(new Date('2026-11-04T05:00:00Z')), '03/11/2026')
   const enlace = saldos.enlaceWhatsAppSaldos(texto)
-  assert.equal(enlace, `https://wa.me/?text=${encodeURIComponent(texto)}`)
+  assert.equal(enlace, `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`)
   assert.match(decodeURIComponent(enlace.split('text=')[1]), /💰 \*TOTAL: \$507,649\.00\*/)
+})
+
+test('decodificar la URL deja los emojis intactos y sin sustitutos sueltos', () => {
+  const fecha = new Date('2026-11-04T18:00:00Z')
+  const texto = saldos.textoSaldosWhatsApp(imagen, fecha)
+  const enlace = saldos.enlaceWhatsAppSaldos(texto)
+  // wa.me responde 302 y reescribe cada UTF-8 de 4 bytes (%F0…) como %EF%BF%BD.
+  // ━ y las letras con acento sobreviven; por eso el mensaje real pierde solo los emojis.
+  assert.equal(enlace.includes('wa.me'), false)
+  assert.equal(enlace.startsWith('https://api.whatsapp.com/send?text='), true)
+  const crudo = enlace.slice(enlace.indexOf('text=') + 'text='.length)
+  assert.equal(crudo.toUpperCase().includes('%EF%BF%BD'), false)
+  assert.match(crudo, /%F0%9F%8F%A6/i)
+  const decodificado = decodeURIComponent(crudo)
+  assert.equal(decodificado, texto)
+  assert.equal(decodificado.isWellFormed(), true)
+  assert.equal(decodificado.includes('\uFFFD'), false)
+  for (const emoji of ['🏦', '📅', '🔵', '🔴', '🟢', '💰']) {
+    assert.equal(decodificado.includes(emoji), true)
+    assert.ok(emoji.codePointAt(0) > 0xFFFF)
+  }
+  assert.equal(decodificado.includes('━'), true)
+  for (let i = 0; i < decodificado.length; i += 1) {
+    const code = decodificado.charCodeAt(i)
+    if (code < 0xD800 || code > 0xDFFF) continue
+    assert.ok(code <= 0xDBFF, 'sustituto bajo suelto')
+    const par = decodificado.charCodeAt(i + 1)
+    assert.ok(par >= 0xDC00 && par <= 0xDFFF, 'par sustituto incompleto')
+    i += 1
+  }
+})
+
+test('el saldo vacío o en cero no se escribe en el campo y sí suma', () => {
+  assert.equal(saldos.textoSaldoCampo(0), '')
+  assert.equal(saldos.textoSaldoCampo('0.00'), '')
+  assert.equal(saldos.textoSaldoCampo(''), '')
+  assert.equal(saldos.textoSaldoCampo(null), '')
+  assert.equal(saldos.textoSaldoCampo(30), '30.00')
+  assert.equal(saldos.textoSaldoCampo(2000), '2,000.00')
+  const cuentas = [
+    { nombre: 'BANCOMER 1', color: saldos.COLOR_AZUL, saldo: 2000 },
+    { nombre: 'BANCOMER 2', color: saldos.COLOR_AZUL, saldo: '' },
+    { nombre: 'BANORTE', color: saldos.COLOR_ROJO, saldo: '30' },
+    { nombre: 'ESTUARDO AFIRME', color: saldos.COLOR_VERDE, saldo: 0 },
+    { nombre: 'ALLAN AFIRME', color: saldos.COLOR_VERDE, saldo: null }
+  ]
+  assert.equal(saldos.totalSaldos(cuentas), 2030)
+  const texto = saldos.textoSaldosWhatsApp(cuentas, new Date('2026-11-04T18:00:00Z'))
+  assert.match(texto, /BANCOMER 2 +\$0\.00/)
+  assert.match(texto, /ESTUARDO AFIRME +\$0\.00/)
+  assert.match(texto, /ALLAN AFIRME +\$0\.00/)
+  assert.match(texto, /💰 \*TOTAL: \$2,030\.00\*/)
 })
 
 test('omite cuentas sin nombre y usa círculo blanco si el color no es azul, rojo ni verde', () => {
@@ -157,6 +209,11 @@ test('el menú de Cuentas usa el componente que importa este util', () => {
   assert.match(vista, /onSnapshot/)
   assert.match(vista, /DEBOUNCE_GUARDADO_MS/)
   assert.match(vista, /enlaceWhatsAppSaldos/)
+  assert.match(vista, /textoSaldoCampo/)
+  assert.match(vista, /placeholder="0\.00"/)
+  assert.match(menu, /AccesoPreciosVenta/)
+  assert.match(menu, /import\('@\/components\/TransaccionesAgendaModal\.vue'\)/)
+  assert.equal(/import TransaccionesAgendaModal from/.test(menu), false)
   assert.match(vista, /Guardando…/)
   assert.match(vista, /Guardado/)
   assert.equal((vista.match(/<button\b(?![^>]*type="button")/g) || []).length, 0)
