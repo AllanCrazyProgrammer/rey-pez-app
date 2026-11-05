@@ -1,12 +1,7 @@
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { RendimientosService } from '../services/rendimientosService';
 import { obtenerGrupoPreciosPorNombre } from '@/utils/preciosAliasCatalogo';
-import {
-  calcularCostoFinal,
-  calcularKilosCrudosItem,
-  calcularGananciaMaquila,
-  calcularTotalKilos
-} from '../utils/calculations';
+import { calcularCostoFinal, calcularKilosCrudosItem, calcularTotalKilos } from '../utils/calculations';
 
 /**
  * Composable para manejar los cálculos de ganancias

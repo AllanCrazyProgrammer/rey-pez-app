@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { debounce } from 'lodash';
 import { RendimientosService } from '../services/rendimientosService';
 import { calcularTotalBolsas, calcularTotalKilos, esMedidaMix } from '../utils/calculations';

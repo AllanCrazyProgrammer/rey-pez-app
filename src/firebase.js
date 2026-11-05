@@ -8,7 +8,7 @@ import {
   persistentMultipleTabManager,
   persistentSingleTabManager
 } from "firebase/firestore";
-import { getDatabase, ref, onDisconnect, serverTimestamp, set } from "firebase/database";
+import { getDatabase, ref, onDisconnect, set } from "firebase/database";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
 

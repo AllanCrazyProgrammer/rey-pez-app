@@ -102,7 +102,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import HistorialProductoModal from './HistorialProductoModal.vue';
 import { formatearFecha } from '@/utils/formatters';
 

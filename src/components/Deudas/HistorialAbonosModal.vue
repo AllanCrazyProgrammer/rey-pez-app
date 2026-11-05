@@ -251,7 +251,7 @@
 <script>
 import { db } from '@/firebase';
 import { eliminarAbono as eliminarAbonoDeuda } from '@/utils/deudas';
-import { collection, getDocs, query, where, orderBy, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {

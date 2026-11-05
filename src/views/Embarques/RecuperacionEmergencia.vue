@@ -207,7 +207,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import BackupService from './BackupService.js';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, formatearFechaParaMostrar } from '@/utils/dateUtils';

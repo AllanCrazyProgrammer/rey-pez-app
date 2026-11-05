@@ -1,6 +1,5 @@
 import Vue from 'vue';
 import Router from 'vue-router';
-import { useAuthStore } from './stores/auth';
 const Home = () => import('./views/Home.vue');
 const NoteMenu = () => import('./views/NoteMenu.vue');
 const SaleNote = () => import('@/views/SaleNote.vue');

@@ -679,7 +679,7 @@ import {
 } from '@/utils/calculosPedidoLimpio'
 import { db } from '@/firebase'
 import { useUIStore } from '@/stores/ui'
-import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore'
 
 const PDF_PREVIEW_MODAL_ID = 'pedido-limpio-pdf-preview'
 

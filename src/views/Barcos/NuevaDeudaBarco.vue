@@ -245,7 +245,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import { formatNumber } from '@/utils/formatters';
 

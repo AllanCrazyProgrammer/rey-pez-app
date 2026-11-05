@@ -268,16 +268,14 @@
 
 <script>
 import ColaboracionEmbarque from './components/ColaboracionEmbarque.vue';
-import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, where, orderBy, runTransaction } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
-import { debounce } from 'lodash';
 import { useAuthStore } from '@/stores/auth'
 import { getSaveManager } from '@/services/SaveManager'
 import SaveStatusIndicator from '@/components/SaveStatusIndicator.vue'
 import AuthErrorNotification from '@/components/AuthErrorNotification.vue'
 import authDiagnostic from '@/utils/authDiagnostic.js'
-import { ref as vueRef, onMounted, onUnmounted } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
 import pdfGenerationMixin from './mixins/pdfGenerationMixin';
@@ -300,11 +298,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Importar constantes y utilidades
 import { esClienteCatarro } from '@/constants/clientesConfig';
-import { 
-  CLIENTES_PREDEFINIDOS, 
-  crearNuevoProducto, 
-  crearNuevoCrudoItem 
-} from '@/constants.js/embarque';
+import { CLIENTES_PREDEFINIDOS, crearNuevoProducto } from '@/constants.js/embarque';
 
 // Importar componentes modaless
 import NuevoClienteModal from './components/modals/NuevoClienteModal.vue';
@@ -330,7 +324,6 @@ import {
 } from '@/utils/dateUtils';
 import { obtenerPrecioMaquilaOzunaDefault } from '@/utils/preciosHistoricos';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 
 // Después de las imports existentes, agregar:
 import EmbarquesSync from '@/services/EmbarquesSync';

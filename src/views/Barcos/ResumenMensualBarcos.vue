@@ -213,7 +213,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';

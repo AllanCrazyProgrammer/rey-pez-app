@@ -154,7 +154,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, where, limit } from 'firebase/firestore';
+import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, limit } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import PapeleraService from '@/services/PapeleraService';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
