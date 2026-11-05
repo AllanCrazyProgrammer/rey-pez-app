@@ -1,15 +1,33 @@
 # Seguridad de Firebase y respaldos
 
-Estado al 5 de noviembre de 2026 y plan para cerrarlo **sin perder datos**. Nada de
-esto se activó solo: las reglas propuestas no están en `firebase.json` y el respaldo
-está apagado hasta configurar un bucket.
+## Estado (5 de noviembre de 2026)
 
-## Qué está expuesto hoy
+- ✅ **Reglas publicadas**: Firestore, Realtime Database y Storage exigen sesión de Firebase
+  Auth (`firestore.rules`, `database.rules.json`, `storage.rules`, iguales a
+  `seguridad/propuesta/`). Comprobado: sin sesión, todo responde *permiso denegado*.
+- ✅ **Login anterior apagado** (`VUE_APP_LOGIN_LOCAL=off`): las contraseñas ya no van en el build.
+- ✅ Cuentas de Firebase Auth: `allan`, `edgar`, `mari` (`<usuario>@reypez.app`).
+- ✅ Web (Firebase Hosting y Heroku) y escritorio (Mac y Windows) inician sesión en Firebase.
+  El escritorio identifica sus peticiones de Auth con el dominio de la web
+  (`electron/authReferer.js`), porque la llave del navegador tiene restricción de sitios web.
+- ⏳ **App de Android**: todavía no inicia sesión en Firebase; con estas reglas no puede leer
+  ni guardar hasta generar un APK nuevo.
+- ⏳ Respaldo diario: apagado hasta configurar el bucket (sección 1).
+- ⏳ Siguiente nivel opcional: reglas por colección y App Check (paso 7).
+
+La llave de API del navegador (Google Cloud → Credenciales) solo acepta: Heroku, localhost,
+`reypezapp-1ced2.web.app`, `reypezapp-1ced2.firebaseapp.com` y el canal preview. Un dominio nuevo
+(p. ej. uno propio) hay que agregarlo ahí o el inicio de sesión fallará.
+
+**Regresar las reglas** (si algo deja de guardar): `git revert` del commit que las publicó y
+`firebase deploy --only firestore:rules,database,storage`. Los datos no se tocan.
+
+## Qué estaba expuesto (antes de publicar las reglas)
 
 | Riesgo | Dónde | Consecuencia |
 |---|---|---|
-| Reglas abiertas (`if true`) | `firestore.rules`, `database.rules.json`, `storage.rules` | Cualquiera con la configuración de Firebase (viaja en el JavaScript público de la app) puede **leer, cambiar o borrar** toda la base y las fotos. |
-| Contraseñas en el código del navegador | `src/services/loginLocal.js` (se elimina del build con `VUE_APP_LOGIN_LOCAL=off`) | Cualquiera que abra las herramientas del navegador ve usuarios y contraseñas. El login solo protege la pantalla, no los datos. |
+| Reglas abiertas (`if true`) | `firestore.rules`, `database.rules.json`, `storage.rules` | Cualquiera con la configuración de Firebase (viaja en el JavaScript público de la app) podía **leer, cambiar o borrar** toda la base y las fotos. |
+| Contraseñas en el código del navegador | `src/services/loginLocal.js` (se elimina del build con `VUE_APP_LOGIN_LOCAL=off`) | Cualquiera que abriera las herramientas del navegador veía usuarios y contraseñas. |
 | Sin respaldo automático propio | — | Un borrado accidental o malicioso no se puede deshacer desde la app (la papelera solo cubre lo que la app borra). |
 
 ## 1. Respaldo diario (hacerlo primero; es independiente de lo demás)
