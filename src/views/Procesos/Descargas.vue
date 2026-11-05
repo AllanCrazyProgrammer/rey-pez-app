@@ -163,7 +163,7 @@
 </template>
 
 <script>
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import TotalCard from '@/components/Descargas/TotalCard.vue';
 import ActiveCounter from '@/components/Descargas/ActiveCounter.vue';
 import CategoryGrid from '@/components/Descargas/CategoryGrid.vue';

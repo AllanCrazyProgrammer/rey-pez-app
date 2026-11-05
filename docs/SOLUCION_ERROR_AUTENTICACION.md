@@ -145,7 +145,7 @@ Los siguientes indican problemas:
 
 - `src/views/Embarques/NuevoEmbarque.vue` - Validaciones y notificaciones
 - `src/stores/auth.js` - Mejoras en manejo de autenticación
-- `src/components/AuthErrorNotification.vue` - Componente de notificación
+- `src/components/layout/AuthErrorNotification.vue` - Componente de notificación
 - `src/utils/authDiagnostic.js` - Utilidad de diagnóstico
 
 ### 🔄 Estado del Issue

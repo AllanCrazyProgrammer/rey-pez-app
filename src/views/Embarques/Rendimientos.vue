@@ -593,7 +593,7 @@ import {
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
-import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
+import MedidasParaHoyCards from '@/components/Existencias/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { formatearFecha } from '@/utils/formatters';
 import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida } from '@/utils/preciosHistoricos';

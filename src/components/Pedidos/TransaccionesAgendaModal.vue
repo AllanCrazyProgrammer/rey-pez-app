@@ -747,10 +747,10 @@
 </template>
 
 <script>
-import { db } from '../firebase';
+import { db } from '../../firebase';
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit, getDoc } from 'firebase/firestore';
-import PdfResumenDiaButton from './PdfResumenDiaButton.vue';
-import ChequesPendientesAccordion from './ChequesPendientesAccordion.vue';
+import PdfResumenDiaButton from '../Clientes/PdfResumenDiaButton.vue';
+import ChequesPendientesAccordion from '../Clientes/ChequesPendientesAccordion.vue';
 
 export default {
   name: 'TransaccionesAgendaModal',

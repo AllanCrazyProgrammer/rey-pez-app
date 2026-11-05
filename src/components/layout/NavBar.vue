@@ -311,7 +311,7 @@
 </template>
 
 <script>
-import { useUIStore } from './stores/ui';
+import { useUIStore } from '../../stores/ui';
 
 export default {
   name: "Navbar",

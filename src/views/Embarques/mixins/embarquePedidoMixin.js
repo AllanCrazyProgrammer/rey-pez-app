@@ -1,6 +1,6 @@
 import { nuevoIdEdicion } from '@/utils/embarqueColaboracion';
 import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
-import { crearNuevoProducto } from '@/constants.js/embarque';
+import { crearNuevoProducto } from '@/constants/embarque';
 import { normalizarMedidaCrudoEmbarque } from '@/utils/medidasPedidoCrudo';
 import { medidaSinAnotaciones } from '@/utils/embarquePedidoEstado';
 

@@ -411,7 +411,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
-import BackButton from '../components/BackButton.vue';
+import BackButton from '../components/layout/BackButton.vue';
 import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaValor } from '@/utils/dateUtils';

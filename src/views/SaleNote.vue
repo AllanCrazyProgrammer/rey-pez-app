@@ -297,10 +297,10 @@
   </div>
 </template>
 <script>
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
-import PreciosNotaVentaModal from '@/components/PreciosNotaVentaModal.vue';
+import PreciosNotaVentaModal from '@/components/Precios/PreciosNotaVentaModal.vue';
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, setDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import moment from 'moment';

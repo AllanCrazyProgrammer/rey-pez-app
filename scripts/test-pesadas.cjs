@@ -363,7 +363,7 @@ test('horizontal swipe at table edges never propagates to browser history', () =
   assert.equal(prevented, 3);
 });
 
-const cuentasSource = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/Cuentas.vue'), 'utf8')).script.content;
+const cuentasSource = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/components/Pesadas/Cuentas.vue'), 'utf8')).script.content;
 const cuentasModule = new Module(path.join(root, 'src/Cuentas.test.js'), module);
 cuentasModule.require = () => ({});
 cuentasModule._compile(babel.transformSync(cuentasSource, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code, cuentasModule.id);

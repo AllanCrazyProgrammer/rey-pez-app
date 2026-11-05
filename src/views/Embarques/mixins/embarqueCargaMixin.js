@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
-import { crearNuevoProducto } from '@/constants.js/embarque';
+import { crearNuevoProducto } from '@/constants/embarque';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 import { esEcoDeRevisionLocal } from '@/utils/embarqueRevision';
 import { esClienteCatarro } from '@/constants/clientesConfig';

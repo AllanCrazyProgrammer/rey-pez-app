@@ -131,8 +131,8 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
-import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
+import PreciosClienteButton from '@/components/Precios/PreciosClienteButton.vue';
 import { formatNumber } from '@/utils/formatters';
 import {
   saldoAcumuladoAntesDeFecha,

@@ -30,7 +30,7 @@ test('automatic report reuses real screen calculations, includes current product
     '@/utils/renombrarMedidaRendimientos': require('../src/utils/renombrarMedidaRendimientos'),
     '@/utils/rendimientosCalculos': require('../src/utils/rendimientosCalculos'),
     '@/utils/pesadas': {}, '@/utils/pesadasPorMedida': {}, './components/PesadasDelDiaModal.vue': {},
-    '@/utils/pdf/sacadas': {}, '@/components/MedidasParaHoyCards.vue': {}, '@/services/EmbarquesOfflineService': offline, '@/utils/formatters': { formatearFecha: value => value },
+    '@/utils/pdf/sacadas': {}, '@/components/Existencias/MedidasParaHoyCards.vue': {}, '@/services/EmbarquesOfflineService': offline, '@/utils/formatters': { formatearFecha: value => value },
     '@/utils/preciosHistoricos': preciosHistoricos,
     '@/utils/preciosAliasCatalogo': preciosAliasCatalogo,
     '@/services/embarqueEscritura': { escribirCamposEmbarque: async () => { throw new Error('el reporte no debe escribir el embarque'); } },

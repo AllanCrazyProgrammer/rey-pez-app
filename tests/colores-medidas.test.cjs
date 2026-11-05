@@ -72,7 +72,7 @@ test('conserva colores guardados repetidos o cercanos, también en PDF, sin modi
 
 test('guarda selecciones manuales similares o repetidas y conserva su color', async () => {
   const writes = [];
-  const modal = load('src/components/MedidasModal.vue', {
+  const modal = load('src/components/Medidas/MedidasModal.vue', {
     'firebase/firestore': { doc() {}, updateDoc: async (_, data) => { writes.push(data); } }
   }).default;
   const vm = context(modal, modal.data());
@@ -94,7 +94,7 @@ test('guarda selecciones manuales similares o repetidas y conserva su color', as
 test('guardar, recargar y crear una medida conservan su color sin modificar los demás campos', async () => {
   const records = [{ id: 'm1', nombre: '51/60', tipo: 'granja', otro: 'conservar' }];
   let update;
-  const modal = load('src/components/MedidasModal.vue', {
+  const modal = load('src/components/Medidas/MedidasModal.vue', {
     'firebase/firestore': {
       collection() {}, query() {}, orderBy() {}, doc: (_, __, id) => id,
       getDocs: async () => ({ docs: records.map(row => ({ id: row.id, data: () => ({ ...row }) })) }),
@@ -117,7 +117,7 @@ test('guardar, recargar y crear una medida conservan su color sin modificar los 
 
 test('agrega medidas con colores similares o repetidos y los conserva al recargar y generar ambos PDF', async () => {
   const records = [{ id: 'm1', nombre: '41/50 soles', tipo: 'granja', colorPdf: '#C08040' }];
-  const modal = load('src/components/MedidasModal.vue', {
+  const modal = load('src/components/Medidas/MedidasModal.vue', {
     'firebase/firestore': {
       collection() {}, query() {}, orderBy() {},
       getDocs: async () => ({ docs: records.map(row => ({ id: row.id, data: () => ({ ...row }) })) }),
@@ -151,7 +151,7 @@ test('agrega medidas con colores similares o repetidos y los conserva al recarga
 });
 
 test('si falla el guardado, el selector y la muestra conservan el color anterior', async () => {
-  const modal = load('src/components/MedidasModal.vue', {
+  const modal = load('src/components/Medidas/MedidasModal.vue', {
     'firebase/firestore': { doc() {}, updateDoc: async () => { throw new Error('sin conexión'); } }
   }).default;
   const vm = context(modal, modal.data());
@@ -207,7 +207,7 @@ test('generar la vista PDF espera los colores del catálogo y no continúa si no
 });
 
 test('compilan las plantillas de configuración y vista previa', () => {
-  for (const file of ['src/components/MedidasModal.vue', 'src/views/Procesos/PedidoLimpioImpresion.vue']) {
+  for (const file of ['src/components/Medidas/MedidasModal.vue', 'src/views/Procesos/PedidoLimpioImpresion.vue']) {
     const sfc = compiler.parseComponent(fs.readFileSync(path.join(root, file), 'utf8'));
     assert.deepEqual(compiler.compile(sfc.template.content).errors, []);
   }

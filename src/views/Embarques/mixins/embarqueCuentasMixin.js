@@ -1,5 +1,5 @@
 import { useUIStore } from '@/stores/ui';
-import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import EmbarqueCuentasService from '@/services/EmbarqueCuentasService';
 import { catarrosCuentas, ozunaCuentas, veronicaCuentas } from '@/services/cuentas.service';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import {

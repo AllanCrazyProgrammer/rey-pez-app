@@ -11,7 +11,7 @@ function cargar({ online = true, consultar = async () => true, timers = {} } = {
   const service = { getById: consultar, getByFecha: async () => [] };
   const mocks = {
     '@/stores/ui': { useUIStore: () => ({ showPdfAlert: text => alerts.push(text) }) },
-    '@/utils/services/EmbarqueCuentasService': { crearCuentaCatarro: async data => creadas.push(data) },
+    '@/services/EmbarqueCuentasService': { crearCuentaCatarro: async data => creadas.push(data) },
     '@/services/cuentas.service': { catarrosCuentas: service, ozunaCuentas: service, veronicaCuentas: service },
   };
   function load(file) {

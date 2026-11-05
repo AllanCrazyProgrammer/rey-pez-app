@@ -88,7 +88,7 @@
 </template>
 
 <script>
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import { formatNumber } from '@/utils/formatters';
 import { resumenPablo, historialPablo, validarMovimientoPablo, TIPOS_PABLO, ETIQUETAS_PABLO } from '@/utils/prestamosPablo';
 import { cargarMovimientosPablo, agregarMovimientoPablo, eliminarMovimientoPablo } from '@/services/prestamosPabloService';

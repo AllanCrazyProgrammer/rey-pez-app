@@ -3,7 +3,7 @@
 import { computed, ref, onMounted } from 'vue';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
-import Existencias from '@/components/Existencias.vue';
+import Existencias from '@/components/Existencias/Existencias.vue';
 import InventarioPanel from './InventarioPanel.vue';
 export default {
   components: { InventarioPanel },

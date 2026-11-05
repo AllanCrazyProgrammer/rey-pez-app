@@ -272,8 +272,8 @@
 
 <script>
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy } from 'firebase/firestore'
-import BuscadorMedidas from '@/components/BuscadorMedidas.vue'
-import GestionProveedores from '@/components/GestionProveedores.vue'
+import BuscadorMedidas from '@/components/Medidas/BuscadorMedidas.vue'
+import GestionProveedores from '@/components/Proveedores/GestionProveedores.vue'
 import { formatearFecha } from '@/utils/formatters';
 
 export default {

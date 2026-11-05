@@ -31,10 +31,10 @@
   </div>
 </template>
   <script>
-// src/components/AddClient.vue
-import BackButton from './BackButton.vue';
+// src/components/Clientes/AddClient.vue
+import BackButton from '../layout/BackButton.vue';
 
-import { db } from '../firebase';
+import { db } from '../../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
 
 export default {

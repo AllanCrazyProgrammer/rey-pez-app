@@ -26,9 +26,9 @@ function component(file) {
     await page.setContent('<div id="app"></div>');
     await page.addScriptTag({ path: require.resolve('vue/dist/vue.js') });
     const components = {
-      Preview: component('src/components/PdfPreview.vue'),
+      Preview: component('src/components/layout/PdfPreview.vue'),
       Prompt: component('src/views/Embarques/components/modals/SubirResumenModal.vue'),
-      Backup: component('src/components/DriveBackupNotice.vue')
+      Backup: component('src/components/layout/DriveBackupNotice.vue')
     };
     await page.addStyleTag({ content: Object.values(components).map(c => c.styles).join('\n') });
     await page.evaluate(({ components, storeSource }) => {

@@ -286,10 +286,10 @@
 <script>
 import { db } from '@/firebase';
 import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, limit, writeBatch } from 'firebase/firestore';
-import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import EmbarqueCuentasService from '@/services/EmbarqueCuentasService';
 import PapeleraService from '@/services/PapeleraService';
-import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModalV2 from '@/components/StashModalV2.vue';
+import PreciosHistorialModal from '@/components/Precios/PreciosHistorialModal.vue';
+import StashModalV2 from '@/components/Pedidos/StashModalV2.vue';
 import ReporteCuentasVeronicaButton from '@/components/Cuentas/ReporteCuentasVeronicaButton.vue';
 import ResumenVentasVeronicaModal from '@/components/Cuentas/ResumenVentasVeronicaModal.vue';
 import ReporteSemanalPDFButton from '@/components/Cuentas/ReporteSemanalPDFButton.vue';

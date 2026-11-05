@@ -168,7 +168,7 @@
 </template>
 
 <script>
-import { preciosService } from '@/services/precios.service';
+import { preciosService } from '@/services/precios.service.js';
 import {
   cargarPreciosParaNotaVenta,
   normalizarNombreProductoPrecio,

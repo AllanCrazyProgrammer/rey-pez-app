@@ -557,10 +557,10 @@ Al aplicar el estilo a un nuevo componente:
 
 Consultar estos archivos para ejemplos completos:
 
-- `src/NavBar.vue` - Estilo Predator Vision completo
-- `src/datos.vue` - HUD Frame + inputs
-- `src/Cuentas.vue` - Listas y totales
-- `src/Calcular.vue` - Botones con variantes
+- `src/components/layout/NavBar.vue` - Estilo Predator Vision completo
+- `src/components/Home/Datos.vue` - HUD Frame + inputs
+- `src/components/Pesadas/Cuentas.vue` - Listas y totales
+- `src/components/Pesadas/Calcular.vue` - Botones con variantes
 - `src/views/Home.vue` - Contenedor con scanlines
 - `src/views/Embarques/ListaEmbarques.vue` - Cards estilo terminal
 - `src/views/Embarques/EmbarquesMenu.vue` - Menú con ASCII art

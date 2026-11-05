@@ -64,7 +64,7 @@ test('real clean summary renders once and its preview equals the Drive bytes', a
     '@/utils/pdf/resumenEmbarque': summary, '@/utils/pdf/filename': load('src/utils/pdf/filename.js'), '@/utils/pdf/delivery': load('src/utils/pdf/delivery.js', b.globals),
     '@/services/DriveNotasSync': { agruparRespaldoDrive: async work => work(), driveNotasDisponible: () => true, encolarNotaDrive: async data => queued.push(data) },
     '@/stores/ui': ui,
-    '@/utils/services/EmbarqueCuentasService': { sincronizarCuentaOzunaParaNota: async () => { throw new Error('no debe sincronizar cuentas en esta prueba'); } },
+    '@/services/EmbarqueCuentasService': { sincronizarCuentaOzunaParaNota: async () => { throw new Error('no debe sincronizar cuentas en esta prueba'); } },
     '@/utils/ozunaCuentaNota': load('src/utils/ozunaCuentaNota.js')
   }).default;
   const products = [{ clienteId: '1', medida: 'Golfo', tipo: 's/h20', taras: [3], kilos: [85], restarTaras: true, precio: 170, reporteTaras: [1,2], reporteBolsas: [26,25] }];

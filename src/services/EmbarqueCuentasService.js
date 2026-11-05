@@ -1,15 +1,15 @@
 import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction, updateDoc } from 'firebase/firestore';
-import { sincronizarCuentaOzunaNota } from '../ozunaCuentaNota';
+import { sincronizarCuentaOzunaNota } from '../utils/ozunaCuentaNota';
 import {
   formatDate,
   normalizarFechaISO,
   obtenerFechaActualISO,
   esFechaValida
-} from '../dateUtils';
-import { acumularLote, redondearCentavos } from '../dinero';
-import { obtenerSobrantesDeItem } from '../sobrantesCrudos';
-import { usarKilosDecimalesCatarro, calcularKilosProductoCatarro, calcularKilosCrudoCatarro } from '../kilosCatarro';
-import { estaPagadoCatarro, redondearTotalVentaCatarro } from '../saldosCatarro';
+} from '../utils/dateUtils';
+import { acumularLote, redondearCentavos } from '../utils/dinero';
+import { obtenerSobrantesDeItem } from '../utils/sobrantesCrudos';
+import { usarKilosDecimalesCatarro, calcularKilosProductoCatarro, calcularKilosCrudoCatarro } from '../utils/kilosCatarro';
+import { estaPagadoCatarro, redondearTotalVentaCatarro } from '../utils/saldosCatarro';
 
 /**
  * Servicio para gestionar la creación y actualización de cuentas de clientes a partir de embarques

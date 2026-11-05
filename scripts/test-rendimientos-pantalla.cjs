@@ -113,7 +113,7 @@ function partirHost(valor) {
     if (id === '@/utils/RendimientosPdf') return {};
     if (id === '@/utils/pdf/reportDelivery') return {};
     if (id === '@/utils/pdf/sacadas') return { normalizarGruposListaMedidasParaPdf: valor => valor };
-    if (id === '@/components/MedidasParaHoyCards.vue') return {};
+    if (id === '@/components/Existencias/MedidasParaHoyCards.vue') return {};
     if (id === '@/utils/formatters') return { formatearFecha: valor => valor };
     if (id === '@/utils/preciosHistoricos') return { normalizarNombreProductoPrecio: valor => valor, obtenerClavesBusquedaMedida: () => [] };
     if (id === '@/utils/renombrarMedidaRendimientos') return require('../src/utils/renombrarMedidaRendimientos');

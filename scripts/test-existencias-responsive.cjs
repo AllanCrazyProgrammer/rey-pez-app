@@ -9,13 +9,13 @@ const root = path.resolve(__dirname, '..');
 const parsed = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/views/ExistenciasCrudos.vue'), 'utf8'));
 assert.deepEqual(compiler.compile(parsed.template.content).errors, []);
 const script = babel.transformSync(parsed.script.content, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code;
-const modal = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/components/ModalDetalleCrudo.vue'), 'utf8'));
+const modal = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/components/Existencias/ModalDetalleCrudo.vue'), 'utf8'));
 assert.deepEqual(compiler.compile(modal.template.content).errors, []);
 const modalScript = babel.transformSync(modal.script.content, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code;
 const runtime = `
 const exports = {};
 function require(name) {
-  if (name === '@/components/ModalDetalleCrudo.vue') return modalExports;
+  if (name === '@/components/Existencias/ModalDetalleCrudo.vue') return modalExports;
   if (name === '@/utils/formatters') return {formatNumber: n => Number(n).toLocaleString('es-MX', {minimumFractionDigits:2,maximumFractionDigits:2})};
   if (name === '@/stores/ui') return {useUIStore:()=>({openModal(){},closeModal(){}})};
   if (name === 'firebase/firestore') return {getDocs(){throw Error('No database allowed in UI fixture')}};

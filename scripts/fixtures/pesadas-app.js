@@ -1,7 +1,7 @@
 import Vue from 'vue';
 import Router from 'vue-router';
 import { createPinia, PiniaVuePlugin } from 'pinia';
-import NavBar from '../../src/NavBar.vue';
+import NavBar from '../../src/components/layout/NavBar.vue';
 import Dia from '../../src/views/Pesadas/PesadasDia.vue';
 import Historial from '../../src/views/Pesadas/PesadasHistorial.vue';
 Vue.use(Router);

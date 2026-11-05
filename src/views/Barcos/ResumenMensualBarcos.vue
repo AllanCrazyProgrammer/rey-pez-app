@@ -214,7 +214,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import jsPDF from 'jspdf';
 // Desde jspdf-autotable 5 importar el paquete ya no agrega doc.autoTable a jsPDF;
 // applyPlugin lo hace explícito (también funciona con la versión 3).

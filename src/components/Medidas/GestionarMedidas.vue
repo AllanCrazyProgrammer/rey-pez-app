@@ -78,7 +78,7 @@
   import { ref, onMounted, computed } from 'vue';
   import { db } from '@/firebase';
   import { collection, addDoc, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
-  import BackButton from './BackButton.vue';
+  import BackButton from '../layout/BackButton.vue';
   
   export default {
     name: 'GestionarMedidas',

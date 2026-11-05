@@ -223,7 +223,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import HistorialPreciosCrudos from '@/components/HistorialPreciosCrudos.vue';
+import HistorialPreciosCrudos from '@/components/Precios/HistorialPreciosCrudos.vue';
 import { formatearFecha } from '@/utils/formatters';
 
 export default {

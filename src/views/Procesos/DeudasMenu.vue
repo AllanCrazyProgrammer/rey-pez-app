@@ -413,7 +413,7 @@
 import { db } from '@/firebase';
 import { proveedorTieneDeudas, redondear } from '@/utils/deudas';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import AbonoGeneralModal from '@/components/Deudas/AbonoGeneralModal.vue';
 import { formatNumber } from '@/utils/formatters';
 

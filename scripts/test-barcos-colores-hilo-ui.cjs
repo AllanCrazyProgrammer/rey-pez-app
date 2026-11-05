@@ -29,7 +29,7 @@ const records = new Map(); let adds = 0;
 const factories = {}, cache = {
   '@/firebase': { db: {} },
   '@/utils/formatters': { formatNumber: (n, d = 2) => Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }) },
-  '@/components/BackButton.vue': { __esModule: true, default: { template: '<span></span>' } },
+  '@/components/layout/BackButton.vue': { __esModule: true, default: { template: '<span></span>' } },
   'firebase/firestore': {
     collection: () => 'test', doc: (db, col, id) => id, query() {}, where() {}, orderBy() {},
     async getDocs() { return { docs: [...records].map(([id, data]) => ({ id, data: () => JSON.parse(JSON.stringify(data)) })) }; },

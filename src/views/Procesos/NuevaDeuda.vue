@@ -162,7 +162,7 @@
 import { db } from '@/firebase';
 import { calcularSaldo, totalProducto, redondear, validarProducto } from '@/utils/deudas';
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
 import { formatNumber } from '@/utils/formatters';
 

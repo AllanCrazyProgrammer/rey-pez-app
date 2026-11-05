@@ -99,8 +99,8 @@ import { collection, getDocs, getDoc, query, orderBy, doc, updateDoc } from 'fir
 import { momentoInventario } from '@/utils/momentoInventario';
 import { fechaRegistro } from '@/utils/fechasInventario';
 import PapeleraService from '@/services/PapeleraService';
-import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
-import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
+import HistorialProductoModal from '@/components/Precios/HistorialProductoModal.vue';
+import ListaMedidasPedidoModal from '@/components/Medidas/ListaMedidasPedidoModal.vue';
 import Sacadas from './Sacadas.vue';
 import { formatNumber } from '@/utils/formatters';
 import { useUIStore } from '@/stores/ui';

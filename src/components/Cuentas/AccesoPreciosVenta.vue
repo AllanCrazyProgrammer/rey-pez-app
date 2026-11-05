@@ -24,7 +24,7 @@
 export default {
   name: 'AccesoPreciosVenta',
   components: {
-    PreciosHistorialModal: () => import('@/components/PreciosHistorialModal.vue')
+    PreciosHistorialModal: () => import('@/components/Precios/PreciosHistorialModal.vue')
   },
   data() {
     return {

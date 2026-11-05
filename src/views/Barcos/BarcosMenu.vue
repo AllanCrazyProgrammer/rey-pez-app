@@ -254,7 +254,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
-import BackButton from '@/components/BackButton.vue';
+import BackButton from '@/components/layout/BackButton.vue';
 import BotonReporteMensual from '@/components/Barcos/BotonReporteMensual.vue';
 
 export default {

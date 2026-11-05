@@ -403,7 +403,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { formatearFecha } from '@/utils/formatters';
-import DictadoTextarea from '@/components/DictadoTextarea.vue';
+import DictadoTextarea from '@/components/layout/DictadoTextarea.vue';
 import {
   TIEMPO_GUARDADO_MS,
   TIEMPO_REINTENTO_SUBIDA_MS,
