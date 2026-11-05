@@ -1,4 +1,5 @@
 const OfflinePlugin = require('./build/OfflinePlugin');
+const { ContextReplacementPlugin } = require('webpack');
 const isElectron = process.env.VUE_APP_TARGET === 'electron';
 
 // vue-loader 15 genera `import style0 from '...?vue&type=style'` en cada componente aunque solo
@@ -51,6 +52,8 @@ module.exports = {
     watchOptions: { poll: 1000 },
     plugins: [
       new IgnorarAvisoStyleVueLoader(),
+      // moment trae ~130 idiomas (~60 KB comprimidos en el arranque); la app solo usa español.
+      new ContextReplacementPlugin(/moment[/\\]locale$/, /^\.\/es$/),
       ...(process.env.NODE_ENV === 'production' && !isElectron && !isAndroid ? [new OfflinePlugin()] : [])
     ],
     optimization: {
