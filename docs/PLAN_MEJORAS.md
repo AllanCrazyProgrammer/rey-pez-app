@@ -26,7 +26,7 @@ pantalla los abría). Los documentos en la base siguen intactos.
 ## Siguientes pasos (pendientes, de menos a más)
 
 ### Corto plazo (bajo riesgo)
-1. **Decidir sobre `src/views/Embarques/Rendimientos/` y `src/utils/pdf/reportDelivery.js`.**
+1. ✅ **Decidido: se conservan** `src/views/Embarques/Rendimientos/` y `src/utils/pdf/reportDelivery.js` (documentados en su README/cabecera).
    La app no los usa (la ruta carga `Embarques/Rendimientos.vue`), pero
    `scripts/test-precios-alias-rutas.cjs` y `scripts/test-reportes-backup.cjs`
    los prueban. O se conectan, o se borran junto con esas pruebas.
