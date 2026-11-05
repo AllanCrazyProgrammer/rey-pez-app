@@ -6,6 +6,9 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { asistente } = require('./asistente');
 exports.asistente = asistente;
 
+// Respaldo diario de Firestore a Cloud Storage (apagado hasta definir RESPALDO_BUCKET).
+exports.respaldoDiarioFirestore = require('./respaldo').respaldoDiarioFirestore;
+
 // La API key vive como secreto de Firebase (nunca en el código ni en el navegador):
 //   firebase functions:secrets:set ANTHROPIC_API_KEY
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');

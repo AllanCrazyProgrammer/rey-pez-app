@@ -60,3 +60,7 @@ electron/google-drive-clients.local.json
 # Logs locales
 logs/
 *.log
+
+# Variables locales de Cloud Functions (p. ej. RESPALDO_BUCKET)
+functions/.env
+functions/.env.*
