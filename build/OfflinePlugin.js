@@ -10,7 +10,7 @@ class OfflinePlugin {
       const assets = Object.keys(compilation.assets).filter(name => !/\.map$/.test(name) && name !== 'service-worker.js');
       const version = crypto.createHash('sha256');
       // A cache policy change must create a separate shell, even with identical assets.
-      version.update('network-refresh-v1');
+      version.update('network-refresh-v2');
       assets.forEach(name => version.update(compilation.assets[name].source()));
       const source = `const CACHE = 'reypez-shell-${version.digest('hex').slice(0, 16)}';
 const ASSETS = ${JSON.stringify(assets.map(name => '/' + name))};
@@ -42,7 +42,14 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (event.request.mode === 'navigate') {
-    event.respondWith(caches.open(CACHE).then(cache => cache.match('/index.html')));
+    // Una navegación no acepta respuestas redirigidas (p. ej. si el hosting redirige /index.html
+    // a /): se entrega una copia limpia. Sin copia en caché, se va a la red.
+    event.respondWith(caches.open(CACHE).then(async cache => {
+      const shell = await cache.match('/index.html');
+      if (!shell) return fetch(event.request);
+      if (!shell.redirected) return shell;
+      return new Response(await shell.blob(), { status: 200, statusText: 'OK', headers: shell.headers });
+    }));
   } else if (ASSETS.includes(url.pathname)) {
     event.respondWith(caches.open(CACHE).then(async cache => (await cache.match(url.pathname)) || fetch(event.request)));
   }
