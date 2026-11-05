@@ -33,6 +33,7 @@ import {
 } from "bootstrap-vue";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-vue/dist/bootstrap-vue.css";
+import "./styles/bootstrap-vue-bs5.css";
 
 // Import Font Awesome
 import '@fortawesome/fontawesome-free/css/all.css';
