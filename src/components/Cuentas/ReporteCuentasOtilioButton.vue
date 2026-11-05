@@ -29,6 +29,7 @@
 import { db } from '@/firebase';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { generarReporteCuentasOtilio } from '@/utils/pdf/generarReporteCuentasOtilio';
+import { formatearFechaInput } from '@/utils/formatters';
 
 export default {
   name: 'ReporteCuentasOtilioButton',
@@ -123,12 +124,7 @@ export default {
       this.fechaFin = this.formatearFechaInput(hoy);
       this.fechaInicio = this.formatearFechaInput(haceUnaSemana);
     },
-    formatearFechaInput(date) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    },
+    formatearFechaInput,
     async generarReporte() {
       if (!this.fechasValidas) {
         this.errorMessage = 'Selecciona un rango de fechas válido.';

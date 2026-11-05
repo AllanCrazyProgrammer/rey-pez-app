@@ -267,6 +267,7 @@ import { db } from '@/firebase';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
 import CuentasAllanResumen from './components/allan/CuentasAllanResumen.vue';
 import LoteCompraCard from './components/allan/LoteCompraCard.vue';
+import { formatearMoneda, formatearNumeroMx } from '@/utils/formatters';
 
 const ENTRADAS_COLLECTION = 'cuentasAllanCamaronEntradas';
 const VENTAS_COLLECTION = 'cuentasAllanCamaronVentas';
@@ -799,12 +800,8 @@ export default {
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : 0;
     },
-    formatearMoneda(value) {
-      return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 }).format(Number(value) || 0);
-    },
-    formatearNumero(value) {
-      return new Intl.NumberFormat('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value) || 0);
-    },
+    formatearMoneda,
+    formatearNumero: formatearNumeroMx,
     volverAMexico() {
       this.$router.push('/cuentas-mexico');
     }

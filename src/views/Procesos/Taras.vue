@@ -139,6 +139,7 @@ import { db } from '@/firebase';
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import BackButton from '@/components/layout/BackButton.vue';
 import TarasMovimientosTable from '@/components/Taras/TarasMovimientosTable.vue';
+import { formatearCantidad } from '@/utils/formatters';
 
 export default {
   name: 'Taras',
@@ -190,11 +191,7 @@ export default {
       const day = String(fecha.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     },
-    formatearCantidad(valor) {
-      const numero = Number(valor) || 0;
-      const prefijo = numero > 0 ? '+' : '';
-      return `${prefijo}${numero}`;
-    },
+    formatearCantidad,
     async cargarProveedores() {
       const proveedorAnterior = this.proveedorSeleccionadoId;
       const snapshot = await getDocs(query(collection(db, 'tarasProveedores'), orderBy('nombre', 'asc')));

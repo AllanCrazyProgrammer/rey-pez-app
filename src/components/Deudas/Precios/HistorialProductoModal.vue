@@ -140,7 +140,7 @@
 
 <script>
 import { preciosService } from '@/services/precios.service';
-import { formatearFecha } from '@/utils/formatters';
+import { formatearFecha, formatearPrecio } from '@/utils/formatters';
 
 export default {
   name: 'HistorialProductoModal',
@@ -273,9 +273,7 @@ export default {
       return `${simbolo}${porcentaje}%`;
     },
 
-    formatearPrecio(precio) {
-      return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    }
+    formatearPrecio
   },
 
   watch: {

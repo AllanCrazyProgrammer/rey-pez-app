@@ -78,7 +78,7 @@
 
 <script>
 import moment from 'moment';
-import { formatNumber } from '@/utils/formatters';
+import { formatNumber, formatearFechaHora, formatearPrecio } from '@/utils/formatters';
 
 export default {
   name: 'EntradasPorProveedorModal',
@@ -153,12 +153,8 @@ export default {
       const valor = (cuarto && cuarto.trim()) ? cuarto.trim() : 's/c';
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
     },
-    formatDateTime(date) {
-      return moment(date).format('DD/MM/YYYY HH:mm');
-    },
-    formatPrice(value) {
-      return (value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
+    formatDateTime: formatearFechaHora,
+    formatPrice: formatearPrecio
   }
 };
 </script>

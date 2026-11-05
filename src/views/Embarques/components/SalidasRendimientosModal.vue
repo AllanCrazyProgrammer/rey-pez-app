@@ -78,6 +78,7 @@
 <script>
 import { getFirestore, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
+import { formatearNumeroFinito } from '@/utils/formatters';
 
 export default {
   name: 'SalidasRendimientosModal',
@@ -320,12 +321,7 @@ export default {
         item.partes.push({ label, kilos });
       }
     },
-    formatearNumero(valor) {
-      const numero = Number(valor || 0);
-      return Number.isFinite(numero)
-        ? numero.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-        : '0';
-    },
+    formatearNumero: formatearNumeroFinito,
     toLocalYMD(fecha) {
       if (!fecha) return '';
       const y = fecha.getFullYear();

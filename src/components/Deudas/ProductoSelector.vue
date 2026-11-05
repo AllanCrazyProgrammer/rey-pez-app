@@ -106,7 +106,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { formatearFecha } from '@/utils/formatters';
+import { formatearFecha, formatearPrecio } from '@/utils/formatters';
 
 export default {
   name: 'ProductoSelector',
@@ -314,9 +314,7 @@ export default {
       this.$emit('update:precio', null);
     },
 
-    formatearPrecio(precio) {
-      return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    },
+    formatearPrecio,
 
   },
 

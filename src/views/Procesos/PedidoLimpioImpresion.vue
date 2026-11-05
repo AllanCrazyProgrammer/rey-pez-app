@@ -680,6 +680,7 @@ import {
 import { db } from '@/firebase'
 import { useUIStore } from '@/stores/ui'
 import { doc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { formatearUnDecimal } from '@/utils/formatters';
 
 const PDF_PREVIEW_MODAL_ID = 'pedido-limpio-pdf-preview'
 
@@ -980,12 +981,7 @@ export default {
         this.isSavingListaMedidas = false;
       }
     },
-    formatDecimal(value) {
-      return Number(value || 0).toLocaleString('en-US', {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1
-      });
-    },
+    formatDecimal: formatearUnDecimal,
     async cargarResumenSacadaHoy() {
       this.resumenSacadaHoy.loading = true;
       this.resumenSacadaHoy.error = '';
