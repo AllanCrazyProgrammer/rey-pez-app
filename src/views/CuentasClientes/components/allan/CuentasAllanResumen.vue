@@ -39,6 +39,7 @@
 </template>
 
 <script>
+import { formatearMoneda, formatearNumeroMx } from '@/utils/formatters';
 export default {
   name: 'CuentasAllanResumen',
   props: {
@@ -48,19 +49,8 @@ export default {
     }
   },
   methods: {
-    formatMoney(value) {
-      return new Intl.NumberFormat('es-MX', {
-        style: 'currency',
-        currency: 'MXN',
-        minimumFractionDigits: 2
-      }).format(Number(value) || 0);
-    },
-    formatNumber(value) {
-      return new Intl.NumberFormat('es-MX', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-      }).format(Number(value) || 0);
-    }
+    formatMoney: formatearMoneda,
+    formatNumber: formatearNumeroMx
   }
 };
 </script>

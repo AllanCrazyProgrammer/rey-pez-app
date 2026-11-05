@@ -58,7 +58,7 @@
 </template>
 
 <script>
-import { formatearFecha } from '@/utils/formatters';
+import { formatearFecha, formatearCantidad } from '@/utils/formatters';
 
 export default {
   name: 'TarasMovimientosTable',
@@ -83,11 +83,7 @@ export default {
   },
   methods: {
     formatearFecha,
-    formatearCantidad(valor) {
-      const numero = Number(valor) || 0;
-      const prefijo = numero > 0 ? '+' : '';
-      return `${prefijo}${numero}`;
-    }
+    formatearCantidad
   }
 };
 </script>

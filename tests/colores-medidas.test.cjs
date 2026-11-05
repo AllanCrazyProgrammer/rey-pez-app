@@ -14,6 +14,11 @@ function load(file, mocks = {}) {
     if (name in mocks) return mocks[name];
     if (name.endsWith('.vue') || name === '@/firebase' || name === '@/stores/ui' || name === 'firebase/firestore') return {};
     if (name.startsWith('@/utils/')) return load(`src/${name.slice(2)}.js`, mocks);
+    // imports relativos dentro de un módulo de src (p. ej. formatters.js → ./dateUtils)
+    if (name.startsWith('./') || name.startsWith('../')) {
+      const rel = path.join(path.dirname(file), name);
+      return load(rel.endsWith('.js') ? rel : `${rel}.js`, mocks);
+    }
     return require(name);
   };
   const code = transformSync(source, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code;

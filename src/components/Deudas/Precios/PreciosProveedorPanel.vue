@@ -104,7 +104,7 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import HistorialProductoModal from './HistorialProductoModal.vue';
-import { formatearFecha } from '@/utils/formatters';
+import { formatearFecha, formatearPrecio } from '@/utils/formatters';
 
 export default {
   name: 'PreciosProveedorPanel',
@@ -267,9 +267,7 @@ export default {
       return fecha.toISOString().split('T')[0];
     },
 
-    formatearPrecio(precio) {
-      return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    }
+    formatearPrecio
   },
 
   watch: {

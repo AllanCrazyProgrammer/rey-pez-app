@@ -413,7 +413,7 @@ import { db } from '@/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import BackButton from '../components/layout/BackButton.vue';
 import moment from 'moment';
-import { formatNumber } from '@/utils/formatters';
+import { formatNumber, formatearPrecio } from '@/utils/formatters';
 import { normalizarFechaValor } from '@/utils/dateUtils';
 import inventarioNavigation from '@/mobile/inventarioNavigation';
 import {
@@ -1080,9 +1080,7 @@ export default {
     esPrecioValido(precio) {
       return precio == null || precio === '' || (Number.isFinite(Number(precio)) && Number(precio) >= 0);
     },
-    formatearPrecio(precio) {
-      return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    },
+    formatearPrecio,
 
     async loadRegistro(id) {
       console.log("Cargando registro con ID:", id);

@@ -305,7 +305,7 @@ import ModalDetalleCrudo from '@/components/Existencias/ModalDetalleCrudo.vue';
 import GestionProveedoresCrudos from '@/components/Proveedores/GestionProveedoresCrudos.vue';
 import EntradasPorProveedorModal from '@/components/Existencias/EntradasPorProveedorModal.vue';
 import RegistroCrudos from './RegistroCrudos.vue';
-import { formatNumber } from '@/utils/formatters';
+import { formatNumber, formatearFechaHora, formatearPrecio } from '@/utils/formatters';
 import { useUIStore } from '@/stores/ui';
 
 export default {
@@ -798,13 +798,9 @@ export default {
       }
     },
 
-    formatDateTime(date) {
-      return moment(date).format('DD/MM/YYYY HH:mm');
-    },
+    formatDateTime: formatearFechaHora,
 
-    formatearPrecio(precio) {
-      return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    },
+    formatearPrecio,
 
     formatearValor(valor) {
       return valor ? valor.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '0';

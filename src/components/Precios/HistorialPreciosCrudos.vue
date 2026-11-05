@@ -139,7 +139,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
-import { formatearFecha } from '@/utils/formatters';
+import { formatearFecha, formatearPrecio } from '@/utils/formatters';
 
 export default {
   name: 'HistorialPreciosCrudos',
@@ -325,9 +325,7 @@ export default {
       }
     },
 
-    formatearPrecio(precio) {
-      return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    }
+    formatearPrecio
   },
 
   watch: {

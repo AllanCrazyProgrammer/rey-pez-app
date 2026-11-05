@@ -95,6 +95,7 @@
 </template>
 
 <script>
+import { formatearUnDecimal } from '@/utils/formatters';
 export default {
   name: 'TarjetaMedidaResumen',
   props: {
@@ -117,12 +118,7 @@ export default {
     }
   },
   methods: {
-    formatDecimal(value) {
-      return Number(value || 0).toLocaleString('en-US', {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1
-      })
-    }
+    formatDecimal: formatearUnDecimal
   }
 }
 </script>
