@@ -128,7 +128,12 @@ let desktop;
     await page.waitForFunction(() => document.querySelector('.rendimientos-container').__vue__.medidasUnicas.length > 0);
     await page.locator('.btn-pdf').click();
     await page.waitForFunction(() => !document.querySelector('.rendimientos-container').__vue__.generandoPDF);
-    const rendPath = path.join(profile, 'embarques', '2026', 'septiembre', '25', 'Rendimientos-Porro-25-sept-26.pdf');
+    // Desde el 22-oct-2026 Rendimientos muestra vista previa (no guarda solo), igual que el resumen:
+    // el archivo va a la carpeta que elige el diálogo de guardado (aquí, la raíz del perfil de prueba).
+    const rendPath = path.join(profile, 'Rendimientos-Porro-25-sept-26.pdf');
+    await page.locator('.pdf-preview[open] iframe').waitFor();
+    assert.equal(fs.existsSync(rendPath), false, 'preview does not save automatically');
+    await page.locator('.pdf-preview[open]').getByRole('button', { name: 'Abrir para imprimir', exact: true }).click();
     for (let attempt = 0; attempt < 100 && !fs.existsSync(rendPath); attempt++) await new Promise(r => setTimeout(r, 100));
     assert.equal(fs.readFileSync(rendPath).subarray(0,5).toString(), '%PDF-');
     assert.ok(fs.statSync(rendPath).size > 5000);
