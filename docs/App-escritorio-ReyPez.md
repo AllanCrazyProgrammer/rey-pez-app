@@ -2,6 +2,18 @@
 
 Esta aplicación contiene todas las pantallas y herramientas dentro de la instalación. Abre desde su icono aunque no haya internet, aunque la web esté caída y aunque nunca se haya abierto la web en ese equipo. No necesita Node, una terminal, Chrome ni un servidor local instalado.
 
+## Versión 0.3.19: inicio de sesión con cuenta de Firebase
+
+Se entra con la cuenta nueva (`allan`, `edgar`, `mari`); las contraseñas anteriores ya no
+funcionan. El **primer** inicio de sesión en cada equipo necesita internet; después la sesión
+queda guardada y la app abre sin conexión. Antes de instalarla, abrir la versión anterior con
+internet para que suba lo pendiente.
+
+Descarga: [GitHub → Releases](https://github.com/AllanCrazyProgrammer/rey-pez-app/releases/latest)
+— `ReyPez-0.3.19-mac-arm64.dmg` (Mac con chip Apple) y `ReyPez-0.3.19-win-x64.exe` (Windows 64 bits).
+Los instaladores no están firmados: en Windows, "Más información → Ejecutar de todas formas";
+en Mac, si avisa que no se puede verificar, clic derecho → Abrir.
+
 ## Versión 0.3.18: resumen sin internet y cuentas de Catarro
 
 El resumen se genera con los datos locales aunque no haya internet. Si el equipo indica conexión pero la consulta de cuentas falla o tarda más de cinco segundos, se permite generar el PDF sin verificar ni crear cuentas. Con conexión, se mantiene la opción de crear las cuentas faltantes antes del resumen.
