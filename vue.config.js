@@ -34,7 +34,9 @@ module.exports = {
   },
   publicPath: isElectron || isAndroid ? './' : '/',
   // Transpilación para soporte de navegadores
-  transpileDependencies: [],
+  // jsPDF 4 (y html2pdf.js 0.14, que lo usa) traen sintaxis ES2022 (campos de
+  // clase) que webpack 4 no sabe leer; Babel los transpila igual que la app.
+  transpileDependencies: ['fast-png', 'iobuffer', 'html2pdf.js'],
   // Configuración para producción
   productionSourceMap: false,
   // Configuración de webpack para asegurar carga correcta de chunks

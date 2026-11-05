@@ -6,9 +6,12 @@
 
 <script>
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+// Desde jspdf-autotable 5 importar el paquete ya no agrega doc.autoTable a jsPDF;
+// applyPlugin lo hace explícito (también funciona con la versión 3).
+import { applyPlugin } from 'jspdf-autotable';
 import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
+applyPlugin(jsPDF);
 
 export default {
   name: 'ReporteSemanalPDFButton',
