@@ -20,7 +20,7 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "cleanUrls": true,
+    "cleanUrls": false,
     "rewrites": [
       {
         "source": "**",
