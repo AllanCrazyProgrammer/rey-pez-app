@@ -1,0 +1,60 @@
+# Publica la web en Firebase Hosting (canal "live") al hacer merge a master.
+#
+# Secrets del repositorio (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT            JSON de una cuenta de servicio con el rol
+#                                       "Firebase Hosting Admin" en reypezapp-1ced2.
+#   VUE_APP_GOOGLE_PICKER_API_KEY       (opcionales) las mismas variables de .env.local,
+#   VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID   que no está en Git. Sin ellas, la web se compila
+#   VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER  igual pero sin la integración con Google Drive.
+#
+# Mientras FIREBASE_SERVICE_ACCOUNT no exista, el flujo termina sin desplegar (no falla).
+name: Firebase Hosting
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: firebase-hosting-live
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TIENE_CUENTA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - name: Avisar si falta la cuenta de servicio
+        if: env.TIENE_CUENTA != 'true'
+        run: echo "::notice::Falta el secret FIREBASE_SERVICE_ACCOUNT; no se despliega a Firebase Hosting."
+
+      - uses: actions/checkout@v4
+        if: env.TIENE_CUENTA == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.TIENE_CUENTA == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        if: env.TIENE_CUENTA == 'true'
+        run: npm ci
+
+      - name: Compilar la web
+        if: env.TIENE_CUENTA == 'true'
+        run: npm run build:web
+        env:
+          VUE_APP_GOOGLE_PICKER_API_KEY: ${{ secrets.VUE_APP_GOOGLE_PICKER_API_KEY }}
+          VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID: ${{ secrets.VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID }}
+          VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER: ${{ secrets.VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER }}
+
+      - name: Desplegar a Firebase Hosting
+        if: env.TIENE_CUENTA == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: reypezapp-1ced2
+          channelId: live
