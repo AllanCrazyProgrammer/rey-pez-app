@@ -57,8 +57,9 @@ android/app/src/main/assets/capacitor.plugins.json
 # Desktop OAuth client configuration (bundled in native installers, never in Git/web)
 electron/google-drive-clients.local.json
 
-# Logs locales
-logs/
+# Logs locales (logs/ debe existir: el nginx de Heroku abre ./logs/error.log al arrancar)
+logs/*
+!logs/.gitkeep
 *.log
 
 # Variables locales de Cloud Functions (p. ej. RESPALDO_BUCKET)
