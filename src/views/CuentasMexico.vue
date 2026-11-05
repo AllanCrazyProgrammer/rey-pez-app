@@ -7,7 +7,49 @@
         <h1>Cuentas México</h1>
 
         <div class="layout-principal">
-          <SaldosCuentas class="columna-saldos" />
+          <div class="columna-saldos">
+            <div class="pestanas-saldos" role="tablist" aria-label="Saldos y créditos">
+              <button
+                id="pestana-saldos"
+                type="button"
+                role="tab"
+                class="pestana-saldos"
+                :class="{ activa: pestanaSaldos === 'saldos' }"
+                :aria-selected="pestanaSaldos === 'saldos' ? 'true' : 'false'"
+                @click="pestanaSaldos = 'saldos'"
+              >Saldos</button>
+              <button
+                id="pestana-capital"
+                type="button"
+                role="tab"
+                class="pestana-saldos"
+                :class="{ activa: pestanaSaldos === 'capital' }"
+                :aria-selected="pestanaSaldos === 'capital' ? 'true' : 'false'"
+                @click="pestanaSaldos = 'capital'"
+              >Créditos</button>
+            </div>
+            <SaldosCuentas
+              v-if="pestanaSaldos === 'saldos'"
+              key="saldos"
+              role="tabpanel"
+              aria-labelledby="pestana-saldos"
+              :centavos="true"
+              :total-redondeado="true"
+            />
+            <SaldosCuentas
+              v-else
+              key="capital"
+              role="tabpanel"
+              aria-labelledby="pestana-capital"
+              :documento="documentoCapital"
+              titulo="Créditos"
+              columna="Créditos"
+              titulo-whatsapp="CRÉDITOS"
+              :centavos="true"
+              :semilla="capitalInicial"
+              :legado="null"
+            />
+          </div>
           <div class="columna-menu">
         <!-- Botón de Agenda de Transacciones destacado arriba -->
         <div class="agenda-container">
@@ -82,6 +124,7 @@
 <script>
 import AccesoPreciosVenta from '@/components/Cuentas/AccesoPreciosVenta.vue';
 import SaldosCuentas from '@/components/Cuentas/SaldosCuentas.vue';
+import { DOCUMENTO_CAPITAL_CUENTAS, capitalInicial } from '@/utils/saldosCuentas';
 
 export default {
   name: 'CuentasMexico',
@@ -92,6 +135,9 @@ export default {
   },
   data() {
     return {
+      pestanaSaldos: 'saldos',
+      documentoCapital: DOCUMENTO_CAPITAL_CUENTAS,
+      capitalInicial: capitalInicial(),
       mostrarModalAgenda: false,
       agendaMontada: false,
       clienteSeleccionado: 'mexico'
@@ -191,6 +237,47 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* Pestañas Saldos / Créditos pegadas arriba de la tarjeta */
+.pestanas-saldos {
+  display: flex;
+  gap: 4px;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 1;
+}
+
+.pestana-saldos {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-family: 'Orbitron', 'Segoe UI', sans-serif;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  background: #0d0d0d;
+  color: #9a9a9a;
+  border: 1px solid #3a3a3a;
+  border-radius: 0;
+}
+
+.pestana-saldos:hover {
+  color: #00ff41;
+  border-color: #00ff41;
+}
+
+.pestana-saldos.activa {
+  background: #161616;
+  color: #00ff41;
+  border-color: #3a3a3a #3a3a3a #161616;
+  border-top: 2px solid #00ff41;
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.45);
+}
+
+.pestana-saldos:focus-visible {
+  outline: 2px solid #00ff41;
+  outline-offset: 2px;
 }
 
 h1 {

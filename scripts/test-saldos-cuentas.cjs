@@ -13,26 +13,35 @@ const imagen = [
   { id: 'allan-afirme', nombre: 'ALLAN AFIRME', color: '#00c853', saldo: '1,363.79' }
 ]
 
-test('el total de la imagen es 507,649.00', () => {
+test('el total de la imagen es 507,649 sin decimales', () => {
+  // Cada saldo se redondea a pesos: 215,746.45 → 215,746 · 97,578.76 → 97,579 · 1,363.79 → 1,364
   assert.equal(saldos.totalSaldos(imagen), 507649)
-  assert.equal(saldos.formatearMonto(saldos.totalSaldos(imagen)), '507,649.00')
+  assert.equal(saldos.formatearMonto(saldos.totalSaldos(imagen)), '507,649')
 })
 
-test('parsea y formatea los montos de la imagen', () => {
+test('parsea y formatea montos en pesos enteros', () => {
   assert.equal(saldos.parsearMonto('$ 190,034.00'), 190034)
   assert.equal(saldos.parsearMonto('2,926.00'), 2926)
-  assert.equal(saldos.parsearMonto('215746.45'), 215746.45)
-  assert.equal(saldos.parsearMonto('1.363,79'), 1363.79)
-  assert.equal(saldos.formatearMonto(2926), '2,926.00')
-  assert.equal(saldos.formatearMonto(1363.79), '1,363.79')
-  assert.equal(saldos.formatearMonto('97,578.76'), '97,578.76')
+  assert.equal(saldos.parsearMonto('215746.45'), 215746)
+  assert.equal(saldos.parsearMonto('1.363,79'), 1364)
+  assert.equal(saldos.parsearMonto('1.363'), 1363)
+  assert.equal(saldos.parsearMonto('1.363.790'), 1363790)
+  assert.equal(saldos.parsearMonto('190034'), 190034)
+  assert.equal(saldos.parsearMonto('1,5'), 2)
+  assert.equal(saldos.parsearMonto(1000.5), 1001)
+  assert.equal(saldos.formatearMonto(2926), '2,926')
+  assert.equal(saldos.formatearMonto(1363.79), '1,364')
+  assert.equal(saldos.formatearMonto('97,578.76'), '97,579')
+  assert.equal(saldos.formatearMonto(0), '0')
   assert.equal(saldos.parsearMonto(''), 0)
   assert.equal(saldos.parsearMonto(null), 0)
   assert.equal(saldos.parsearMonto('abc'), 0)
+  assert.equal(saldos.parsearMonto('-'), 0)
+  assert.equal(Object.is(saldos.parsearMonto('-0'), -0), false)
   assert.equal(saldos.parsearMonto('-2,926.00'), -2926)
-  assert.equal(saldos.formatearMonto(-2926), '-2,926.00')
-  assert.equal(saldos.totalSaldos([{ saldo: 0.1 }, { saldo: 0.2 }]), 0.3)
-  assert.equal(saldos.formatearMonto(saldos.totalSaldos([{ saldo: 0.1 }, { saldo: 0.2 }])), '0.30')
+  assert.equal(saldos.parsearMonto('(500)'), -500)
+  assert.equal(saldos.formatearMonto(-2926), '-2,926')
+  assert.equal(saldos.totalSaldos([{ saldo: 0.4 }, { saldo: 0.4 }]), 0)
 })
 
 test('arma el texto y el enlace de WhatsApp', () => {
@@ -43,20 +52,28 @@ test('arma el texto y el enlace de WhatsApp', () => {
     '📅 miércoles 4 de noviembre 2026',
     '━━━━━━━━━━━━━━━━━━━━',
     '```',
-    '🔵 BANCOMER 1       $190,034.00',
-    '🔵 BANCOMER 2         $2,926.00',
-    '🔴 BANORTE          $215,746.45',
-    '🟢 ESTUARDO AFIRME   $97,578.76',
-    '🟢 ALLAN AFIRME       $1,363.79',
+    '🔵 BANCOMER 1       $190,034',
+    '🔵 BANCOMER 2         $2,926',
+    '🔴 BANORTE          $215,746',
+    '🟢 ESTUARDO AFIRME   $97,579',
+    '🟢 ALLAN AFIRME       $1,364',
     '```',
     '━━━━━━━━━━━━━━━━━━━━',
-    '💰 *TOTAL: $507,649.00*'
+    '💰 *TOTAL: $507,649*'
   ].join('\n'))
   assert.equal(saldos.formatearFechaSaldos('2026-11-04'), '04/11/2026')
   assert.equal(saldos.formatearFechaSaldos(new Date('2026-11-04T05:00:00Z')), '03/11/2026')
   const enlace = saldos.enlaceWhatsAppSaldos(texto)
   assert.equal(enlace, `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`)
-  assert.match(decodeURIComponent(enlace.split('text=')[1]), /💰 \*TOTAL: \$507,649\.00\*/)
+  assert.match(decodeURIComponent(enlace.split('text=')[1]), /💰 \*TOTAL: \$507,649\*/)
+})
+
+test('fecha y hora concisas en hora de México', () => {
+  assert.equal(saldos.formatearFechaHoraCorta(new Date('2026-11-05T20:32:00Z')), '05/11/26 2:32 pm')
+  assert.equal(saldos.formatearFechaHoraCorta(Date.parse('2026-11-05T05:07:00Z')), '04/11/26 11:07 pm')
+  assert.equal(saldos.formatearFechaHoraCorta({ toMillis: () => 0 }), '31/12/69 6:00 pm')
+  assert.equal(saldos.formatearFechaHoraCorta(new Date('2026-11-05T06:05:00Z')), '05/11/26 12:05 am')
+  assert.equal(saldos.formatearFechaHoraCorta(new Date('2026-11-05T18:45:00Z')), '05/11/26 12:45 pm')
 })
 
 test('decodificar la URL deja los emojis intactos y sin sustitutos sueltos', () => {
@@ -89,13 +106,7 @@ test('decodificar la URL deja los emojis intactos y sin sustitutos sueltos', () 
   }
 })
 
-test('el saldo vacío o en cero no se escribe en el campo y sí suma', () => {
-  assert.equal(saldos.textoSaldoCampo(0), '')
-  assert.equal(saldos.textoSaldoCampo('0.00'), '')
-  assert.equal(saldos.textoSaldoCampo(''), '')
-  assert.equal(saldos.textoSaldoCampo(null), '')
-  assert.equal(saldos.textoSaldoCampo(30), '30.00')
-  assert.equal(saldos.textoSaldoCampo(2000), '2,000.00')
+test('el saldo vacío o en cero vale 0 en el total y en WhatsApp', () => {
   const cuentas = [
     { nombre: 'BANCOMER 1', color: saldos.COLOR_AZUL, saldo: 2000 },
     { nombre: 'BANCOMER 2', color: saldos.COLOR_AZUL, saldo: '' },
@@ -105,10 +116,10 @@ test('el saldo vacío o en cero no se escribe en el campo y sí suma', () => {
   ]
   assert.equal(saldos.totalSaldos(cuentas), 2030)
   const texto = saldos.textoSaldosWhatsApp(cuentas, new Date('2026-11-04T18:00:00Z'))
-  assert.match(texto, /BANCOMER 2 +\$0\.00/)
-  assert.match(texto, /ESTUARDO AFIRME +\$0\.00/)
-  assert.match(texto, /ALLAN AFIRME +\$0\.00/)
-  assert.match(texto, /💰 \*TOTAL: \$2,030\.00\*/)
+  assert.match(texto, /BANCOMER 2 +\$0\n/)
+  assert.match(texto, /ESTUARDO AFIRME +\$0\n/)
+  assert.match(texto, /ALLAN AFIRME +\$0\n/)
+  assert.match(texto, /💰 \*TOTAL: \$2,030\*/)
 })
 
 test('omite cuentas sin nombre y usa círculo blanco si el color no es azul, rojo ni verde', () => {
@@ -123,81 +134,180 @@ test('omite cuentas sin nombre y usa círculo blanco si el color no es azul, roj
     '📅 miércoles 4 de noviembre 2026',
     '━━━━━━━━━━━━━━━━━━━━',
     '```',
-    '⚪ CAJA  $10.00',
+    '⚪ CAJA  $10',
     '```',
     '━━━━━━━━━━━━━━━━━━━━',
-    '💰 *TOTAL: $10.00*'
+    '💰 *TOTAL: $10*'
   ].join('\n'))
 })
 
-test('las cuentas iniciales traen color y saldo en cero', () => {
+test('las cuentas iniciales traen color, orden y saldo en cero', () => {
   const iniciales = saldos.cuentasIniciales()
   assert.deepEqual(iniciales.map((cuenta) => cuenta.nombre), [
     'BANCOMER 1', 'BANCOMER 2', 'BANORTE', 'ESTUARDO AFIRME', 'ALLAN AFIRME'
   ])
+  assert.deepEqual(iniciales.map((cuenta) => cuenta.orden), [0, 1, 2, 3, 4])
   assert.equal(iniciales[0].color, saldos.COLOR_AZUL)
-  assert.equal(iniciales[1].color, saldos.COLOR_AZUL)
   assert.equal(iniciales[2].color, saldos.COLOR_ROJO)
-  assert.equal(iniciales[3].color, saldos.COLOR_VERDE)
   assert.equal(iniciales[4].color, saldos.COLOR_VERDE)
-  assert.ok(iniciales.every((cuenta) => cuenta.saldo === 0 && cuenta.id))
+  assert.ok(iniciales.every((cuenta) => cuenta.saldo === 0 && cuenta.id && cuenta.editadoEn === null))
   iniciales[0].saldo = 10
   assert.equal(saldos.cuentasIniciales()[0].saldo, 0)
-  assert.equal(saldos.DEBOUNCE_GUARDADO_MS, 500)
   assert.equal(saldos.COLECCION_SALDOS_CUENTAS, 'saldosCuentas')
-  assert.equal(saldos.DOCUMENTO_SALDOS_CUENTAS, 'actual')
+  assert.equal(saldos.DOCUMENTO_SALDOS_CUENTAS, 'porCuenta')
+  assert.equal(saldos.DOCUMENTO_SALDOS_LEGADO, 'actual')
+  assert.equal(saldos.COLECCION_HISTORIAL_SALDOS, 'saldosCuentasHistorial')
 })
 
-test('crea cuentas y arma el documento único', () => {
+test('crea cuentas al final de la lista', () => {
   assert.equal(saldos.crearCuenta({ nombre: '   ' }), null)
   const nueva = saldos.crearCuenta({
     nombre: '  Caja chica  ',
     color: '#AbC',
     saldo: '1,000.5',
-    id: 'caja'
+    id: 'caja',
+    ahora: 1000,
+    existentes: saldos.cuentasIniciales()
   })
-  assert.deepEqual(nueva, { id: 'caja', nombre: 'Caja chica', color: '#abc', saldo: 1000.5 })
+  assert.deepEqual(nueva, { id: 'caja', nombre: 'Caja chica', color: '#abc', saldo: 1001, orden: 5, editadoEn: 1000 })
   const invalida = saldos.crearCuenta({ nombre: 'Otra', color: 'rojo', saldo: 5, id: 'otra' })
   assert.equal(invalida.color, saldos.COLOR_AZUL)
-  const doc = saldos.documentoSaldos(imagen, '2026-11-04T18:00:00.000Z')
-  assert.equal(doc.updatedAt, '2026-11-04T18:00:00.000Z')
-  assert.equal(doc.cuentas[0].saldo, 190034)
-  assert.equal(saldos.cuentasDesdeDocumento(doc)[4].saldo, 1363.79)
-  assert.equal(saldos.cuentasDesdeDocumento({}), null)
-  assert.equal(saldos.cuentasDesdeDocumento(null), null)
+  assert.equal(invalida.orden, 0)
 })
 
-test('el snapshot no pisa la edición, el alta ni la baja local', () => {
-  const local = [
-    { id: 'bancomer-1', nombre: 'BANCOMER 1', color: '#2979ff', saldo: 10 },
-    { id: 'banorte', nombre: 'BANORTE', color: '#ff1744', saldo: 5 }
-  ]
-  const remoto = [
-    { id: 'bancomer-1', nombre: 'BANCOMER 1', color: '#2979ff', saldo: '99' },
-    { id: 'banorte', nombre: 'BANORTE', color: '#ff1744', saldo: '7.5' },
-    { id: 'allan-afirme', nombre: 'ALLAN AFIRME', color: '#00c853', saldo: 1 }
-  ]
-  const fusion = saldos.fusionarCuentas(local, remoto, { editando: ['bancomer-1'] })
-  assert.equal(fusion.find((cuenta) => cuenta.id === 'bancomer-1').saldo, 10)
-  assert.equal(fusion.find((cuenta) => cuenta.id === 'banorte').saldo, 7.5)
-  assert.equal(fusion.find((cuenta) => cuenta.id === 'allan-afirme').saldo, 1)
-  fusion[0].saldo = 0
-  assert.equal(local[0].saldo, 10)
+test('lee el formato nuevo (mapa por cuenta) y el anterior (arreglo)', () => {
+  const legado = saldos.cuentasDesdeDocumento({ cuentas: imagen })
+  assert.deepEqual(legado.map((cuenta) => cuenta.id), imagen.map((cuenta) => cuenta.id))
+  assert.equal(legado[2].saldo, 215746)
 
-  const conAlta = saldos.fusionarCuentas(
-    local.concat([{ id: 'caja', nombre: 'CAJA', color: '#2979ff', saldo: 3 }]),
-    remoto,
-    { pendientesAlta: ['caja'] }
-  )
-  assert.equal(conAlta.find((cuenta) => cuenta.id === 'caja').saldo, 3)
+  const mapa = saldos.mapaDesdeCuentas(legado)
+  assert.deepEqual(Object.keys(mapa), imagen.map((cuenta) => cuenta.id))
+  assert.deepEqual(mapa.banorte, { nombre: 'BANORTE', color: '#ff1744', saldo: 215746, orden: 2, editadoEn: null })
 
-  const conBaja = saldos.fusionarCuentas(
-    local.filter((cuenta) => cuenta.id !== 'banorte'),
-    remoto,
-    { pendientesBaja: ['banorte'] }
-  )
-  assert.equal(conBaja.some((cuenta) => cuenta.id === 'banorte'), false)
-  assert.equal(conBaja.some((cuenta) => cuenta.id === 'allan-afirme'), true)
+  // El orden lo define `orden`, no el orden de las llaves del mapa.
+  const leidas = saldos.cuentasDesdeDocumento({
+    cuentas: {
+      z: { nombre: 'ZETA', color: '#2979ff', saldo: 5, orden: 0, editadoEn: { toMillis: () => 42 } },
+      a: { nombre: 'ALFA', color: '#2979ff', saldo: '1,234.50', orden: 1 },
+      vacia: { saldo: 9 }
+    }
+  })
+  assert.deepEqual(leidas.map((cuenta) => cuenta.id), ['z', 'a'])
+  assert.equal(leidas[0].editadoEn, 42)
+  assert.equal(leidas[1].saldo, 1235)
+
+  assert.equal(saldos.cuentasDesdeDocumento({}), null)
+  assert.equal(saldos.cuentasDesdeDocumento(null), null)
+  assert.deepEqual(saldos.cuentasDesdeDocumento({ cuentas: {} }), [])
+})
+
+test('cada cuenta se guarda como un campo propio, con su historial', () => {
+  const cuenta = { id: 'banorte', nombre: 'BANORTE', color: '#FF1744', saldo: 10, orden: 2 }
+  assert.deepEqual(saldos.datosCuenta({ ...cuenta, saldo: '20,000.40', editadoEn: 5 }), {
+    nombre: 'BANORTE', color: '#ff1744', saldo: 20000, orden: 2, editadoEn: 5
+  })
+  const editadoEn = Date.parse('2026-11-05T20:32:00Z')
+  assert.deepEqual(saldos.registroHistorial({ tipo: 'saldo', cuenta, saldoAnterior: 10, saldo: '20,000', editadoEn }), {
+    tipo: 'saldo',
+    cuentaId: 'banorte',
+    nombre: 'BANORTE',
+    saldoAnterior: 10,
+    saldo: 20000,
+    editadoEn,
+    fecha: '05/11/26 2:32 pm'
+  })
+  assert.equal(saldos.registroHistorial({ tipo: 'baja', cuenta, editadoEn }).saldo, null)
+})
+
+test('con centavos conserva 2 decimales y no cambia los pesos enteros', () => {
+  assert.equal(saldos.parsearMonto('11,885,668.65', true), 11885668.65)
+  assert.equal(saldos.parsearMonto('3,284,420', true), 3284420)
+  assert.equal(saldos.parsearMonto('1.5', true), 1.5)
+  assert.equal(saldos.parsearMonto('2.345', true), 2345)
+  assert.equal(saldos.parsearMonto(10.456, true), 10.46)
+  assert.equal(saldos.parsearMonto('(500.25)', true), -500.25)
+  assert.equal(saldos.formatearMonto(11885668.65, true), '11,885,668.65')
+  assert.equal(saldos.formatearMonto(3284420, true), '3,284,420.00')
+  assert.equal(saldos.formatearMonto(0, true), '0.00')
+  assert.equal(saldos.formatearMonto(-1234.5, true), '-1,234.50')
+  // Sin la bandera sigue redondeando a pesos
+  assert.equal(saldos.parsearMonto('215746.45'), 215746)
+  assert.equal(saldos.formatearMonto(1363.79), '1,364')
+  // 0.1 + 0.2 no arrastra error de punto flotante
+  assert.equal(saldos.totalSaldos([{ saldo: 0.1 }, { saldo: 0.2 }], true), 0.3)
+})
+
+test('Capital: datos de referencia, total y mensaje de WhatsApp', () => {
+  const capital = saldos.capitalInicial()
+  assert.deepEqual(capital.map((cuenta) => cuenta.nombre), [
+    'BANCOMER 14', 'BANCOMER 5', 'BANCOMER R 6', 'BANORTE R 5', 'AFIRME 2.2 EST'
+  ])
+  assert.deepEqual(capital.map((cuenta) => cuenta.color), ['#2979ff', '#2979ff', '#2979ff', '#ff1744', '#00c853'])
+  assert.deepEqual(capital.map((cuenta) => cuenta.orden), [0, 1, 2, 3, 4])
+  assert.equal(saldos.formatearMonto(saldos.totalSaldos(capital, true), true), '24,542,614.05')
+  assert.equal(saldos.formatearFechaHoraCorta(capital[0].editadoEn), '04/11/26 8:43 pm')
+  assert.equal(saldos.DOCUMENTO_CAPITAL_CUENTAS, 'capital')
+
+  // Ida y vuelta por el documento: no pierde centavos
+  const guardado = { cuentas: saldos.mapaDesdeCuentas(capital, true) }
+  const leidas = saldos.cuentasDesdeDocumento(guardado, true)
+  assert.equal(leidas[0].saldo, 11885668.65)
+  assert.equal(leidas[4].saldo, 1455999.96)
+  assert.equal(saldos.formatearMonto(saldos.totalSaldos(leidas, true), true), '24,542,614.05')
+
+  const texto = saldos.textoSaldosWhatsApp(capital, new Date('2026-11-04T18:00:00Z'), { titulo: 'CAPITAL', centavos: true })
+  assert.match(texto, /^🏦 \*CAPITAL\*\n📅 miércoles 4 de noviembre 2026/)
+  assert.match(texto, /🔵 BANCOMER 14 {5}\$11,885,668\.65/)
+  assert.match(texto, /💰 \*TOTAL: \$24,542,614\.05\*$/)
+  // Saldos no cambia: mismo título y pesos enteros
+  assert.match(saldos.textoSaldosWhatsApp(imagen, new Date('2026-11-04T18:00:00Z')), /^🏦 \*SALDOS DE CUENTAS\*/)
+
+  const editadoEn = Date.parse('2026-11-05T20:32:00Z')
+  const cuenta = capital[0]
+  const registro = saldos.registroHistorial({ cuenta, saldoAnterior: 100.5, saldo: '200.25', editadoEn, centavos: true })
+  assert.equal(registro.saldoAnterior, 100.5)
+  assert.equal(registro.saldo, 200.25)
+})
+
+test('Saldos admite centavos por cuenta y redondea solo el total', () => {
+  const cuentas = [
+    { id: 'a', nombre: 'BANCOMER 1', color: '#2979ff', saldo: '190,034.00' },
+    { id: 'b', nombre: 'BANCOMER 2', color: '#2979ff', saldo: '2,926.00' },
+    { id: 'c', nombre: 'BANORTE', color: '#ff1744', saldo: '215,746.45' },
+    { id: 'd', nombre: 'ESTUARDO AFIRME', color: '#00c853', saldo: '97,578.76' },
+    { id: 'e', nombre: 'ALLAN AFIRME', color: '#00c853', saldo: '1,363.79' }
+  ]
+  assert.equal(saldos.formatearMonto(saldos.parsearMonto('215,746.45', true), true), '215,746.45')
+  assert.equal(saldos.totalSaldos(cuentas, true), 507649)
+  // El total se suma con centavos y luego se redondea (no se redondea cuenta por cuenta)
+  assert.equal(saldos.formatearTotal(507648.6, true, true), '507,649')
+  assert.equal(saldos.formatearTotal(507648.4, true, true), '507,648')
+  assert.equal(saldos.formatearTotal(507648.6, true, false), '507,648.60')
+  assert.equal(saldos.formatearTotal(507648.6, false, false), '507,649')
+
+  const texto = saldos.textoSaldosWhatsApp(cuentas, new Date('2026-11-04T18:00:00Z'), { centavos: true, totalRedondeado: true })
+  assert.match(texto, /^🏦 \*SALDOS DE CUENTAS\*/)
+  assert.match(texto, /🔴 BANORTE {10}\$215,746\.45/)
+  assert.match(texto, /🟢 ALLAN AFIRME {7}\$1,363\.79/)
+  assert.match(texto, /💰 \*TOTAL: \$507,649\*$/)
+  // Créditos conserva los centavos también en el total
+  const creditos = saldos.textoSaldosWhatsApp(saldos.capitalInicial(), new Date(), { titulo: 'CRÉDITOS', centavos: true })
+  assert.match(creditos, /💰 \*TOTAL: \$24,542,614\.05\*$/)
+})
+
+test('la vista de Cuentas México tiene pestañas arriba para Saldos y Capital', () => {
+  const menu = fs.readFileSync(path.join(__dirname, '../src/views/CuentasMexico.vue'), 'utf8')
+  const vista = fs.readFileSync(path.join(__dirname, '../src/components/Cuentas/SaldosCuentas.vue'), 'utf8')
+  assert.match(menu, /role="tablist"/)
+  assert.equal((menu.match(/role="tab"/g) || []).length, 2)
+  assert.match(menu, /pestanaSaldos = 'saldos'/)
+  assert.match(menu, /pestanaSaldos = 'capital'/)
+  assert.equal((menu.match(/:centavos="true"/g) || []).length, 2)
+  assert.match(menu, /:total-redondeado="true"/)
+  assert.match(menu, /:legado="null"/)
+  assert.match(menu, /capitalInicial/)
+  assert.match(vista, /this\.documento/)
+  assert.equal(/botonCambio|boton-cambio/.test(vista + menu), false)
 })
 
 test('el menú de Cuentas usa el componente que importa este util', () => {
@@ -207,14 +317,19 @@ test('el menú de Cuentas usa el componente que importa este util', () => {
   assert.match(vista, /from '@\/utils\/saldosCuentas'/)
   assert.match(vista, /COLECCION_SALDOS_CUENTAS/)
   assert.match(vista, /onSnapshot/)
-  assert.match(vista, /DEBOUNCE_GUARDADO_MS/)
+  assert.match(vista, /writeBatch/)
+  assert.match(vista, /\{ merge: true \}/)
+  assert.match(vista, /runTransaction/)
   assert.match(vista, /enlaceWhatsAppSaldos/)
-  assert.match(vista, /textoSaldoCampo/)
-  assert.match(vista, /placeholder="0\.00"/)
+  assert.match(vista, /formatearFechaHoraCorta/)
+  assert.match(vista, /role="dialog"/)
+  assert.match(vista, /:inputmode="centavos \? 'decimal' : 'numeric'"/)
+  assert.equal(/btn-eliminar/.test(vista), false)
   assert.match(menu, /AccesoPreciosVenta/)
   assert.match(menu, /import\('@\/components\/TransaccionesAgendaModal\.vue'\)/)
   assert.equal(/import TransaccionesAgendaModal from/.test(menu), false)
   assert.match(vista, /Guardando…/)
   assert.match(vista, /Guardado/)
+  assert.match(vista, /Cargando…/)
   assert.equal((vista.match(/<button\b(?![^>]*type="button")/g) || []).length, 0)
 })

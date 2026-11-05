@@ -64,39 +64,3 @@ const app = new Vue({
     }
   }
 }).$mount("#app");
-
-// Primero verificamos si ya existe window.fabric
-if (!window.fabric) {
-  // Si no existe, importamos fabric
-  import('fabric').then(fabricModule => {
-    window.fabric = fabricModule.fabric || fabricModule;
-    console.log('Fabric.js cargado globalmente');
-  }).catch(error => {
-    console.error('Error al cargar Fabric.js:', error);
-  });
-}
-
-// Verificamos si pdfMake ya está disponible globalmente
-if (!window.pdfMake) {
-  // Si no existe, importamos pdfMake
-  Promise.all([
-    import('pdfmake/build/pdfmake'),
-    import('pdfmake/build/vfs_fonts')
-  ]).then(([pdfMakeModule, pdfFontsModule]) => {
-    window.pdfMake = pdfMakeModule.default || pdfMakeModule;
-    
-    // Asignar fuentes
-    if (pdfFontsModule.default) {
-      window.pdfMake.vfs = pdfFontsModule.default;
-    } else if (pdfFontsModule.pdfMake && pdfFontsModule.pdfMake.vfs) {
-      window.pdfMake.vfs = pdfFontsModule.pdfMake.vfs;
-    } else {
-      window.pdfMake.vfs = pdfFontsModule;
-    }
-    
-    console.log('pdfMake cargado globalmente');
-  }).catch(error => {
-    console.error('Error al cargar pdfMake:', error);
-    console.log('Usando versión de CDN si está disponible');
-  });
-}

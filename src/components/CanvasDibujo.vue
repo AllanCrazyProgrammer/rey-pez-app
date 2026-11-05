@@ -55,9 +55,16 @@
 </template>
 
 <script>
-// Cambiar la forma de importar fabric.js
-import 'fabric';
-const fabric = window.fabric;
+// fabric.js (vendor 5.3.1) ya no bloquea el arranque desde index.html: se carga aquí, bajo demanda.
+let fabric = window.fabric;
+const cargarFabric = () => new Promise((resolve, reject) => {
+  if (window.fabric) { fabric = window.fabric; resolve(fabric); return; }
+  const script = document.createElement('script');
+  script.src = `${process.env.BASE_URL}vendor/fabric-5.3.1.min.js`;
+  script.onload = () => { fabric = window.fabric; resolve(fabric); };
+  script.onerror = () => reject(new Error('No se pudo cargar fabric.js'));
+  document.head.appendChild(script);
+});
 
 export default {
   name: 'CanvasDibujo',
@@ -79,15 +86,11 @@ export default {
     };
   },
   mounted() {
-    // Asegurarnos de que fabric esté cargado
-    console.log('Fabric disponible:', typeof fabric !== 'undefined');
-    
     // Usar nextTick para asegurar que el DOM esté completamente renderizado
     this.$nextTick(() => {
-      setTimeout(() => {
-        // Dar un pequeño tiempo para asegurar que fabric se ha cargado completamente
-        this.initCanvas();
-      }, 100);
+      cargarFabric()
+        .then(() => setTimeout(() => this.initCanvas(), 100))
+        .catch((error) => console.error(error.message));
     });
     
     // Ajustar tamaño del canvas cuando cambia el tamaño de la ventana

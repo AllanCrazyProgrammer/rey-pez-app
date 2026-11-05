@@ -1,7 +1,15 @@
 /**
  * Saldos de cuentas bancarias del menú de Cuentas México.
- * Lógica pura: parseo, formato, total, texto de WhatsApp y fusión con snapshots.
+ * Lógica pura: parseo, formato, total, texto de WhatsApp y forma de los documentos.
  * No habla con Firestore.
+ *
+ * Modelo (documento saldosCuentas/porCuenta):
+ *   { cuentas: { [id]: { nombre, color, saldo, orden, editadoEn } }, updatedAt }
+ * Cada cuenta es un campo propio del mapa, así que guardar una cuenta no toca las
+ * demás y dos dispositivos pueden editar cuentas distintas sin pisarse.
+ * Los montos son pesos enteros (sin decimales). La pestaña de Capital usa el mismo
+ * modelo en otro documento (saldosCuentas/capital) pero con centavos: todas las
+ * funciones aceptan `centavos` (false por defecto = pesos enteros).
  */
 
 const COLOR_AZUL = '#2979ff'
@@ -15,8 +23,13 @@ const COLORES_CUENTA = {
 }
 
 const COLECCION_SALDOS_CUENTAS = 'saldosCuentas'
-const DOCUMENTO_SALDOS_CUENTAS = 'actual'
-const DEBOUNCE_GUARDADO_MS = 500
+const DOCUMENTO_SALDOS_CUENTAS = 'porCuenta'
+/** Documento de la pestaña Capital (mismo formato, con centavos). */
+const DOCUMENTO_CAPITAL_CUENTAS = 'capital'
+/** Documento anterior (lista completa en un arreglo). Solo se lee para migrar. */
+const DOCUMENTO_SALDOS_LEGADO = 'actual'
+const COLECCION_HISTORIAL_SALDOS = 'saldosCuentasHistorial'
+const ZONA_HORARIA = 'America/Mexico_City'
 const SEPARADOR_WHATSAPP = '━━━━━━━━━━━━━━━━━━━━'
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 const MESES = [
@@ -33,26 +46,39 @@ const CUENTAS_INICIALES = [
 ]
 
 function cuentasIniciales() {
-  return CUENTAS_INICIALES.map((cuenta) => ({ ...cuenta }))
+  return CUENTAS_INICIALES.map((cuenta, indice) => ({ ...cuenta, orden: indice, editadoEn: null }))
 }
 
-function aCentavos(numero) {
+/** Capital de referencia capturado el 04/11/26 8:43 pm (hora de México). Total: 24,542,614.05. */
+const CAPITAL_REFERENCIA_EN = 1793846587000
+const CAPITAL_INICIAL = [
+  { id: 'bancomer-14', nombre: 'BANCOMER 14', color: COLOR_AZUL, saldo: 11885668.65 },
+  { id: 'bancomer-5', nombre: 'BANCOMER 5', color: COLOR_AZUL, saldo: 4491525.44 },
+  { id: 'bancomer-r-6', nombre: 'BANCOMER R 6', color: COLOR_AZUL, saldo: 3284420 },
+  { id: 'banorte-r-5', nombre: 'BANORTE R 5', color: COLOR_ROJO, saldo: 3425000 },
+  { id: 'afirme-2-2-est', nombre: 'AFIRME 2.2 EST', color: COLOR_VERDE, saldo: 1455999.96 }
+]
+
+function capitalInicial() {
+  return CAPITAL_INICIAL.map((cuenta, indice) => ({ ...cuenta, orden: indice, editadoEn: CAPITAL_REFERENCIA_EN }))
+}
+
+function redondear(numero, centavos = false) {
   if (!Number.isFinite(numero)) return 0
   const signo = numero < 0 ? -1 : 1
-  const absoluto = Math.abs(numero)
-  return signo * Math.round((absoluto + Number.EPSILON) * 100)
-}
-
-function desdeCentavos(centavos) {
-  return centavos / 100
+  const factor = centavos ? 100 : 1
+  return signo * (Math.round(Math.abs(numero) * factor) / factor) || 0
 }
 
 /**
- * Interpreta un monto escrito a mano: 190,034.00, $2,926.00, 215746.45 o 1.363,79.
- * Vacío o ilegible vale 0. El resultado queda en centavos.
+ * Interpreta un monto escrito a mano y lo deja en pesos enteros.
+ * Acepta 190,034 · $2,926.00 · 215746.45 · 1.363,79 · 1.363.790 · -500 · (500).
+ * Un separador seguido de 1 o 2 dígitos al final son centavos (se redondean);
+ * cualquier otro punto o coma es separador de miles. Vacío o ilegible vale 0.
+ * Con `centavos` se conservan 2 decimales en lugar de redondear a pesos.
  */
-function parsearMonto(valor) {
-  if (typeof valor === 'number') return desdeCentavos(aCentavos(valor))
+function parsearMonto(valor, centavos = false) {
+  if (typeof valor === 'number') return redondear(valor, centavos)
   if (valor == null) return 0
   let texto = String(valor).trim().replace(/\$/g, '').replace(/\s/g, '')
   if (!texto) return 0
@@ -60,80 +86,86 @@ function parsearMonto(valor) {
   texto = texto.replace(/[()]/g, '').replace(/^-/, '')
   if (!texto) return 0
 
-  const ultimaComa = texto.lastIndexOf(',')
-  const ultimoPunto = texto.lastIndexOf('.')
-  if (ultimaComa !== -1 && ultimoPunto !== -1) {
-    texto = ultimaComa > ultimoPunto
-      ? texto.replace(/\./g, '').replace(',', '.')
-      : texto.replace(/,/g, '')
-  } else if (ultimaComa !== -1) {
-    const partes = texto.split(',')
-    const miles = partes.length > 1
-      && partes[0].length >= 1
-      && partes[0].length <= 3
-      && partes.slice(1).every((parte) => parte.length === 3)
-    texto = miles ? partes.join('') : texto.replace(',', '.')
-  } else if ((texto.match(/\./g) || []).length > 1) {
-    const partes = texto.split('.')
-    const miles = partes.slice(1).every((parte) => parte.length === 3)
-    if (miles) texto = partes.join('')
+  let entero = texto
+  let decimales = ''
+  const ultimo = Math.max(texto.lastIndexOf(','), texto.lastIndexOf('.'))
+  if (ultimo !== -1) {
+    const despues = texto.slice(ultimo + 1)
+    if (despues.length <= 2) {
+      entero = texto.slice(0, ultimo)
+      decimales = despues
+    }
   }
-
-  texto = texto.replace(/[.,]$/, '')
-  if (!/^\d+(\.\d+)?$/.test(texto)) return 0
-  const numero = desdeCentavos(aCentavos(Number(texto)))
-  return negativo ? -numero : numero
+  entero = entero.replace(/[.,]/g, '')
+  if (!entero && !decimales) return 0
+  if (!/^\d*$/.test(entero) || !/^\d*$/.test(decimales)) return 0
+  const numero = Number(`${entero || '0'}.${decimales || '0'}`)
+  const resultado = redondear(numero, centavos)
+  return negativo ? -resultado || 0 : resultado
 }
 
-function formatearMonto(valor) {
-  const centavos = aCentavos(typeof valor === 'number' ? valor : parsearMonto(valor))
-  const negativo = centavos < 0
-  const absoluto = Math.abs(centavos)
-  const entero = Math.floor(absoluto / 100)
-  const decimales = String(absoluto % 100).padStart(2, '0')
-  const conMiles = String(entero).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return `${negativo ? '-' : ''}${conMiles}.${decimales}`
+/** 190034 → "190,034" (sin decimales) · con `centavos`: 11885668.65 → "11,885,668.65". */
+function formatearMonto(valor, centavos = false) {
+  const monto = parsearMonto(valor, centavos)
+  const [enteros, decimales] = Math.abs(monto).toFixed(centavos ? 2 : 0).split('.')
+  const conMiles = enteros.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${monto < 0 ? '-' : ''}${conMiles}${centavos ? `.${decimales}` : ''}`
 }
 
-/** Texto del campo. Vacío o cero no se muestran; en el total y en WhatsApp siguen valiendo 0. */
-function textoSaldoCampo(saldo) {
-  const numero = typeof saldo === 'number' ? saldo : parsearMonto(saldo)
-  if (!Number.isFinite(numero) || aCentavos(numero) === 0) return ''
-  return formatearMonto(numero)
-}
-
-function totalSaldos(cuentas) {
+/** Suma en unidades mínimas (pesos o centavos) para no arrastrar error de punto flotante. */
+function totalSaldos(cuentas, centavos = false) {
   const lista = Array.isArray(cuentas) ? cuentas : []
-  const centavos = lista.reduce((suma, cuenta) => suma + aCentavos(parsearMonto(cuenta && cuenta.saldo)), 0)
-  return desdeCentavos(centavos)
+  const factor = centavos ? 100 : 1
+  const suma = lista.reduce(
+    (acumulado, cuenta) => acumulado + Math.round(parsearMonto(cuenta && cuenta.saldo, centavos) * factor),
+    0
+  )
+  return suma / factor
 }
 
-function partesCalendarioSaldos(fecha) {
+/** Total listo para mostrar: con `redondeado` va en pesos enteros aunque las cuentas lleven centavos. */
+function formatearTotal(total, centavos = false, redondeado = false) {
+  return formatearMonto(total, redondeado ? false : centavos)
+}
+
+function partesFechaHora(fecha) {
   if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
     const partes = fecha.split('-')
-    return { year: Number(partes[0]), month: Number(partes[1]), day: Number(partes[2]) }
+    return { year: Number(partes[0]), month: Number(partes[1]), day: Number(partes[2]), hour: 0, minute: 0 }
   }
-  const base = fecha instanceof Date ? fecha : new Date(fecha)
+  const ms = aMilisegundos(fecha)
+  const base = ms != null ? new Date(ms) : new Date(fecha)
   const valida = Number.isNaN(base.getTime()) ? new Date() : base
   const partes = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Mexico_City',
+    timeZone: ZONA_HORARIA,
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric'
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
   }).formatToParts(valida)
   const valor = (tipo) => Number(partes.find((parte) => parte.type === tipo).value)
-  return { year: valor('year'), month: valor('month'), day: valor('day') }
+  return { year: valor('year'), month: valor('month'), day: valor('day'), hour: valor('hour'), minute: valor('minute') }
 }
 
+const dos = (n) => String(n).padStart(2, '0')
+
 function formatearFechaSaldos(fecha = new Date()) {
-  const { year, month, day } = partesCalendarioSaldos(fecha)
-  const dd = String(day).padStart(2, '0')
-  const mm = String(month).padStart(2, '0')
-  return `${dd}/${mm}/${year}`
+  const { year, month, day } = partesFechaHora(fecha)
+  return `${dos(day)}/${dos(month)}/${year}`
+}
+
+/** Fecha y hora concisas en hora de México, formato de 12 horas: "05/11/26 2:32 pm". */
+function formatearFechaHoraCorta(fecha = new Date()) {
+  const { year, month, day, hour, minute } = partesFechaHora(fecha)
+  const hora12 = hour % 12 === 0 ? 12 : hour % 12
+  const periodo = hour < 12 ? 'am' : 'pm'
+  return `${dos(day)}/${dos(month)}/${String(year).slice(-2)} ${hora12}:${dos(minute)} ${periodo}`
 }
 
 function formatearFechaLargaSaldos(fecha = new Date()) {
-  const { year, month, day } = partesCalendarioSaldos(fecha)
+  const { year, month, day } = partesFechaHora(fecha)
   const indice = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
   return `${DIAS_SEMANA[indice]} ${day} de ${MESES[month - 1]} ${year}`
 }
@@ -152,11 +184,11 @@ function cuentasNombradas(cuentas) {
 }
 
 /** Bloque monoespaciado para que los montos queden en columna en el celular. */
-function lineasCuentasWhatsApp(lista) {
+function lineasCuentasWhatsApp(lista, centavos = false) {
   const filas = lista.map((cuenta) => ({
     emoji: emojiCuenta(cuenta && cuenta.color),
     nombre: String(cuenta.nombre).trim(),
-    monto: `$${formatearMonto(cuenta && cuenta.saldo)}`
+    monto: `$${formatearMonto(cuenta && cuenta.saldo, centavos)}`
   }))
   const anchoNombre = filas.reduce((max, fila) => Math.max(max, fila.nombre.length), 0)
   const anchoMonto = filas.reduce((max, fila) => Math.max(max, fila.monto.length), 0)
@@ -168,16 +200,24 @@ function lineasCuentasWhatsApp(lista) {
   return ['```', ...cuerpo, '```']
 }
 
-/** Las cuentas sin nombre no se listan ni suman al total del mensaje. */
-function textoSaldosWhatsApp(cuentas, fecha = new Date()) {
+/**
+ * Las cuentas sin nombre no se listan ni suman al total del mensaje.
+ * `opciones`: { titulo: 'SALDOS DE CUENTAS', centavos: false, totalRedondeado: false }.
+ * Con `totalRedondeado` el TOTAL va en pesos enteros aunque las cuentas lleven centavos.
+ */
+function textoSaldosWhatsApp(
+  cuentas,
+  fecha = new Date(),
+  { titulo = 'SALDOS DE CUENTAS', centavos = false, totalRedondeado = false } = {}
+) {
   const lista = cuentasNombradas(cuentas)
   const lineas = [
-    '🏦 *SALDOS DE CUENTAS*',
+    `🏦 *${titulo}*`,
     `📅 ${formatearFechaLargaSaldos(fecha)}`,
     SEPARADOR_WHATSAPP
   ]
-  if (lista.length) lineas.push(...lineasCuentasWhatsApp(lista))
-  lineas.push(SEPARADOR_WHATSAPP, `💰 *TOTAL: $${formatearMonto(totalSaldos(lista))}*`)
+  if (lista.length) lineas.push(...lineasCuentasWhatsApp(lista, centavos))
+  lineas.push(SEPARADOR_WHATSAPP, `💰 *TOTAL: $${formatearTotal(totalSaldos(lista, centavos), centavos, totalRedondeado)}*`)
   return lineas.join('\n')
 }
 
@@ -195,22 +235,28 @@ function colorValido(valor) {
   return typeof valor === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(valor.trim())
 }
 
-function normalizarCuenta(raw, indice = 0) {
+/** Milisegundos a partir de número, Date o Timestamp de Firestore; si no, null. */
+function aMilisegundos(valor) {
+  if (valor == null) return null
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null
+  if (valor instanceof Date) return Number.isNaN(valor.getTime()) ? null : valor.getTime()
+  if (typeof valor.toMillis === 'function') return valor.toMillis()
+  return null
+}
+
+function normalizarCuenta(raw, indice = 0, centavos = false) {
   const fuente = raw && typeof raw === 'object' ? raw : {}
   const nombre = String(fuente.nombre == null ? '' : fuente.nombre).trim().slice(0, 40)
   const id = String(fuente.id == null ? '' : fuente.id).trim() || `cuenta-${indice + 1}`
   const color = colorValido(fuente.color) ? String(fuente.color).trim().toLowerCase() : COLOR_AZUL
-  return { id, nombre, color, saldo: parsearMonto(fuente.saldo) }
-}
-
-function clonarCuenta(cuenta) {
-  return { id: cuenta.id, nombre: cuenta.nombre, color: cuenta.color, saldo: cuenta.saldo }
+  const orden = Number.isFinite(fuente.orden) ? fuente.orden : indice
+  return { id, nombre, color, saldo: parsearMonto(fuente.saldo, centavos), orden, editadoEn: aMilisegundos(fuente.editadoEn) }
 }
 
 function crearIdCuenta(nombre, ahora = Date.now(), aleatorio = Math.random().toString(36).slice(2, 6)) {
   const base = String(nombre || 'cuenta')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -218,60 +264,80 @@ function crearIdCuenta(nombre, ahora = Date.now(), aleatorio = Math.random().toS
   return `${base}-${Number(ahora).toString(36)}${aleatorio}`
 }
 
-function crearCuenta({ nombre, color, saldo = 0, id, ahora, aleatorio } = {}) {
+/** La cuenta nueva va al final de la lista existente. */
+function crearCuenta({ nombre, color, saldo = 0, id, ahora, aleatorio, existentes = [] } = {}) {
+  const ordenes = (Array.isArray(existentes) ? existentes : [])
+    .map((cuenta) => cuenta && cuenta.orden)
+    .filter((orden) => Number.isFinite(orden))
   const cuenta = normalizarCuenta({
     id: id || crearIdCuenta(nombre, ahora, aleatorio),
     nombre,
     color,
-    saldo
+    saldo,
+    orden: ordenes.length ? Math.max(...ordenes) + 1 : 0,
+    editadoEn: ahora === undefined ? null : ahora
   })
   if (!cuenta.nombre) return null
   return cuenta
 }
 
-function cuentasDesdeDocumento(data) {
-  if (!data || typeof data !== 'object' || !Array.isArray(data.cuentas)) return null
-  return data.cuentas
-    .map((cuenta, indice) => normalizarCuenta(cuenta, indice))
-    .filter((cuenta) => cuenta.nombre)
-}
-
-function documentoSaldos(cuentas, updatedAt) {
-  return {
-    cuentas: (Array.isArray(cuentas) ? cuentas : []).map((cuenta, indice) => normalizarCuenta(cuenta, indice)),
-    updatedAt: updatedAt === undefined ? null : updatedAt
-  }
+function ordenarCuentas(lista) {
+  return lista.slice().sort((a, b) => (a.orden - b.orden) || a.nombre.localeCompare(b.nombre) || a.id.localeCompare(b.id))
 }
 
 /**
- * Aplica un snapshot remoto sin pisar lo que este dispositivo está editando,
- * dando de alta o dando de baja.
+ * Lee las cuentas de un documento. Acepta el formato nuevo (mapa por id) y el
+ * anterior (arreglo). Devuelve null si el documento no trae cuentas.
  */
-function fusionarCuentas(local, remoto, opciones = {}) {
-  const editando = new Set(opciones.editando || [])
-  const altas = new Set(opciones.pendientesAlta || [])
-  const bajas = new Set(opciones.pendientesBaja || [])
-  const locales = new Map()
-  ;(Array.isArray(local) ? local : []).forEach((cuenta, indice) => {
-    const normal = normalizarCuenta(cuenta, indice)
-    if (normal.id) locales.set(normal.id, normal)
-  })
-  const salida = []
+function cuentasDesdeDocumento(data, centavos = false) {
+  if (!data || typeof data !== 'object' || !data.cuentas || typeof data.cuentas !== 'object') return null
+  const crudas = Array.isArray(data.cuentas)
+    ? data.cuentas
+    : Object.keys(data.cuentas).map((id) => ({ ...(data.cuentas[id] || {}), id }))
   const vistos = new Set()
-  ;(Array.isArray(remoto) ? remoto : []).forEach((cuenta, indice) => {
-    const remota = normalizarCuenta(cuenta, indice)
-    if (!remota.id || vistos.has(remota.id) || bajas.has(remota.id)) return
-    vistos.add(remota.id)
-    const propia = locales.get(remota.id)
-    const conservar = propia && (editando.has(remota.id) || altas.has(remota.id))
-    salida.push(clonarCuenta(conservar ? propia : remota))
+  const lista = crudas
+    .map((cuenta, indice) => normalizarCuenta(cuenta, indice, centavos))
+    .filter((cuenta) => {
+      if (!cuenta.nombre || vistos.has(cuenta.id)) return false
+      vistos.add(cuenta.id)
+      return true
+    })
+  return ordenarCuentas(lista)
+}
+
+/** Campos que se guardan para una cuenta dentro del mapa (el id es la llave). */
+function datosCuenta(cuenta, centavos = false) {
+  const normal = normalizarCuenta(cuenta, 0, centavos)
+  return {
+    nombre: normal.nombre,
+    color: normal.color,
+    saldo: normal.saldo,
+    orden: normal.orden,
+    editadoEn: normal.editadoEn
+  }
+}
+
+function mapaDesdeCuentas(cuentas, centavos = false) {
+  const mapa = {}
+  ;(Array.isArray(cuentas) ? cuentas : []).forEach((cuenta, indice) => {
+    const normal = normalizarCuenta({ orden: indice, ...cuenta }, indice, centavos)
+    if (normal.nombre && !mapa[normal.id]) mapa[normal.id] = datosCuenta(normal, centavos)
   })
-  locales.forEach((propia, id) => {
-    if (!vistos.has(id) && (altas.has(id) || editando.has(id)) && !bajas.has(id)) {
-      salida.push(clonarCuenta(propia))
-    }
-  })
-  return salida
+  return mapa
+}
+
+/** Renglón del historial: un cambio de saldo, un alta o una baja. */
+function registroHistorial({ tipo = 'saldo', cuenta, saldoAnterior = null, saldo = null, editadoEn, centavos = false }) {
+  const normal = normalizarCuenta(cuenta, 0, centavos)
+  return {
+    tipo,
+    cuentaId: normal.id,
+    nombre: normal.nombre,
+    saldoAnterior: saldoAnterior == null ? null : parsearMonto(saldoAnterior, centavos),
+    saldo: saldo == null ? null : parsearMonto(saldo, centavos),
+    editadoEn: aMilisegundos(editadoEn),
+    fecha: formatearFechaHoraCorta(editadoEn)
+  }
 }
 
 module.exports = {
@@ -281,18 +347,23 @@ module.exports = {
   COLORES_CUENTA,
   COLECCION_SALDOS_CUENTAS,
   DOCUMENTO_SALDOS_CUENTAS,
-  DEBOUNCE_GUARDADO_MS,
+  DOCUMENTO_CAPITAL_CUENTAS,
+  DOCUMENTO_SALDOS_LEGADO,
+  COLECCION_HISTORIAL_SALDOS,
   cuentasIniciales,
+  capitalInicial,
   parsearMonto,
   formatearMonto,
-  textoSaldoCampo,
   totalSaldos,
+  formatearTotal,
   formatearFechaSaldos,
+  formatearFechaHoraCorta,
   textoSaldosWhatsApp,
   enlaceWhatsAppSaldos,
   normalizarCuenta,
   crearCuenta,
   cuentasDesdeDocumento,
-  documentoSaldos,
-  fusionarCuentas
+  datosCuenta,
+  mapaDesdeCuentas,
+  registroHistorial
 }

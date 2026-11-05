@@ -103,7 +103,14 @@ export default {
     if (this._removeDesktopClose) this._removeDesktopClose();
   },
   mounted() {
-    EmbarquesSync.start();
+    // La descarga/sincronización de embarques no debe competir con la carga de la
+    // pantalla: se arranca cuando el navegador queda ocioso (máx. 4 s de espera).
+    const arrancarSync = () => EmbarquesSync.start();
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(arrancarSync, { timeout: 4000 });
+    } else {
+      setTimeout(arrancarSync, 1500);
+    }
     if (window.desktop?.onPrepareClose) {
       this._removeDesktopClose = window.desktop.onPrepareClose(async () => {
         await this.$nextTick();
