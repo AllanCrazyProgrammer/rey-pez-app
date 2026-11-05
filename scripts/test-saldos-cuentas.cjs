@@ -69,9 +69,11 @@ test('arma el texto y el enlace de WhatsApp', () => {
 })
 
 test('fecha y hora concisas en hora de México', () => {
-  assert.equal(saldos.formatearFechaHoraCorta(new Date('2026-11-05T20:32:00Z')), '05/11/26 14:32')
-  assert.equal(saldos.formatearFechaHoraCorta(Date.parse('2026-11-05T05:07:00Z')), '04/11/26 23:07')
-  assert.equal(saldos.formatearFechaHoraCorta({ toMillis: () => 0 }), '31/12/69 18:00')
+  assert.equal(saldos.formatearFechaHoraCorta(new Date('2026-11-05T20:32:00Z')), '05/11/26 2:32 pm')
+  assert.equal(saldos.formatearFechaHoraCorta(Date.parse('2026-11-05T05:07:00Z')), '04/11/26 11:07 pm')
+  assert.equal(saldos.formatearFechaHoraCorta({ toMillis: () => 0 }), '31/12/69 6:00 pm')
+  assert.equal(saldos.formatearFechaHoraCorta(new Date('2026-11-05T06:05:00Z')), '05/11/26 12:05 am')
+  assert.equal(saldos.formatearFechaHoraCorta(new Date('2026-11-05T18:45:00Z')), '05/11/26 12:45 pm')
 })
 
 test('decodificar la URL deja los emojis intactos y sin sustitutos sueltos', () => {
@@ -212,9 +214,100 @@ test('cada cuenta se guarda como un campo propio, con su historial', () => {
     saldoAnterior: 10,
     saldo: 20000,
     editadoEn,
-    fecha: '05/11/26 14:32'
+    fecha: '05/11/26 2:32 pm'
   })
   assert.equal(saldos.registroHistorial({ tipo: 'baja', cuenta, editadoEn }).saldo, null)
+})
+
+test('con centavos conserva 2 decimales y no cambia los pesos enteros', () => {
+  assert.equal(saldos.parsearMonto('11,885,668.65', true), 11885668.65)
+  assert.equal(saldos.parsearMonto('3,284,420', true), 3284420)
+  assert.equal(saldos.parsearMonto('1.5', true), 1.5)
+  assert.equal(saldos.parsearMonto('2.345', true), 2345)
+  assert.equal(saldos.parsearMonto(10.456, true), 10.46)
+  assert.equal(saldos.parsearMonto('(500.25)', true), -500.25)
+  assert.equal(saldos.formatearMonto(11885668.65, true), '11,885,668.65')
+  assert.equal(saldos.formatearMonto(3284420, true), '3,284,420.00')
+  assert.equal(saldos.formatearMonto(0, true), '0.00')
+  assert.equal(saldos.formatearMonto(-1234.5, true), '-1,234.50')
+  // Sin la bandera sigue redondeando a pesos
+  assert.equal(saldos.parsearMonto('215746.45'), 215746)
+  assert.equal(saldos.formatearMonto(1363.79), '1,364')
+  // 0.1 + 0.2 no arrastra error de punto flotante
+  assert.equal(saldos.totalSaldos([{ saldo: 0.1 }, { saldo: 0.2 }], true), 0.3)
+})
+
+test('Capital: datos de referencia, total y mensaje de WhatsApp', () => {
+  const capital = saldos.capitalInicial()
+  assert.deepEqual(capital.map((cuenta) => cuenta.nombre), [
+    'BANCOMER 14', 'BANCOMER 5', 'BANCOMER R 6', 'BANORTE R 5', 'AFIRME 2.2 EST'
+  ])
+  assert.deepEqual(capital.map((cuenta) => cuenta.color), ['#2979ff', '#2979ff', '#2979ff', '#ff1744', '#00c853'])
+  assert.deepEqual(capital.map((cuenta) => cuenta.orden), [0, 1, 2, 3, 4])
+  assert.equal(saldos.formatearMonto(saldos.totalSaldos(capital, true), true), '24,542,614.05')
+  assert.equal(saldos.formatearFechaHoraCorta(capital[0].editadoEn), '04/11/26 8:43 pm')
+  assert.equal(saldos.DOCUMENTO_CAPITAL_CUENTAS, 'capital')
+
+  // Ida y vuelta por el documento: no pierde centavos
+  const guardado = { cuentas: saldos.mapaDesdeCuentas(capital, true) }
+  const leidas = saldos.cuentasDesdeDocumento(guardado, true)
+  assert.equal(leidas[0].saldo, 11885668.65)
+  assert.equal(leidas[4].saldo, 1455999.96)
+  assert.equal(saldos.formatearMonto(saldos.totalSaldos(leidas, true), true), '24,542,614.05')
+
+  const texto = saldos.textoSaldosWhatsApp(capital, new Date('2026-11-04T18:00:00Z'), { titulo: 'CAPITAL', centavos: true })
+  assert.match(texto, /^🏦 \*CAPITAL\*\n📅 miércoles 4 de noviembre 2026/)
+  assert.match(texto, /🔵 BANCOMER 14 {5}\$11,885,668\.65/)
+  assert.match(texto, /💰 \*TOTAL: \$24,542,614\.05\*$/)
+  // Saldos no cambia: mismo título y pesos enteros
+  assert.match(saldos.textoSaldosWhatsApp(imagen, new Date('2026-11-04T18:00:00Z')), /^🏦 \*SALDOS DE CUENTAS\*/)
+
+  const editadoEn = Date.parse('2026-11-05T20:32:00Z')
+  const cuenta = capital[0]
+  const registro = saldos.registroHistorial({ cuenta, saldoAnterior: 100.5, saldo: '200.25', editadoEn, centavos: true })
+  assert.equal(registro.saldoAnterior, 100.5)
+  assert.equal(registro.saldo, 200.25)
+})
+
+test('Saldos admite centavos por cuenta y redondea solo el total', () => {
+  const cuentas = [
+    { id: 'a', nombre: 'BANCOMER 1', color: '#2979ff', saldo: '190,034.00' },
+    { id: 'b', nombre: 'BANCOMER 2', color: '#2979ff', saldo: '2,926.00' },
+    { id: 'c', nombre: 'BANORTE', color: '#ff1744', saldo: '215,746.45' },
+    { id: 'd', nombre: 'ESTUARDO AFIRME', color: '#00c853', saldo: '97,578.76' },
+    { id: 'e', nombre: 'ALLAN AFIRME', color: '#00c853', saldo: '1,363.79' }
+  ]
+  assert.equal(saldos.formatearMonto(saldos.parsearMonto('215,746.45', true), true), '215,746.45')
+  assert.equal(saldos.totalSaldos(cuentas, true), 507649)
+  // El total se suma con centavos y luego se redondea (no se redondea cuenta por cuenta)
+  assert.equal(saldos.formatearTotal(507648.6, true, true), '507,649')
+  assert.equal(saldos.formatearTotal(507648.4, true, true), '507,648')
+  assert.equal(saldos.formatearTotal(507648.6, true, false), '507,648.60')
+  assert.equal(saldos.formatearTotal(507648.6, false, false), '507,649')
+
+  const texto = saldos.textoSaldosWhatsApp(cuentas, new Date('2026-11-04T18:00:00Z'), { centavos: true, totalRedondeado: true })
+  assert.match(texto, /^🏦 \*SALDOS DE CUENTAS\*/)
+  assert.match(texto, /🔴 BANORTE {10}\$215,746\.45/)
+  assert.match(texto, /🟢 ALLAN AFIRME {7}\$1,363\.79/)
+  assert.match(texto, /💰 \*TOTAL: \$507,649\*$/)
+  // Créditos conserva los centavos también en el total
+  const creditos = saldos.textoSaldosWhatsApp(saldos.capitalInicial(), new Date(), { titulo: 'CRÉDITOS', centavos: true })
+  assert.match(creditos, /💰 \*TOTAL: \$24,542,614\.05\*$/)
+})
+
+test('la vista de Cuentas México tiene pestañas arriba para Saldos y Capital', () => {
+  const menu = fs.readFileSync(path.join(__dirname, '../src/views/CuentasMexico.vue'), 'utf8')
+  const vista = fs.readFileSync(path.join(__dirname, '../src/components/Cuentas/SaldosCuentas.vue'), 'utf8')
+  assert.match(menu, /role="tablist"/)
+  assert.equal((menu.match(/role="tab"/g) || []).length, 2)
+  assert.match(menu, /pestanaSaldos = 'saldos'/)
+  assert.match(menu, /pestanaSaldos = 'capital'/)
+  assert.equal((menu.match(/:centavos="true"/g) || []).length, 2)
+  assert.match(menu, /:total-redondeado="true"/)
+  assert.match(menu, /:legado="null"/)
+  assert.match(menu, /capitalInicial/)
+  assert.match(vista, /this\.documento/)
+  assert.equal(/botonCambio|boton-cambio/.test(vista + menu), false)
 })
 
 test('el menú de Cuentas usa el componente que importa este util', () => {
@@ -230,7 +323,7 @@ test('el menú de Cuentas usa el componente que importa este util', () => {
   assert.match(vista, /enlaceWhatsAppSaldos/)
   assert.match(vista, /formatearFechaHoraCorta/)
   assert.match(vista, /role="dialog"/)
-  assert.match(vista, /inputmode="numeric"/)
+  assert.match(vista, /:inputmode="centavos \? 'decimal' : 'numeric'"/)
   assert.equal(/btn-eliminar/.test(vista), false)
   assert.match(menu, /AccesoPreciosVenta/)
   assert.match(menu, /import\('@\/components\/TransaccionesAgendaModal\.vue'\)/)

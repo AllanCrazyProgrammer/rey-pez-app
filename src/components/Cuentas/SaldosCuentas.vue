@@ -1,7 +1,7 @@
 <template>
-  <section class="saldos-cuentas" aria-label="Saldos de cuentas">
+  <section class="saldos-cuentas" :class="{ 'con-centavos': centavos }" :aria-label="titulo">
     <header class="saldos-cabecera">
-      <h2>Saldos de cuentas</h2>
+      <h2>{{ titulo }}</h2>
       <p
         class="saldos-estado"
         :class="{ 'saldos-estado--pendiente': estado !== 'Guardado' }"
@@ -14,17 +14,17 @@
 
     <p v-if="!cargado" class="saldos-aviso">
       {{ sinConexion
-        ? 'Sin conexión: los saldos aparecerán en cuanto haya red. Mientras tanto no se pueden editar.'
-        : 'Cargando saldos…' }}
+        ? `Sin conexión: ${columna.toLowerCase()} aparecerá en cuanto haya red. Mientras tanto no se puede editar.`
+        : `Cargando ${titulo.toLowerCase()}…` }}
     </p>
 
     <div v-else class="saldos-tabla-wrap">
       <table class="saldos-tabla">
-        <caption class="sr-only">Saldos por cuenta y total</caption>
+        <caption class="sr-only">{{ titulo }} por cuenta y total</caption>
         <thead>
           <tr>
             <th scope="col" class="col-nombre">Cuenta</th>
-            <th scope="col" class="col-saldo">Saldo</th>
+            <th scope="col" class="col-saldo">{{ columna }}</th>
             <th scope="col" class="col-accion"><span class="sr-only">Acciones</span></th>
           </tr>
         </thead>
@@ -68,25 +68,8 @@
     </div>
 
     <div class="saldos-acciones">
-      <button type="button" class="btn-agregar" :disabled="!cargado" @click="abrirAlta">Agregar cuenta</button>
       <button type="button" class="btn-whatsapp" :disabled="!cargado" @click="compartir">Compartir por WhatsApp</button>
     </div>
-
-    <form v-if="formulario" class="saldos-alta" @submit.prevent="confirmarAlta">
-      <label class="campo">
-        <span>Nombre</span>
-        <input v-model.trim="altaNombre" type="text" maxlength="40" required autocomplete="off">
-      </label>
-      <label class="campo">
-        <span>Color</span>
-        <input v-model="altaColor" type="color">
-      </label>
-      <p v-if="errorAlta" class="saldos-error" role="alert">{{ errorAlta }}</p>
-      <div class="saldos-alta-acciones">
-        <button type="button" class="btn-agregar" @click="confirmarAlta">Guardar cuenta</button>
-        <button type="button" class="btn-secundario" @click="cerrarAlta">Cancelar</button>
-      </div>
-    </form>
 
     <div v-if="edicion" class="modal-fondo" @click.self="cerrarEdicion">
       <div
@@ -100,7 +83,7 @@
           <p class="modal-fecha" :title="'Fecha y hora de esta edición'">🕒 {{ fechaCorta(ahora) }}</p>
         </header>
 
-        <label class="modal-label" for="monto-edicion-saldo">Nuevo saldo</label>
+        <label class="modal-label" for="monto-edicion-saldo">Nuevo {{ columna.toLowerCase() }}</label>
         <div class="modal-input-wrap">
           <span class="signo" aria-hidden="true">$</span>
           <input
@@ -109,10 +92,10 @@
             v-model="edicion.texto"
             class="modal-input"
             type="text"
-            inputmode="numeric"
+            :inputmode="centavos ? 'decimal' : 'numeric'"
             autocomplete="off"
             spellcheck="false"
-            placeholder="0"
+            :placeholder="centavos ? '0.00' : '0'"
             @keydown.enter.prevent="guardarEdicion"
           >
         </div>
@@ -128,20 +111,6 @@
           <button type="button" class="btn-guardar" @click="guardarEdicion">Guardar</button>
           <button type="button" class="btn-secundario" @click="cerrarEdicion">Cancelar</button>
         </div>
-
-        <div class="modal-borrar">
-          <button
-            v-if="!edicion.confirmarBorrar"
-            type="button"
-            class="btn-link-peligro"
-            @click="edicion.confirmarBorrar = true"
-          >Eliminar cuenta</button>
-          <div v-else class="confirmar-borrar">
-            <span>¿Eliminar {{ edicion.nombre }}?</span>
-            <button type="button" class="btn-peligro" @click="eliminarCuenta">Sí, eliminar</button>
-            <button type="button" class="btn-secundario" @click="edicion.confirmarBorrar = false">No</button>
-          </div>
-        </div>
       </div>
     </div>
   </section>
@@ -151,7 +120,6 @@
 import { Capacitor } from '@capacitor/core'
 import {
   collection,
-  deleteField,
   doc,
   onSnapshot,
   runTransaction,
@@ -160,18 +128,17 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/firebase'
 import {
-  COLOR_AZUL,
   COLECCION_SALDOS_CUENTAS,
   DOCUMENTO_SALDOS_CUENTAS,
   DOCUMENTO_SALDOS_LEGADO,
   COLECCION_HISTORIAL_SALDOS,
   cuentasIniciales,
   cuentasDesdeDocumento,
-  crearCuenta,
   datosCuenta,
   enlaceWhatsAppSaldos,
   formatearFechaHoraCorta,
   formatearMonto,
+  formatearTotal,
   mapaDesdeCuentas,
   parsearMonto,
   registroHistorial,
@@ -183,6 +150,23 @@ const ESPERA_SIN_CONEXION_MS = 6000
 
 export default {
   name: 'SaldosCuentas',
+  props: {
+    /** Documento de saldosCuentas/ donde viven las cuentas de esta pestaña. */
+    documento: { type: String, default: DOCUMENTO_SALDOS_CUENTAS },
+    titulo: { type: String, default: 'Saldos de cuentas' },
+    /** Encabezado de la columna de montos (y palabra usada en el modal). */
+    columna: { type: String, default: 'Saldo' },
+    /** Título del mensaje de WhatsApp. */
+    tituloWhatsapp: { type: String, default: 'SALDOS DE CUENTAS' },
+    /** true: montos con centavos; false: pesos enteros. */
+    centavos: { type: Boolean, default: false },
+    /** true: el TOTAL se redondea a pesos aunque las cuentas lleven centavos. */
+    totalRedondeado: { type: Boolean, default: false },
+    /** Cuentas con las que se crea el documento la primera vez (null: las de arranque). */
+    semilla: { type: Array, default: null },
+    /** Documento anterior del que migrar la primera vez (null: ninguno). */
+    legado: { type: String, default: DOCUMENTO_SALDOS_LEGADO }
+  },
   data() {
     return {
       cuentas: [],
@@ -190,10 +174,6 @@ export default {
       sinConexion: false,
       pendiente: false,
       errorGuardado: '',
-      formulario: false,
-      altaNombre: '',
-      altaColor: COLOR_AZUL,
-      errorAlta: '',
       edicion: null,
       errorEdicion: '',
       ahora: Date.now()
@@ -201,7 +181,7 @@ export default {
   },
   computed: {
     totalFormateado() {
-      return formatearMonto(totalSaldos(this.cuentas))
+      return formatearTotal(totalSaldos(this.cuentas, this.centavos), this.centavos, this.totalRedondeado)
     },
     estado() {
       if (!this.cargado) return this.sinConexion ? 'Sin conexión' : 'Cargando…'
@@ -247,13 +227,13 @@ export default {
   },
   methods: {
     formatear(valor) {
-      return formatearMonto(valor)
+      return formatearMonto(valor, this.centavos)
     },
     fechaCorta(valor) {
       return formatearFechaHoraCorta(valor)
     },
     referenciaSaldos() {
-      return doc(db, COLECCION_SALDOS_CUENTAS, DOCUMENTO_SALDOS_CUENTAS)
+      return doc(db, COLECCION_SALDOS_CUENTAS, this.documento)
     },
     recibirSnapshot(snap) {
       if (!snap.exists()) {
@@ -262,31 +242,31 @@ export default {
         if (!snap.metadata.fromCache) this.inicializarDocumento()
         return
       }
-      this.cuentas = cuentasDesdeDocumento(snap.data()) || []
+      this.cuentas = cuentasDesdeDocumento(snap.data(), this.centavos) || []
       this.pendiente = snap.metadata.hasPendingWrites
       this.cargado = true
       this.sinConexion = false
       if (this.errorGuardado === 'No se pudieron leer los saldos.') this.errorGuardado = ''
     },
     /**
-     * Primera vez: crea saldosCuentas/porCuenta a partir del documento anterior
-     * (saldosCuentas/actual) o, si no existe, con las cuentas de arranque.
-     * La transacción evita que dos dispositivos lo creen a la vez.
+     * Primera vez: crea el documento de esta pestaña a partir del documento anterior
+     * (solo Saldos: saldosCuentas/actual) o, si no existe, con la semilla / las
+     * cuentas de arranque. La transacción evita que dos dispositivos lo creen a la vez.
      */
     async inicializarDocumento() {
       if (this._inicializando) return
       this._inicializando = true
       const referencia = this.referenciaSaldos()
-      const legado = doc(db, COLECCION_SALDOS_CUENTAS, DOCUMENTO_SALDOS_LEGADO)
+      const legado = this.legado ? doc(db, COLECCION_SALDOS_CUENTAS, this.legado) : null
       try {
         await runTransaction(db, async (tx) => {
           const actual = await tx.get(referencia)
           if (actual.exists()) return
-          const anterior = await tx.get(legado)
-          const previas = anterior.exists() ? cuentasDesdeDocumento(anterior.data()) : null
+          const anterior = legado ? await tx.get(legado) : null
+          const previas = anterior && anterior.exists() ? cuentasDesdeDocumento(anterior.data(), this.centavos) : null
           tx.set(referencia, {
-            cuentas: mapaDesdeCuentas(previas || cuentasIniciales()),
-            migradoDe: previas ? DOCUMENTO_SALDOS_LEGADO : null,
+            cuentas: mapaDesdeCuentas(previas || this.semilla || cuentasIniciales(), this.centavos),
+            migradoDe: previas ? this.legado : null,
             updatedAt: serverTimestamp()
           })
         })
@@ -316,6 +296,7 @@ export default {
       }, { merge: true })
       batch.set(doc(collection(db, COLECCION_HISTORIAL_SALDOS)), {
         ...registro,
+        libro: this.documento,
         creado: serverTimestamp()
       })
       this.errorGuardado = ''
@@ -325,7 +306,6 @@ export default {
       })
     },
     abrirEdicion(cuenta) {
-      this.cerrarAlta()
       this.errorEdicion = ''
       this.ahora = Date.now()
       this.edicion = {
@@ -334,8 +314,7 @@ export default {
         color: cuenta.color,
         saldoAnterior: cuenta.saldo,
         editadoAntes: cuenta.editadoEn,
-        texto: cuenta.saldo ? formatearMonto(cuenta.saldo) : '',
-        confirmarBorrar: false
+        texto: cuenta.saldo ? formatearMonto(cuenta.saldo, this.centavos) : ''
       }
       clearInterval(this._reloj)
       this._reloj = setInterval(() => { this.ahora = Date.now() }, 15000)
@@ -362,56 +341,20 @@ export default {
       const cuenta = this.cuentaEnEdicion()
       if (!cuenta) return
       const editadoEn = Date.now()
-      const saldo = parsearMonto(this.edicion.texto)
+      const saldo = parsearMonto(this.edicion.texto, this.centavos)
       this.escribirCuenta(
         cuenta,
-        datosCuenta({ ...cuenta, saldo, editadoEn }),
-        registroHistorial({ tipo: 'saldo', cuenta, saldoAnterior: cuenta.saldo, saldo, editadoEn })
+        datosCuenta({ ...cuenta, saldo, editadoEn }, this.centavos),
+        registroHistorial({ tipo: 'saldo', cuenta, saldoAnterior: cuenta.saldo, saldo, editadoEn, centavos: this.centavos })
       )
       this.cerrarEdicion()
-    },
-    eliminarCuenta() {
-      const cuenta = this.cuentaEnEdicion()
-      if (!cuenta) return
-      this.escribirCuenta(
-        cuenta,
-        deleteField(),
-        registroHistorial({ tipo: 'baja', cuenta, saldoAnterior: cuenta.saldo, editadoEn: Date.now() })
-      )
-      this.cerrarEdicion()
-    },
-    abrirAlta() {
-      this.formulario = true
-      this.errorAlta = ''
-    },
-    cerrarAlta() {
-      this.formulario = false
-      this.errorAlta = ''
-      this.altaNombre = ''
-      this.altaColor = COLOR_AZUL
-    },
-    confirmarAlta() {
-      const editadoEn = Date.now()
-      const cuenta = crearCuenta({
-        nombre: this.altaNombre,
-        color: this.altaColor,
-        saldo: 0,
-        ahora: editadoEn,
-        existentes: this.cuentas
-      })
-      if (!cuenta) {
-        this.errorAlta = 'Escribe el nombre de la cuenta.'
-        return
-      }
-      this.escribirCuenta(
-        cuenta,
-        datosCuenta(cuenta),
-        registroHistorial({ tipo: 'alta', cuenta, saldo: 0, editadoEn })
-      )
-      this.cerrarAlta()
     },
     async compartir() {
-      const texto = textoSaldosWhatsApp(this.cuentas, new Date())
+      const texto = textoSaldosWhatsApp(this.cuentas, new Date(), {
+        titulo: this.tituloWhatsapp,
+        centavos: this.centavos,
+        totalRedondeado: this.totalRedondeado
+      })
       const enlace = enlaceWhatsAppSaldos(texto)
       if (Capacitor.isNativePlatform() && typeof navigator.share === 'function') {
         try {
@@ -520,6 +463,11 @@ export default {
 .col-saldo { width: 34%; }
 .col-accion { width: 20%; }
 
+/* Capital: cifras de hasta 8 dígitos más centavos necesitan más ancho. */
+.con-centavos .col-nombre { width: 36%; }
+.con-centavos .col-saldo { width: 46%; }
+.con-centavos .col-accion { width: 18%; }
+
 .nombre-cuenta {
   font-weight: 800;
   text-align: left;
@@ -592,9 +540,7 @@ export default {
 }
 
 .saldos-acciones,
-.saldos-alta-acciones,
-.modal-acciones,
-.confirmar-borrar {
+.modal-acciones {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -605,10 +551,8 @@ export default {
 }
 
 .saldos-acciones button,
-.saldos-alta-acciones button,
 .modal-acciones button,
 .btn-editar,
-.btn-peligro,
 .btn-secundario {
   min-height: 44px;
   padding: 8px 12px;
@@ -623,7 +567,6 @@ export default {
   cursor: not-allowed;
 }
 
-.btn-agregar,
 .btn-secundario,
 .btn-editar {
   background: transparent;
@@ -631,7 +574,6 @@ export default {
   border: 1px solid #6a6a6a;
 }
 
-.btn-agregar:hover:not(:disabled),
 .btn-secundario:hover,
 .btn-editar:hover {
   border-color: #00ff41;
@@ -660,13 +602,6 @@ export default {
   font-weight: 700;
 }
 
-.btn-peligro {
-  background: #ff1744;
-  color: #ffffff;
-  border: 1px solid #ff1744;
-  font-weight: 700;
-}
-
 .saldos-acciones button,
 .modal-acciones button {
   flex: 1 1 140px;
@@ -674,41 +609,6 @@ export default {
 
 .btn-editar-icono {
   display: none;
-}
-
-.saldos-alta {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #3a3a3a;
-}
-
-.campo {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.85rem;
-  color: #d0d0d0;
-}
-
-.campo input[type="text"] {
-  min-height: 44px;
-  box-sizing: border-box;
-  border: 1px solid #5a5a5a;
-  background: #111111;
-  color: #ffffff;
-  font: inherit;
-  font-size: 16px;
-  padding: 8px 10px;
-}
-
-.campo input[type="color"] {
-  width: 100%;
-  height: 44px;
-  padding: 4px;
-  border: 1px solid #5a5a5a;
-  background: #111111;
 }
 
 /* Modal de edición */
@@ -809,38 +709,6 @@ export default {
 
 .modal-antes {
   color: #8a8a8a;
-}
-
-.modal-borrar {
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid #333333;
-  font-size: 0.85rem;
-}
-
-.btn-link-peligro {
-  min-height: 36px;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  color: #ff8a80;
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.confirmar-borrar {
-  align-items: center;
-}
-
-.confirmar-borrar span {
-  flex: 1 1 100%;
-  color: #ff8a80;
-}
-
-.confirmar-borrar button {
-  flex: 1 1 90px;
-  font-size: 0.85rem;
 }
 
 .sr-only {

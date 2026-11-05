@@ -7,7 +7,9 @@
  *   { cuentas: { [id]: { nombre, color, saldo, orden, editadoEn } }, updatedAt }
  * Cada cuenta es un campo propio del mapa, así que guardar una cuenta no toca las
  * demás y dos dispositivos pueden editar cuentas distintas sin pisarse.
- * Los montos son pesos enteros (sin decimales).
+ * Los montos son pesos enteros (sin decimales). La pestaña de Capital usa el mismo
+ * modelo en otro documento (saldosCuentas/capital) pero con centavos: todas las
+ * funciones aceptan `centavos` (false por defecto = pesos enteros).
  */
 
 const COLOR_AZUL = '#2979ff'
@@ -22,6 +24,8 @@ const COLORES_CUENTA = {
 
 const COLECCION_SALDOS_CUENTAS = 'saldosCuentas'
 const DOCUMENTO_SALDOS_CUENTAS = 'porCuenta'
+/** Documento de la pestaña Capital (mismo formato, con centavos). */
+const DOCUMENTO_CAPITAL_CUENTAS = 'capital'
 /** Documento anterior (lista completa en un arreglo). Solo se lee para migrar. */
 const DOCUMENTO_SALDOS_LEGADO = 'actual'
 const COLECCION_HISTORIAL_SALDOS = 'saldosCuentasHistorial'
@@ -45,10 +49,25 @@ function cuentasIniciales() {
   return CUENTAS_INICIALES.map((cuenta, indice) => ({ ...cuenta, orden: indice, editadoEn: null }))
 }
 
-function redondear(numero) {
+/** Capital de referencia capturado el 04/11/26 8:43 pm (hora de México). Total: 24,542,614.05. */
+const CAPITAL_REFERENCIA_EN = 1793846587000
+const CAPITAL_INICIAL = [
+  { id: 'bancomer-14', nombre: 'BANCOMER 14', color: COLOR_AZUL, saldo: 11885668.65 },
+  { id: 'bancomer-5', nombre: 'BANCOMER 5', color: COLOR_AZUL, saldo: 4491525.44 },
+  { id: 'bancomer-r-6', nombre: 'BANCOMER R 6', color: COLOR_AZUL, saldo: 3284420 },
+  { id: 'banorte-r-5', nombre: 'BANORTE R 5', color: COLOR_ROJO, saldo: 3425000 },
+  { id: 'afirme-2-2-est', nombre: 'AFIRME 2.2 EST', color: COLOR_VERDE, saldo: 1455999.96 }
+]
+
+function capitalInicial() {
+  return CAPITAL_INICIAL.map((cuenta, indice) => ({ ...cuenta, orden: indice, editadoEn: CAPITAL_REFERENCIA_EN }))
+}
+
+function redondear(numero, centavos = false) {
   if (!Number.isFinite(numero)) return 0
   const signo = numero < 0 ? -1 : 1
-  return signo * Math.round(Math.abs(numero)) || 0
+  const factor = centavos ? 100 : 1
+  return signo * (Math.round(Math.abs(numero) * factor) / factor) || 0
 }
 
 /**
@@ -56,9 +75,10 @@ function redondear(numero) {
  * Acepta 190,034 · $2,926.00 · 215746.45 · 1.363,79 · 1.363.790 · -500 · (500).
  * Un separador seguido de 1 o 2 dígitos al final son centavos (se redondean);
  * cualquier otro punto o coma es separador de miles. Vacío o ilegible vale 0.
+ * Con `centavos` se conservan 2 decimales en lugar de redondear a pesos.
  */
-function parsearMonto(valor) {
-  if (typeof valor === 'number') return redondear(valor)
+function parsearMonto(valor, centavos = false) {
+  if (typeof valor === 'number') return redondear(valor, centavos)
   if (valor == null) return 0
   let texto = String(valor).trim().replace(/\$/g, '').replace(/\s/g, '')
   if (!texto) return 0
@@ -80,20 +100,32 @@ function parsearMonto(valor) {
   if (!entero && !decimales) return 0
   if (!/^\d*$/.test(entero) || !/^\d*$/.test(decimales)) return 0
   const numero = Number(`${entero || '0'}.${decimales || '0'}`)
-  const resultado = redondear(numero)
+  const resultado = redondear(numero, centavos)
   return negativo ? -resultado || 0 : resultado
 }
 
-/** 190034 → "190,034". Sin decimales. */
-function formatearMonto(valor) {
-  const pesos = parsearMonto(valor)
-  const conMiles = String(Math.abs(pesos)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return `${pesos < 0 ? '-' : ''}${conMiles}`
+/** 190034 → "190,034" (sin decimales) · con `centavos`: 11885668.65 → "11,885,668.65". */
+function formatearMonto(valor, centavos = false) {
+  const monto = parsearMonto(valor, centavos)
+  const [enteros, decimales] = Math.abs(monto).toFixed(centavos ? 2 : 0).split('.')
+  const conMiles = enteros.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${monto < 0 ? '-' : ''}${conMiles}${centavos ? `.${decimales}` : ''}`
 }
 
-function totalSaldos(cuentas) {
+/** Suma en unidades mínimas (pesos o centavos) para no arrastrar error de punto flotante. */
+function totalSaldos(cuentas, centavos = false) {
   const lista = Array.isArray(cuentas) ? cuentas : []
-  return lista.reduce((suma, cuenta) => suma + parsearMonto(cuenta && cuenta.saldo), 0)
+  const factor = centavos ? 100 : 1
+  const suma = lista.reduce(
+    (acumulado, cuenta) => acumulado + Math.round(parsearMonto(cuenta && cuenta.saldo, centavos) * factor),
+    0
+  )
+  return suma / factor
+}
+
+/** Total listo para mostrar: con `redondeado` va en pesos enteros aunque las cuentas lleven centavos. */
+function formatearTotal(total, centavos = false, redondeado = false) {
+  return formatearMonto(total, redondeado ? false : centavos)
 }
 
 function partesFechaHora(fecha) {
@@ -124,10 +156,12 @@ function formatearFechaSaldos(fecha = new Date()) {
   return `${dos(day)}/${dos(month)}/${year}`
 }
 
-/** Fecha y hora concisas en hora de México: "05/11/26 14:32". */
+/** Fecha y hora concisas en hora de México, formato de 12 horas: "05/11/26 2:32 pm". */
 function formatearFechaHoraCorta(fecha = new Date()) {
   const { year, month, day, hour, minute } = partesFechaHora(fecha)
-  return `${dos(day)}/${dos(month)}/${String(year).slice(-2)} ${dos(hour)}:${dos(minute)}`
+  const hora12 = hour % 12 === 0 ? 12 : hour % 12
+  const periodo = hour < 12 ? 'am' : 'pm'
+  return `${dos(day)}/${dos(month)}/${String(year).slice(-2)} ${hora12}:${dos(minute)} ${periodo}`
 }
 
 function formatearFechaLargaSaldos(fecha = new Date()) {
@@ -150,11 +184,11 @@ function cuentasNombradas(cuentas) {
 }
 
 /** Bloque monoespaciado para que los montos queden en columna en el celular. */
-function lineasCuentasWhatsApp(lista) {
+function lineasCuentasWhatsApp(lista, centavos = false) {
   const filas = lista.map((cuenta) => ({
     emoji: emojiCuenta(cuenta && cuenta.color),
     nombre: String(cuenta.nombre).trim(),
-    monto: `$${formatearMonto(cuenta && cuenta.saldo)}`
+    monto: `$${formatearMonto(cuenta && cuenta.saldo, centavos)}`
   }))
   const anchoNombre = filas.reduce((max, fila) => Math.max(max, fila.nombre.length), 0)
   const anchoMonto = filas.reduce((max, fila) => Math.max(max, fila.monto.length), 0)
@@ -166,16 +200,24 @@ function lineasCuentasWhatsApp(lista) {
   return ['```', ...cuerpo, '```']
 }
 
-/** Las cuentas sin nombre no se listan ni suman al total del mensaje. */
-function textoSaldosWhatsApp(cuentas, fecha = new Date()) {
+/**
+ * Las cuentas sin nombre no se listan ni suman al total del mensaje.
+ * `opciones`: { titulo: 'SALDOS DE CUENTAS', centavos: false, totalRedondeado: false }.
+ * Con `totalRedondeado` el TOTAL va en pesos enteros aunque las cuentas lleven centavos.
+ */
+function textoSaldosWhatsApp(
+  cuentas,
+  fecha = new Date(),
+  { titulo = 'SALDOS DE CUENTAS', centavos = false, totalRedondeado = false } = {}
+) {
   const lista = cuentasNombradas(cuentas)
   const lineas = [
-    '🏦 *SALDOS DE CUENTAS*',
+    `🏦 *${titulo}*`,
     `📅 ${formatearFechaLargaSaldos(fecha)}`,
     SEPARADOR_WHATSAPP
   ]
-  if (lista.length) lineas.push(...lineasCuentasWhatsApp(lista))
-  lineas.push(SEPARADOR_WHATSAPP, `💰 *TOTAL: $${formatearMonto(totalSaldos(lista))}*`)
+  if (lista.length) lineas.push(...lineasCuentasWhatsApp(lista, centavos))
+  lineas.push(SEPARADOR_WHATSAPP, `💰 *TOTAL: $${formatearTotal(totalSaldos(lista, centavos), centavos, totalRedondeado)}*`)
   return lineas.join('\n')
 }
 
@@ -202,13 +244,13 @@ function aMilisegundos(valor) {
   return null
 }
 
-function normalizarCuenta(raw, indice = 0) {
+function normalizarCuenta(raw, indice = 0, centavos = false) {
   const fuente = raw && typeof raw === 'object' ? raw : {}
   const nombre = String(fuente.nombre == null ? '' : fuente.nombre).trim().slice(0, 40)
   const id = String(fuente.id == null ? '' : fuente.id).trim() || `cuenta-${indice + 1}`
   const color = colorValido(fuente.color) ? String(fuente.color).trim().toLowerCase() : COLOR_AZUL
   const orden = Number.isFinite(fuente.orden) ? fuente.orden : indice
-  return { id, nombre, color, saldo: parsearMonto(fuente.saldo), orden, editadoEn: aMilisegundos(fuente.editadoEn) }
+  return { id, nombre, color, saldo: parsearMonto(fuente.saldo, centavos), orden, editadoEn: aMilisegundos(fuente.editadoEn) }
 }
 
 function crearIdCuenta(nombre, ahora = Date.now(), aleatorio = Math.random().toString(36).slice(2, 6)) {
@@ -247,14 +289,14 @@ function ordenarCuentas(lista) {
  * Lee las cuentas de un documento. Acepta el formato nuevo (mapa por id) y el
  * anterior (arreglo). Devuelve null si el documento no trae cuentas.
  */
-function cuentasDesdeDocumento(data) {
+function cuentasDesdeDocumento(data, centavos = false) {
   if (!data || typeof data !== 'object' || !data.cuentas || typeof data.cuentas !== 'object') return null
   const crudas = Array.isArray(data.cuentas)
     ? data.cuentas
     : Object.keys(data.cuentas).map((id) => ({ ...(data.cuentas[id] || {}), id }))
   const vistos = new Set()
   const lista = crudas
-    .map((cuenta, indice) => normalizarCuenta(cuenta, indice))
+    .map((cuenta, indice) => normalizarCuenta(cuenta, indice, centavos))
     .filter((cuenta) => {
       if (!cuenta.nombre || vistos.has(cuenta.id)) return false
       vistos.add(cuenta.id)
@@ -264,8 +306,8 @@ function cuentasDesdeDocumento(data) {
 }
 
 /** Campos que se guardan para una cuenta dentro del mapa (el id es la llave). */
-function datosCuenta(cuenta) {
-  const normal = normalizarCuenta(cuenta)
+function datosCuenta(cuenta, centavos = false) {
+  const normal = normalizarCuenta(cuenta, 0, centavos)
   return {
     nombre: normal.nombre,
     color: normal.color,
@@ -275,24 +317,24 @@ function datosCuenta(cuenta) {
   }
 }
 
-function mapaDesdeCuentas(cuentas) {
+function mapaDesdeCuentas(cuentas, centavos = false) {
   const mapa = {}
   ;(Array.isArray(cuentas) ? cuentas : []).forEach((cuenta, indice) => {
-    const normal = normalizarCuenta({ orden: indice, ...cuenta }, indice)
-    if (normal.nombre && !mapa[normal.id]) mapa[normal.id] = datosCuenta(normal)
+    const normal = normalizarCuenta({ orden: indice, ...cuenta }, indice, centavos)
+    if (normal.nombre && !mapa[normal.id]) mapa[normal.id] = datosCuenta(normal, centavos)
   })
   return mapa
 }
 
 /** Renglón del historial: un cambio de saldo, un alta o una baja. */
-function registroHistorial({ tipo = 'saldo', cuenta, saldoAnterior = null, saldo = null, editadoEn }) {
-  const normal = normalizarCuenta(cuenta)
+function registroHistorial({ tipo = 'saldo', cuenta, saldoAnterior = null, saldo = null, editadoEn, centavos = false }) {
+  const normal = normalizarCuenta(cuenta, 0, centavos)
   return {
     tipo,
     cuentaId: normal.id,
     nombre: normal.nombre,
-    saldoAnterior: saldoAnterior == null ? null : parsearMonto(saldoAnterior),
-    saldo: saldo == null ? null : parsearMonto(saldo),
+    saldoAnterior: saldoAnterior == null ? null : parsearMonto(saldoAnterior, centavos),
+    saldo: saldo == null ? null : parsearMonto(saldo, centavos),
     editadoEn: aMilisegundos(editadoEn),
     fecha: formatearFechaHoraCorta(editadoEn)
   }
@@ -305,12 +347,15 @@ module.exports = {
   COLORES_CUENTA,
   COLECCION_SALDOS_CUENTAS,
   DOCUMENTO_SALDOS_CUENTAS,
+  DOCUMENTO_CAPITAL_CUENTAS,
   DOCUMENTO_SALDOS_LEGADO,
   COLECCION_HISTORIAL_SALDOS,
   cuentasIniciales,
+  capitalInicial,
   parsearMonto,
   formatearMonto,
   totalSaldos,
+  formatearTotal,
   formatearFechaSaldos,
   formatearFechaHoraCorta,
   textoSaldosWhatsApp,
