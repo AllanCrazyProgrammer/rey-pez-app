@@ -117,6 +117,7 @@ function partirHost(valor) {
     if (id === '@/utils/formatters') return { formatearFecha: valor => valor };
     if (id === '@/utils/preciosHistoricos') return { normalizarNombreProductoPrecio: valor => valor, obtenerClavesBusquedaMedida: () => [] };
     if (id === '@/utils/renombrarMedidaRendimientos') return require('../src/utils/renombrarMedidaRendimientos');
+    if (id === '@/utils/rendimientosCalculos') return require('../src/utils/rendimientosCalculos');
     if (id === '@/utils/pesadas') return compilar('src/utils/pesadas.js', require);
     if (id === '@/utils/pesadasPorMedida') return compilar('src/utils/pesadasPorMedida.js', dep => {
       if (dep === './pesadas') return compilar('src/utils/pesadas.js', require);
