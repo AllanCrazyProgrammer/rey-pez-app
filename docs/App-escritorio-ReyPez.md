@@ -11,8 +11,12 @@ internet para que suba lo pendiente.
 
 Descarga: [GitHub → Releases](https://github.com/AllanCrazyProgrammer/rey-pez-app/releases/latest)
 — `ReyPez-0.3.19-mac-arm64.dmg` (Mac con chip Apple) y `ReyPez-0.3.19-win-x64.exe` (Windows 64 bits).
-Los instaladores no están firmados: en Windows, "Más información → Ejecutar de todas formas";
-en Mac, si avisa que no se puede verificar, clic derecho → Abrir.
+Los instaladores no están firmados: en Windows, "Más información → Ejecutar de todas formas".
+En Mac, después de arrastrar la app a Aplicaciones, correr una vez en Terminal
+`xattr -dr com.apple.quarantine /Applications/ReyPez.app`; sin eso macOS dice que
+"ReyPez está dañado" (no lo está; pulsar Cancelar, no "Mover al basurero"). "Clic derecho →
+Abrir" no sirve con ese aviso. Abrirla desde Aplicaciones y quitar copias viejas: la app solo
+permite una ventana, y si hay otra versión abierta se usa esa.
 
 ## Versión 0.3.18: resumen sin internet y cuentas de Catarro
 
