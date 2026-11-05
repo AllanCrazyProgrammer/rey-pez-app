@@ -30,7 +30,7 @@ async function run() {
       { test: /\.mjs$/, type: 'javascript/auto' },
       { test: /\.vue$/, loader: '@vue/vue-loader-v15' },
       { test: /\.js$/, exclude: /node_modules/, loader: 'babel-loader', options: { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-optional-chaining', '@babel/plugin-transform-nullish-coalescing-operator'] } },
-      { test: /\.css$/, use: ['vue-style-loader', 'css-loader'] },
+      { test: /\.css$/, use: ['vue-style-loader', { loader: 'css-loader', options: { esModule: false } }] },
       { test: /\.(png|svg|woff2?|ttf)$/, type: 'asset/resource' }
     ] }, plugins: [new VueLoaderPlugin()], devtool: false
   }, (error, stats) => error || stats.hasErrors() ? reject(error || new Error(stats.toString('errors-only'))) : resolve()));

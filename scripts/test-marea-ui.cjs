@@ -18,7 +18,7 @@ async function run() {
     module: { rules: [
       { test: /\.vue$/, loader: '@vue/vue-loader-v15' },
       { test: /\.js$/, exclude: /node_modules/, loader: 'babel-loader', options: { configFile: false, babelrc: false } },
-      { test: /\.css$/, use: ['vue-style-loader', 'css-loader'] }
+      { test: /\.css$/, use: ['vue-style-loader', { loader: 'css-loader', options: { esModule: false } }] }
     ] }, plugins: [new VueLoaderPlugin()], devtool: false
   }, (error, stats) => error || stats.hasErrors() ? reject(error || new Error(stats.toString('errors-only'))) : resolve()));
   const html = '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Marea QA</title><style>body{margin:0}</style><div id="app"></div><script src="/app.js"></script></html>';
