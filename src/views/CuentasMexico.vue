@@ -21,7 +21,7 @@
         
         <!-- Botón de Precios de Venta -->
         <div class="precios-container">
-          <PreciosHistorialModal />
+          <AccesoPreciosVenta />
         </div>
         
         <!-- Contenedor de botones de clientes -->
@@ -68,35 +68,42 @@
     </div>
     
     <!-- Modal de agenda de transacciones -->
+    <!-- La agenda arrastra jsPDF. Solo se pide el chunk al abrirla. -->
     <TransaccionesAgendaModal
+      v-if="agendaMontada"
       :mostrar="mostrarModalAgenda"
       :cliente="clienteSeleccionado"
+      @hook:mounted="mostrarModalAgenda = true"
       @cerrar="cerrarModalAgenda"
     />
   </div>
 </template>
 
 <script>
-import TransaccionesAgendaModal from '@/components/TransaccionesAgendaModal.vue';
-import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+import AccesoPreciosVenta from '@/components/Cuentas/AccesoPreciosVenta.vue';
 import SaldosCuentas from '@/components/Cuentas/SaldosCuentas.vue';
 
 export default {
   name: 'CuentasMexico',
   components: {
-    TransaccionesAgendaModal,
-    PreciosHistorialModal,
+    TransaccionesAgendaModal: () => import('@/components/TransaccionesAgendaModal.vue'),
+    AccesoPreciosVenta,
     SaldosCuentas
   },
   data() {
     return {
       mostrarModalAgenda: false,
+      agendaMontada: false,
       clienteSeleccionado: 'mexico'
     };
   },
   methods: {
     abrirAgenda() {
-      this.mostrarModalAgenda = true;
+      if (this.agendaMontada) {
+        this.mostrarModalAgenda = true;
+        return;
+      }
+      this.agendaMontada = true;
     },
     cerrarModalAgenda() {
       this.mostrarModalAgenda = false;

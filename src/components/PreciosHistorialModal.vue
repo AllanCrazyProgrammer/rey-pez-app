@@ -491,6 +491,11 @@ export default {
     compact: {
       type: Boolean,
       default: false
+    },
+    // En Cuentas México la colección completa no se lee hasta abrir el modal.
+    cargarAlAbrir: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -1191,7 +1196,13 @@ export default {
       }
     },
     // Método para abrir el modal y establecer el filtro de cliente
-    abrirModal() {
+    async abrirModal() {
+      if (this.cargarAlAbrir && !this._cargaPrecios) {
+        this._cargaPrecios = this.cargarPreciosActuales();
+      }
+      if (this._cargaPrecios) await this._cargaPrecios;
+      if (this._isDestroyed) return;
+
       // Establecer el filtro de cliente si hay un cliente actual
       if (this.clienteActual && this.clientes.some(c => c.id === this.clienteActual)) {
         this.filtroCliente = this.clienteActual;
@@ -1333,8 +1344,11 @@ export default {
       }
     }
   },
+  created() {
+    this._cargaPrecios = null;
+  },
   mounted() {
-    this.cargarPreciosActuales();
+    if (!this.cargarAlAbrir) this.cargarPreciosActuales();
   },
   beforeDestroy() {
     this.actualizarBloqueoScrollPagina(false);
