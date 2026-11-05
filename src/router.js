@@ -45,8 +45,7 @@ const DeudasMenu = () => import('@/views/Procesos/DeudasMenu.vue');
 const NuevaDeuda = () => import('@/views/Procesos/NuevaDeuda.vue');
 const ListaDeudas = () => import('@/views/Procesos/ListaDeudas.vue');
 const PrestamosMenu = () => import('@/views/Procesos/PrestamosMenu.vue');
-const PrestamosDespicadoras = () => import('@/views/Procesos/PrestamosDespicadoras.vue');
-const PrestamosTrabajadores = () => import('@/views/Procesos/PrestamosTrabajadores.vue');
+const PrestamosCuentas = () => import('@/views/Procesos/PrestamosCuentas.vue');
 const PrestamosPablo = () => import('@/views/Procesos/PrestamosPablo.vue');
 const Taras = () => import('@/views/Procesos/Taras.vue');
 const Alan = () => import('@/views/Procesos/Alan.vue');
@@ -474,12 +473,14 @@ const routes = [
   {
     path: '/procesos/prestamos/despicadoras',
     name: 'PrestamosDespicadoras',
-    component: PrestamosDespicadoras
+    component: PrestamosCuentas,
+    props: { tipo: 'despicadoras' }
   },
   {
     path: '/procesos/prestamos/trabajadores',
     name: 'PrestamosTrabajadores',
-    component: PrestamosTrabajadores
+    component: PrestamosCuentas,
+    props: { tipo: 'trabajadores' }
   },
   {
     path: '/procesos/prestamos/pablo',

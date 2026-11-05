@@ -1,24 +1,24 @@
 <template>
-  <div class="prestamos-despicadoras-container prestamos-workspace">
+  <div class="prestamos-container prestamos-workspace" :style="estiloColores">
     <div class="back-button-container">
       <BackButton to="/procesos/prestamos" />
     </div>
-    
-    <div class="workspace-heading"><div><span class="eyebrow">CONTROL DE CUENTAS</span><h1>Préstamos a Despicadoras</h1><p>Consulta saldos, registra préstamos y lleva cada abono al día.</p></div><button class="btn-refresh" :disabled="cargando || guardando" @click="cargarPrestamos()"><i class="fas fa-sync-alt"></i> Actualizar</button></div>
+
+    <div class="workspace-heading"><div><span class="eyebrow">CONTROL DE CUENTAS</span><h1>{{ tipoConfig.titulo }}</h1><p>Consulta saldos, registra préstamos y lleva cada abono al día.</p></div><button class="btn-refresh" :disabled="cargando || guardando" @click="cargarPrestamos()"><i class="fas fa-sync-alt"></i> Actualizar</button></div>
     <div v-if="mensaje" role="status" class="notice-success">{{ mensaje }} <button @click="mensaje = ''" aria-label="Cerrar aviso">×</button></div>
-    
+
     <div class="filtros-container">
       <div class="filtro filtro-busqueda"><label for="buscarCuenta">Buscar por nombre</label><input id="buscarCuenta" v-model="busqueda" type="search" placeholder="Escribe un nombre…" autocomplete="off"></div>
       <div class="filtro">
-        <label for="filtroDespicadora">Despicadora:</label>
-        <select id="filtroDespicadora" v-model="filtroDespicadora">
-          <option value="">Todas</option>
-          <option v-for="despicadora in despicadoras" :key="despicadora.id" :value="despicadora.id">
-            {{ despicadora.nombre }}
+        <label for="filtroPersona">{{ tipoConfig.singular }}:</label>
+        <select id="filtroPersona" v-model="filtroPersona">
+          <option value="">{{ tipoConfig.todas }}</option>
+          <option v-for="persona in personas" :key="persona.id" :value="persona.id">
+            {{ persona.nombre }}
           </option>
         </select>
       </div>
-      
+
       <div class="filtro">
         <label for="filtroEstado">Estado:</label>
         <select id="filtroEstado" v-model="filtroEstado">
@@ -28,12 +28,12 @@
         </select>
       </div>
     </div>
-    
+
     <div class="results-caption">{{ cuentasFiltradas.length }} cuentas encontradas · El resumen refleja los filtros seleccionados</div>
     <div class="resumen-container">
       <div class="resumen-card abonado"><h3>Total abonado</h3><p>{{ cargando ? '…' : '$' + formatNumber(totalAbonadoGeneral) }}</p></div>
       <div class="resumen-card activos">
-        <h3>Despicadoras con Deuda</h3>
+        <h3>{{ tipoConfig.plural }} con Deuda</h3>
         <p>{{ cargando ? '…' : cuentasConDeuda }}</p>
       </div>
       <div class="resumen-card pendiente">
@@ -45,40 +45,40 @@
         <p>{{ cargando ? '…' : '$' + formatNumber(totalPrestadoGeneral) }}</p>
       </div>
     </div>
-    
+
     <div class="acciones-container"><div class="orden-cuentas"><label for="ordenCuentas">Ordenar por</label><select id="ordenCuentas" v-model="orden"><option value="saldo">Mayor saldo pendiente</option><option value="nombre">Nombre A–Z</option></select></div>
       <button @click="mostrarModalNuevoPrestamo" class="btn-nuevo-prestamo" :disabled="cargando || !!errorCarga || guardando">
         <i class="fas fa-plus"></i> Nuevo Préstamo
       </button>
-      <button @click="mostrarModalNuevaDespicadora" class="btn-nueva-despicadora">
-        <i class="fas fa-building"></i> Nueva Despicadora
+      <button @click="mostrarModalNuevaPersona" class="btn-nueva-persona">
+        <i :class="tipoConfig.icono"></i> {{ tipoConfig.nueva }}
       </button>
     </div>
-    
+
     <div v-if="errorCarga" role="alert" class="notice-error">{{ errorCarga }} <button @click="cargarPrestamos()" :disabled="cargando">Reintentar</button></div>
     <div v-if="cargando" class="loading-spinner">
       <div class="spinner"></div>
       <p>Cargando cuentas...</p>
     </div>
-    
+
     <div v-else-if="errorCarga" class="no-data">
       <p>Los saldos no están disponibles.</p>
       <button @click="mostrarModalNuevoPrestamo" class="btn-nuevo-prestamo">
         Crear Nuevo Préstamo
       </button>
     </div>
-    
-    <div v-else-if="!cuentasFiltradas.length" class="no-data"><h3>No hay cuentas que mostrar</h3><p>{{ cuentasDespicadoras.length ? 'Prueba con otro nombre o cambia los filtros.' : 'Registra el primer préstamo para comenzar.' }}</p></div>
+
+    <div v-else-if="!cuentasFiltradas.length" class="no-data"><h3>No hay cuentas que mostrar</h3><p>{{ cuentasPersonas.length ? 'Prueba con otro nombre o cambia los filtros.' : 'Registra el primer préstamo para comenzar.' }}</p></div>
     <div v-else class="cuentas-container">
-      <div 
+      <div
         v-for="cuenta in cuentasVisibles"
-        :key="cuenta.despicadoraId" 
+        :key="idDe(cuenta)"
         class="cuenta-card"
         :class="{ 'sin-deuda': cuenta.saldoPendiente <= 0 }"
       >
         <div class="cuenta-header">
           <div class="cuenta-info">
-            <h3 class="despicadora-nombre">{{ cuenta.despicadoraNombre }}</h3><span class="account-status" :class="{ settled: cuenta.saldoPendiente <= 0 }">{{ cuenta.saldoPendiente > 0 ? 'Con saldo pendiente' : 'Al día' }}</span><span class="loan-count">{{ cuenta.prestamos.length }} préstamo(s)</span>
+            <h3 class="persona-nombre">{{ nombreDe(cuenta) }}</h3><span class="account-status" :class="{ settled: cuenta.saldoPendiente <= 0 }">{{ cuenta.saldoPendiente > 0 ? 'Con saldo pendiente' : 'Al día' }}</span><span class="loan-count">{{ cuenta.prestamos.length }} préstamo(s)</span>
             <div class="cuenta-stats">
               <div class="stat">
                 <span class="label">Total Prestado:</span>
@@ -111,7 +111,7 @@
             </button>
           </div>
         </div>
-        
+
         <div class="cuenta-resumen">
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: cuenta.porcentajePagado + '%' }"></div>
@@ -120,23 +120,23 @@
         </div>
       </div>
     </div>
-    
+
     <nav v-if="!cargando && !errorCarga && paginas > 1" class="pagination-bar" aria-label="Páginas de cuentas"><button :disabled="pagina === 1" @click="pagina--">Anterior</button><span>Página {{ pagina }} de {{ paginas }}</span><button :disabled="pagina >= paginas" @click="pagina++">Siguiente</button></nav>
     <!-- Modal Nuevo Préstamo -->
     <div v-if="showModalNuevoPrestamo" class="modal-overlay" @click="closeModalOnOverlay">
       <div class="modal-content" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
         <div class="modal-header">
-          <h2>Nuevo Préstamo a Despicadora</h2>
+          <h2>{{ tipoConfig.tituloNuevoPrestamo }}</h2>
           <button @click="showModalNuevoPrestamo = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="guardarNuevoPrestamo" class="form-prestamo">
             <div class="form-group">
-              <label for="despicadoraSelect">Despicadora:</label>
-              <select id="despicadoraSelect" v-model="nuevoPrestamo.despicadoraId" required>
-                <option value="">Seleccionar despicadora</option>
-                <option v-for="despicadora in despicadoras" :key="despicadora.id" :value="despicadora.id">
-                  {{ despicadora.nombre }}
+              <label for="personaSelect">{{ tipoConfig.singular }}:</label>
+              <select id="personaSelect" v-model="nuevoPrestamo.personaId" required>
+                <option value="">{{ tipoConfig.seleccionar }}</option>
+                <option v-for="persona in personas" :key="persona.id" :value="persona.id">
+                  {{ persona.nombre }}
                 </option>
               </select>
             </div>
@@ -152,7 +152,7 @@
               <label for="descripcionPrestamo">Descripción:</label>
               <textarea id="descripcionPrestamo" v-model="nuevoPrestamo.descripcion" rows="3" placeholder="Descripción del préstamo (opcional)"></textarea>
             </div>
-            
+
             <div class="form-actions">
               <button type="button" @click="showModalNuevoPrestamo = false" :disabled="guardando" class="btn-cancelar">Cancelar</button>
               <button type="submit" class="btn-guardar" :disabled="guardando">
@@ -163,45 +163,46 @@
         </div>
       </div>
     </div>
-    
-    <!-- Modal Nueva Despicadora -->
-    <div v-if="showModalNuevaDespicadora" class="modal-overlay" @click="closeModalOnOverlay">
+
+    <!-- Modal Nueva Persona (despicadora o trabajador) -->
+    <div v-if="showModalNuevaPersona" class="modal-overlay" @click="closeModalOnOverlay">
       <div class="modal-content" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
         <div class="modal-header">
-          <h2>Nueva Despicadora</h2>
-          <button @click="showModalNuevaDespicadora = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
+          <h2>{{ tipoConfig.nueva }}</h2>
+          <button @click="showModalNuevaPersona = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
         </div>
         <div class="modal-body">
-          <form @submit.prevent="guardarNuevaDespicadora" class="form-despicadora">
+          <form @submit.prevent="guardarNuevaPersona" class="form-persona">
             <div class="form-group">
-              <label for="nombreDespicadora">Nombre:</label>
-              <input id="nombreDespicadora" type="text" v-model="nuevaDespicadora.nombre" required placeholder="Nombre de la despicadora">
+              <label for="nombrePersona">Nombre:</label>
+              <input id="nombrePersona" type="text" v-model="nuevaPersona.nombre" required :placeholder="tipoConfig.placeholderNombre">
             </div>
             <div class="form-group">
-              <label for="contactoDespicadora">Contacto:</label>
-              <input id="contactoDespicadora" type="text" v-model="nuevaDespicadora.contacto" placeholder="Teléfono o email (opcional)">
+              <label for="contactoPersona">Contacto:</label>
+              <input id="contactoPersona" type="text" v-model="nuevaPersona.contacto" placeholder="Teléfono o email (opcional)">
             </div>
             <div class="form-group">
-              <label for="direccionDespicadora">Dirección:</label>
-              <textarea id="direccionDespicadora" v-model="nuevaDespicadora.direccion" rows="2" placeholder="Dirección (opcional)"></textarea>
+              <label for="extraPersona">{{ tipoConfig.extra.etiqueta }}</label>
+              <textarea v-if="tipoConfig.extra.multilinea" id="extraPersona" v-model="nuevaPersona.extra" rows="2" :placeholder="tipoConfig.extra.placeholder"></textarea>
+              <input v-else id="extraPersona" type="text" v-model="nuevaPersona.extra" :placeholder="tipoConfig.extra.placeholder">
             </div>
-            
+
             <div class="form-actions">
-              <button type="button" @click="showModalNuevaDespicadora = false" :disabled="guardando" class="btn-cancelar">Cancelar</button>
+              <button type="button" @click="showModalNuevaPersona = false" :disabled="guardando" class="btn-cancelar">Cancelar</button>
               <button type="submit" class="btn-guardar" :disabled="guardando">
-                {{ guardando ? 'Guardando...' : 'Guardar Despicadora' }}
+                {{ guardando ? 'Guardando...' : tipoConfig.guardar }}
               </button>
             </div>
           </form>
         </div>
       </div>
     </div>
-    
+
     <!-- Modal Historial Completo -->
     <div v-if="showHistorialModal" class="modal-overlay" @click="closeModalOnOverlay">
       <div class="modal-content modal-large" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
         <div class="modal-header">
-          <h2>Historial Completo - {{ cuentaSeleccionada?.despicadoraNombre }}</h2>
+          <h2>Historial Completo - {{ nombreDe(cuentaSeleccionada) }}</h2>
           <button @click="showHistorialModal = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
         </div>
         <div class="modal-body">
@@ -220,7 +221,7 @@
                 <p>${{ formatNumber(cuentaSeleccionada?.saldoPendiente) }}</p>
               </div>
             </div>
-            
+
             <div class="progress-section">
               <div class="progress-bar-large">
                 <div class="progress-fill-large" :style="{ width: cuentaSeleccionada?.porcentajePagado + '%' }"></div>
@@ -228,14 +229,14 @@
               <span class="progress-text-large">{{ cuentaSeleccionada?.porcentajePagado }}% pagado</span>
             </div>
           </div>
-          
+
           <div class="history-heading"><h3>Movimientos</h3><select v-model="filtroMovimiento" aria-label="Filtrar movimientos"><option value="">Todos los movimientos</option><option value="prestamo">Solo préstamos</option><option value="abono">Solo abonos</option></select></div><p class="results-caption">{{ movimientosFiltrados.length }} movimientos · Del más reciente al más antiguo</p>
           <div v-if="movimientosFiltrados.length === 0" class="no-historial">
             <p>No hay movimientos registrados.</p>
           </div>
           <button v-if="movimientosFiltrados.length > limiteHistorial" class="btn-refresh" @click="limiteHistorial += 40">Mostrar 40 movimientos más</button>
           <div class="historial-container">
-            <div 
+            <div
               v-for="movimiento in movimientosVisibles"
               :key="movimiento.tipo + movimiento.id + (movimiento.prestamoId || '')"
               class="movimiento-item"
@@ -266,7 +267,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Abono a la cuenta completa -->
     <div v-if="showAbonoModal" class="modal-overlay" @click="closeModalOnOverlay">
       <div class="modal-content" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
@@ -276,10 +277,10 @@
         </div>
         <div class="modal-body">
           <div class="prestamo-info">
-            <p><strong>Despicadora:</strong> {{ cuentaSeleccionada?.despicadoraNombre }}</p>
+            <p><strong>{{ tipoConfig.singular }}:</strong> {{ nombreDe(cuentaSeleccionada) }}</p>
             <p><strong>Saldo Pendiente:</strong> ${{ formatNumber(cuentaSeleccionada?.saldoPendiente) }}</p>
           </div>
-          
+
           <form @submit.prevent="guardarAbono" class="form-abono">
             <div class="form-group">
               <label for="fechaAbono">Fecha:</label>
@@ -287,13 +288,13 @@
             </div>
             <div class="form-group">
               <label for="descripcionAbono">Descripción:</label>
-              <input id="descripcionAbono" type="text" v-model="nuevoAbono.descripcion" required placeholder="Ej: Pago parcial, Transferencia, etc.">
+              <input id="descripcionAbono" type="text" v-model="nuevoAbono.descripcion" required :placeholder="tipoConfig.placeholderAbono">
             </div>
             <div class="form-group">
               <label for="montoAbono">Monto:</label>
               <input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="0.01" :max="cuentaSeleccionada?.saldoPendiente" step="0.01">
             </div>
-            
+
             <div class="abono-preview"><span>Saldo después de este abono</span><strong>${{ formatNumber(saldoDespuesAbono) }}</strong><button type="button" @click="nuevoAbono.monto = cuentaSeleccionada.saldoPendiente">Abonar saldo completo</button></div>
             <div class="form-actions">
               <button type="button" @click="showAbonoModal = false" :disabled="guardando" class="btn-cancelar">Cancelar</button>
@@ -309,17 +310,27 @@
 </template>
 
 <script>
+// Pantalla de préstamos compartida por Despicadoras y Trabajadores (ver prestamosTipos.js).
+// El router pasa `tipo`; colecciones, campos y textos salen de la configuración de ese tipo.
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { movimientosCuenta, fechaMovimiento } from '@/utils/prestamos';
 import { cargarCuentasPrestamos, eliminarCuentaPrestamos } from '@/services/prestamosService';
 import BackButton from '@/components/BackButton.vue';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
+import { TIPOS_PRESTAMO } from './prestamosTipos';
 
 export default {
-  name: 'PrestamosDespicadoras',
+  name: 'PrestamosCuentas',
   components: {
     BackButton
+  },
+  props: {
+    tipo: {
+      type: String,
+      required: true,
+      validator: valor => Object.prototype.hasOwnProperty.call(TIPOS_PRESTAMO, valor)
+    }
   },
   data() {
     return {
@@ -331,37 +342,37 @@ export default {
       errorCarga: '',
       mensaje: '',
       prestamos: [],
-      despicadoras: [],
-      cuentasDespicadoras: [],
+      personas: [],
+      cuentasPersonas: [],
       historialCompleto: [],
       cargando: true,
       guardando: false,
-      
+
       // Filtros
-      filtroDespicadora: '',
+      filtroPersona: '',
       filtroEstado: '',
-      
+
       // Modales
       showModalNuevoPrestamo: false,
-      showModalNuevaDespicadora: false,
+      showModalNuevaPersona: false,
       showHistorialModal: false,
       showAbonoModal: false,
       cuentaSeleccionada: null,
-      
+
       // Formularios
       nuevoPrestamo: {
-        despicadoraId: '',
+        personaId: '',
         fecha: '',
         monto: null,
         descripcion: ''
       },
-      
-      nuevaDespicadora: {
+
+      nuevaPersona: {
         nombre: '',
         contacto: '',
-        direccion: ''
+        extra: ''
       },
-      
+
       nuevoAbono: {
         fecha: '',
         descripcion: '',
@@ -369,15 +380,28 @@ export default {
       }
     };
   },
-  
+
   watch: {
+    // Ir directo de una ruta de préstamos a la otra reutiliza este componente: empezar de cero.
+    tipo() {
+      Object.assign(this.$data, this.$options.data.call(this));
+      Promise.all([this.cargarPrestamos(false), this.cargarPersonas()]);
+    },
     busqueda() { this.pagina = 1; },
-    filtroDespicadora() { this.pagina = 1; },
+    filtroPersona() { this.pagina = 1; },
     filtroEstado() { this.pagina = 1; },
     orden() { this.pagina = 1; },
     filtroMovimiento() { this.limiteHistorial = 40; }
   },
   computed: {
+    tipoConfig() { return TIPOS_PRESTAMO[this.tipo]; },
+    estiloColores() {
+      return {
+        '--prestamos-acento': this.tipoConfig.colores.acento,
+        '--prestamos-acento-oscuro': this.tipoConfig.colores.acentoOscuro,
+        '--prestamos-al-corriente': this.tipoConfig.colores.alCorriente
+      };
+    },
     cuentasVisibles() { return this.cuentasFiltradas.slice((this.pagina - 1) * 20, this.pagina * 20); },
     paginas() { return Math.max(1, Math.ceil(this.cuentasFiltradas.length / 20)); },
     movimientosFiltrados() { return this.historialCompleto.filter(m => !this.filtroMovimiento || m.tipo === this.filtroMovimiento); },
@@ -385,11 +409,11 @@ export default {
     saldoDespuesAbono() { return Math.max(0, Math.round(((this.cuentaSeleccionada?.saldoPendiente || 0) - (Number(this.nuevoAbono.monto) || 0)) * 100) / 100); },
     totalAbonadoGeneral() { return this.cuentasFiltradas.reduce((sum, c) => sum + c.totalAbonado, 0); },
     cuentasFiltradas() {
-      const normalizar = valor => String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const normalizar = valor => String(valor || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
       const termino = normalizar(this.busqueda.trim());
-      return this.cuentasDespicadoras.filter(cuenta => {
-        if (termino && !normalizar(cuenta.despicadoraNombre).includes(termino)) return false;
-        if (this.filtroDespicadora && cuenta.despicadoraId !== this.filtroDespicadora) {
+      return this.cuentasPersonas.filter(cuenta => {
+        if (termino && !normalizar(this.nombreDe(cuenta)).includes(termino)) return false;
+        if (this.filtroPersona && this.idDe(cuenta) !== this.filtroPersona) {
           return false;
         }
         if (this.filtroEstado === 'activo' && cuenta.saldoPendiente <= 0) {
@@ -400,28 +424,33 @@ export default {
         }
         return true;
       }).sort((a, b) => this.orden === 'nombre'
-        ? a.despicadoraNombre.localeCompare(b.despicadoraNombre, 'es')
-        : b.saldoPendiente - a.saldoPendiente || a.despicadoraNombre.localeCompare(b.despicadoraNombre, 'es'));
+        ? this.nombreDe(a).localeCompare(this.nombreDe(b), 'es')
+        : b.saldoPendiente - a.saldoPendiente || this.nombreDe(a).localeCompare(this.nombreDe(b), 'es'));
     },
-    
+
     cuentasConDeuda() {
       return this.cuentasFiltradas.filter(c => c.saldoPendiente > 0).length;
     },
-    
+
     totalPendienteGeneral() {
       return this.cuentasFiltradas.reduce((sum, cuenta) => sum + cuenta.saldoPendiente, 0);
     },
-    
+
     totalPrestadoGeneral() {
       return this.cuentasFiltradas.reduce((sum, cuenta) => sum + cuenta.totalPrestado, 0);
     }
   },
-  
+
   methods: {
-  
+
     formatNumber,
-  
+
     formatearFecha,
+
+    // Las cuentas guardan el id y el nombre con el prefijo del tipo (despicadoraId, trabajadorNombre…).
+    idDe(cuenta) { return cuenta ? cuenta[`${this.tipoConfig.campo}Id`] : undefined; },
+    nombreDe(cuenta) { return cuenta ? cuenta[`${this.tipoConfig.campo}Nombre`] : undefined; },
+
     obtenerFechaActual() {
       const fecha = new Date();
       // Ajustar por zona horaria para obtener la fecha local correcta
@@ -430,14 +459,14 @@ export default {
       const day = String(fecha.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     },
-    
+
     async cargarPrestamos(actualizar = true) {
       try {
         this.cargando = true;
         this.errorCarga = '';
         this.pagina = 1;
-        this.cuentasDespicadoras = await cargarCuentasPrestamos('prestamosDespicadoras', 'despicadora', actualizar);
-        this.prestamos = this.cuentasDespicadoras.flatMap(cuenta => cuenta.prestamos);
+        this.cuentasPersonas = await cargarCuentasPrestamos(this.tipoConfig.coleccionPrestamos, this.tipoConfig.campo, actualizar);
+        this.prestamos = this.cuentasPersonas.flatMap(cuenta => cuenta.prestamos);
       } catch (error) {
         console.error("Error al cargar préstamos: ", error);
         this.errorCarga = "No se pudieron actualizar los saldos. Intenta de nuevo antes de registrar un movimiento.";
@@ -445,53 +474,54 @@ export default {
         this.cargando = false;
       }
     },
-    
-    async cargarDespicadoras() {
+
+    async cargarPersonas() {
       try {
-        const querySnapshot = await getDocs(collection(db, 'despicadoras'));
-        this.despicadoras = querySnapshot.docs.map(doc => ({
+        const querySnapshot = await getDocs(collection(db, this.tipoConfig.coleccionPersonas));
+        this.personas = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
       } catch (error) {
-        console.error("Error al cargar despicadoras: ", error);
+        console.error(this.tipoConfig.errorCargar, error);
       }
     },
-    
+
     mostrarModalNuevoPrestamo() {
       this.nuevoPrestamo = {
-        despicadoraId: '',
+        personaId: '',
         fecha: this.obtenerFechaActual(),
         monto: null,
         descripcion: ''
       };
       this.showModalNuevoPrestamo = true;
     },
-    
-    mostrarModalNuevaDespicadora() {
-      this.nuevaDespicadora = {
+
+    mostrarModalNuevaPersona() {
+      this.nuevaPersona = {
         nombre: '',
         contacto: '',
-        direccion: ''
+        extra: ''
       };
-      this.showModalNuevaDespicadora = true;
+      this.showModalNuevaPersona = true;
     },
-    
+
     async guardarNuevoPrestamo() {
       if (this.guardando) return;
-      if (!this.nuevoPrestamo.despicadoraId || !Number.isFinite(this.nuevoPrestamo.monto) || this.nuevoPrestamo.monto <= 0) {
+      if (!this.nuevoPrestamo.personaId || !Number.isFinite(this.nuevoPrestamo.monto) || this.nuevoPrestamo.monto <= 0) {
         alert('Por favor complete todos los campos requeridos');
         return;
       }
-      
+
       try {
         this.guardando = true;
-        
-        const despicadora = this.despicadoras.find(d => d.id === this.nuevoPrestamo.despicadoraId);
-        
-        await addDoc(collection(db, 'prestamosDespicadoras'), {
-          despicadoraId: this.nuevoPrestamo.despicadoraId,
-          despicadoraNombre: despicadora.nombre,
+
+        const persona = this.personas.find(p => p.id === this.nuevoPrestamo.personaId);
+        const { campo, coleccionPrestamos } = this.tipoConfig;
+
+        await addDoc(collection(db, coleccionPrestamos), {
+          [`${campo}Id`]: this.nuevoPrestamo.personaId,
+          [`${campo}Nombre`]: persona.nombre,
           fecha: this.nuevoPrestamo.fecha,
           montoInicial: this.nuevoPrestamo.monto,
           saldoPendiente: this.nuevoPrestamo.monto,
@@ -499,7 +529,7 @@ export default {
           estado: 'activo',
           fechaCreacion: new Date()
         });
-        
+
         this.showModalNuevoPrestamo = false;
         await this.cargarPrestamos();
         this.mensaje = 'Préstamo registrado correctamente';
@@ -510,34 +540,34 @@ export default {
         this.guardando = false;
       }
     },
-    
-    async guardarNuevaDespicadora() {
-      if (!this.nuevaDespicadora.nombre) {
-        alert('Por favor ingrese el nombre de la despicadora');
+
+    async guardarNuevaPersona() {
+      if (!this.nuevaPersona.nombre) {
+        alert(this.tipoConfig.pedirNombre);
         return;
       }
-      
+
       try {
         this.guardando = true;
-        
-        await addDoc(collection(db, 'despicadoras'), {
-          nombre: this.nuevaDespicadora.nombre,
-          contacto: this.nuevaDespicadora.contacto,
-          direccion: this.nuevaDespicadora.direccion,
+
+        await addDoc(collection(db, this.tipoConfig.coleccionPersonas), {
+          nombre: this.nuevaPersona.nombre,
+          contacto: this.nuevaPersona.contacto,
+          [this.tipoConfig.extra.clave]: this.nuevaPersona.extra,
           fechaCreacion: new Date()
         });
-        
-        this.showModalNuevaDespicadora = false;
-        await this.cargarDespicadoras();
-        alert('Despicadora registrada correctamente');
+
+        this.showModalNuevaPersona = false;
+        await this.cargarPersonas();
+        alert(this.tipoConfig.registrada);
       } catch (error) {
-        console.error("Error al guardar despicadora: ", error);
-        alert('Error al guardar despicadora: ' + error.message);
+        console.error(this.tipoConfig.errorGuardar, error);
+        alert(this.tipoConfig.errorGuardar + error.message);
       } finally {
         this.guardando = false;
       }
     },
-    
+
     verHistorial(cuenta) {
       this.cuentaSeleccionada = cuenta;
       this.filtroMovimiento = '';
@@ -545,7 +575,7 @@ export default {
       this.historialCompleto = movimientosCuenta(cuenta);
       this.showHistorialModal = true;
     },
-    
+
     agregarAbonoCuenta(cuenta) {
       this.cuentaSeleccionada = cuenta;
       this.nuevoAbono = {
@@ -555,56 +585,57 @@ export default {
       };
       this.showAbonoModal = true;
     },
-    
+
     async guardarAbono() {
       if (this.guardando) return;
       if (!this.nuevoAbono.descripcion || !this.nuevoAbono.monto) {
         alert('Por favor complete todos los campos del abono');
         return;
       }
-      
+
       if (!Number.isFinite(this.nuevoAbono.monto) || this.nuevoAbono.monto <= 0) {
         alert('El monto del abono debe ser mayor a cero');
         return;
       }
-      
+
       if (this.nuevoAbono.monto > this.cuentaSeleccionada.saldoPendiente) {
         alert('El monto del abono no puede ser mayor al saldo pendiente');
         return;
       }
-      
+
       try {
         this.guardando = true;
-        
+        const coleccion = this.tipoConfig.coleccionPrestamos;
+
         // Buscar el préstamo más reciente de la cuenta para asociar el abono
         const prestamoMasReciente = [...this.cuentaSeleccionada.prestamos]
           .sort((a, b) => fechaMovimiento(b.fechaCreacion) - fechaMovimiento(a.fechaCreacion))[0];
-        
+
         if (!prestamoMasReciente) {
           alert('Error: No se encontró un préstamo para asociar el abono');
           return;
         }
-        
-        await addDoc(collection(db, 'prestamosDespicadoras', prestamoMasReciente.id, 'abonos'), {
+
+        await addDoc(collection(db, coleccion, prestamoMasReciente.id, 'abonos'), {
           descripcion: this.nuevoAbono.descripcion,
           monto: this.nuevoAbono.monto,
           fecha: this.nuevoAbono.fecha,
           fechaCreacion: new Date()
         });
-        
+
         // Recalcular y actualizar el saldo pendiente del préstamo
-        const abonosSnapshot = await getDocs(collection(db, 'prestamosDespicadoras', prestamoMasReciente.id, 'abonos'));
+        const abonosSnapshot = await getDocs(collection(db, coleccion, prestamoMasReciente.id, 'abonos'));
         let totalAbonos = 0;
         abonosSnapshot.forEach(doc => {
           totalAbonos += doc.data().monto || 0;
         });
-        
+
         const nuevoSaldoPendiente = prestamoMasReciente.montoInicial - totalAbonos;
-        await updateDoc(doc(db, 'prestamosDespicadoras', prestamoMasReciente.id), {
+        await updateDoc(doc(db, coleccion, prestamoMasReciente.id), {
           saldoPendiente: nuevoSaldoPendiente,
           estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'activo'
         });
-        
+
         this.showAbonoModal = false;
         await this.cargarPrestamos(); // Recargar todo para actualizar las cuentas
         this.mensaje = 'Abono registrado correctamente';
@@ -615,22 +646,23 @@ export default {
         this.guardando = false;
       }
     },
-    
+
     async eliminarMovimiento(movimiento) {
       if (this.guardando) return;
+      const coleccion = this.tipoConfig.coleccionPrestamos;
       try {
         this.guardando = true;
         if (movimiento.tipo === 'abono') {
           if (!confirm('¿Eliminar este abono? Esta acción no se puede deshacer.')) return;
           // Eliminar el abono
-          await deleteDoc(doc(db, 'prestamosDespicadoras', movimiento.prestamoId, 'abonos', movimiento.id));
-          
+          await deleteDoc(doc(db, coleccion, movimiento.prestamoId, 'abonos', movimiento.id));
+
           // Recalcular saldo pendiente y estado del préstamo
-          const prestamoRef = doc(db, 'prestamosDespicadoras', movimiento.prestamoId);
+          const prestamoRef = doc(db, coleccion, movimiento.prestamoId);
           const prestamoSnap = await getDoc(prestamoRef);
           if (prestamoSnap.exists()) {
             const prestamoData = prestamoSnap.data();
-            const abonosSnapshot = await getDocs(collection(db, 'prestamosDespicadoras', movimiento.prestamoId, 'abonos'));
+            const abonosSnapshot = await getDocs(collection(db, coleccion, movimiento.prestamoId, 'abonos'));
             let totalAbonos = 0;
             abonosSnapshot.forEach(a => { totalAbonos += a.data().monto || 0; });
             const nuevoSaldoPendiente = (prestamoData.montoInicial || 0) - totalAbonos;
@@ -642,19 +674,19 @@ export default {
         } else if (movimiento.tipo === 'prestamo') {
           if (!confirm('¿Eliminar este préstamo y todos sus abonos? Esta acción no se puede deshacer.')) return;
           // Borrar abonos en batch y luego el préstamo
-          const abonosSnapshot = await getDocs(collection(db, 'prestamosDespicadoras', movimiento.id, 'abonos'));
+          const abonosSnapshot = await getDocs(collection(db, coleccion, movimiento.id, 'abonos'));
           const batch = writeBatch(db);
           abonosSnapshot.forEach((a) => {
-            batch.delete(doc(db, 'prestamosDespicadoras', movimiento.id, 'abonos', a.id));
+            batch.delete(doc(db, coleccion, movimiento.id, 'abonos', a.id));
           });
           await batch.commit();
-          await deleteDoc(doc(db, 'prestamosDespicadoras', movimiento.id));
+          await deleteDoc(doc(db, coleccion, movimiento.id));
         }
-        
+
         // Refrescar datos y el historial visible
         await this.cargarPrestamos();
         if (this.cuentaSeleccionada) {
-          const cuentaActualizada = this.cuentasDespicadoras.find(c => c.despicadoraId === this.cuentaSeleccionada.despicadoraId);
+          const cuentaActualizada = this.cuentasPersonas.find(c => this.idDe(c) === this.idDe(this.cuentaSeleccionada));
           if (cuentaActualizada) {
             this.verHistorial(cuentaActualizada);
           } else {
@@ -672,20 +704,20 @@ export default {
     async eliminarCuenta(cuenta) {
       if (this.guardando) return;
       const confirmacion = confirm(
-        `¿Borrar la cuenta de préstamos de ${cuenta.despicadoraNombre}?\n\n` +
+        `¿Borrar la cuenta de préstamos de ${this.nombreDe(cuenta)}?\n\n` +
         `Se eliminarán ${cuenta.prestamos.length} préstamo(s), todos sus abonos y el historial completo. ` +
-        'La despicadora seguirá disponible. Esta acción no se puede deshacer.'
+        `${this.tipoConfig.sigueDisponible} Esta acción no se puede deshacer.`
       );
       if (!confirmacion) return;
 
       try {
         this.guardando = true;
-        await eliminarCuentaPrestamos('prestamosDespicadoras', cuenta);
+        await eliminarCuentaPrestamos(this.tipoConfig.coleccionPrestamos, cuenta);
         this.showHistorialModal = false;
         this.showAbonoModal = false;
         this.cuentaSeleccionada = null;
         await this.cargarPrestamos(true);
-        this.mensaje = `Cuenta de préstamos de ${cuenta.despicadoraNombre} eliminada`;
+        this.mensaje = `Cuenta de préstamos de ${this.nombreDe(cuenta)} eliminada`;
       } catch (error) {
         console.error('Error al borrar cuenta de préstamos:', error);
         alert('No se pudo borrar la cuenta: ' + error.message);
@@ -693,25 +725,25 @@ export default {
         this.guardando = false;
       }
     },
-    
+
     closeModalOnOverlay(event) {
       if (!this.guardando && event.target === event.currentTarget) {
         this.showModalNuevoPrestamo = false;
-        this.showModalNuevaDespicadora = false;
+        this.showModalNuevaPersona = false;
         this.showHistorialModal = false;
         this.showAbonoModal = false;
       }
     }
   },
-  
+
   async mounted() {
-    await Promise.all([this.cargarPrestamos(false), this.cargarDespicadoras()]);
+    await Promise.all([this.cargarPrestamos(false), this.cargarPersonas()]);
   }
 };
 </script>
 
 <style scoped>
-.prestamos-despicadoras-container {
+.prestamos-container {
   max-width: 1200px;
   width: 95%;
   margin: 0 auto;
@@ -722,7 +754,7 @@ h1 {
   color: #2c3e50;
   text-align: center;
   margin-bottom: 30px;
-  border-bottom: 3px solid #e74c3c;
+  border-bottom: 3px solid var(--prestamos-acento);
   padding-bottom: 10px;
 }
 
@@ -787,7 +819,7 @@ h1 {
 }
 
 .resumen-card.activos {
-  border-left: 5px solid #e74c3c;
+  border-left: 5px solid var(--prestamos-acento);
 }
 
 .resumen-card.pendiente {
@@ -811,7 +843,7 @@ h1 {
 }
 
 .resumen-card.activos p {
-  color: #e74c3c;
+  color: var(--prestamos-acento);
 }
 
 .resumen-card.pendiente p {
@@ -833,7 +865,7 @@ h1 {
   background: white;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  border-left: 5px solid #e74c3c;
+  border-left: 5px solid var(--prestamos-acento);
   overflow: hidden;
   transition: all 0.3s ease;
 }
@@ -844,7 +876,7 @@ h1 {
 }
 
 .cuenta-card.sin-deuda {
-  border-left-color: #2ecc71;
+  border-left-color: var(--prestamos-al-corriente);
   opacity: 0.8;
 }
 
@@ -862,7 +894,7 @@ h1 {
   min-width: 300px;
 }
 
-.despicadora-nombre {
+.persona-nombre {
   color: #2c3e50;
   margin: 0 0 15px 0;
   font-size: 1.4em;
@@ -893,7 +925,7 @@ h1 {
 }
 
 .stat .value.prestado {
-  color: #e74c3c;
+  color: var(--prestamos-acento);
 }
 
 .stat .value.abonado {
@@ -905,7 +937,7 @@ h1 {
 }
 
 .stat .value.pagado {
-  color: #2ecc71;
+  color: var(--prestamos-al-corriente);
 }
 
 .stat.saldo {
@@ -978,7 +1010,7 @@ h1 {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #e74c3c, #27ae60);
+  background: linear-gradient(90deg, var(--prestamos-acento), #27ae60);
   border-radius: 4px;
   transition: width 0.5s ease;
 }
@@ -1012,7 +1044,7 @@ h1 {
 }
 
 .stat-card.prestado {
-  border-left-color: #e74c3c;
+  border-left-color: var(--prestamos-acento);
 }
 
 .stat-card.abonado {
@@ -1036,7 +1068,7 @@ h1 {
 }
 
 .stat-card.prestado p {
-  color: #e74c3c;
+  color: var(--prestamos-acento);
 }
 
 .stat-card.abonado p {
@@ -1063,7 +1095,7 @@ h1 {
 
 .progress-fill-large {
   height: 100%;
-  background: linear-gradient(90deg, #e74c3c, #27ae60);
+  background: linear-gradient(90deg, var(--prestamos-acento), #27ae60);
   border-radius: 6px;
   transition: width 0.5s ease;
 }
@@ -1102,7 +1134,7 @@ h1 {
 }
 
 .movimiento-item.prestamo {
-  border-left: 4px solid #e74c3c;
+  border-left: 4px solid var(--prestamos-acento);
 }
 
 .movimiento-item.abono {
@@ -1121,7 +1153,7 @@ h1 {
 }
 
 .movimiento-item.prestamo .movimiento-icon {
-  background: #e74c3c;
+  background: var(--prestamos-acento);
 }
 
 .movimiento-item.abono .movimiento-icon {
@@ -1161,7 +1193,7 @@ h1 {
 }
 
 .movimiento-monto.prestamo {
-  color: #e74c3c;
+  color: var(--prestamos-acento);
 }
 
 .movimiento-monto.abono {
@@ -1184,8 +1216,8 @@ h1 {
   flex-wrap: wrap;
 }
 
-.btn-nuevo-prestamo, .btn-nueva-despicadora {
-  background-color: #e74c3c;
+.btn-nuevo-prestamo, .btn-nueva-persona {
+  background-color: var(--prestamos-acento);
   color: white;
   border: none;
   padding: 12px 20px;
@@ -1198,15 +1230,15 @@ h1 {
   font-size: 1em;
 }
 
-.btn-nueva-despicadora {
+.btn-nueva-persona {
   background-color: #3498db;
 }
 
 .btn-nuevo-prestamo:hover {
-  background-color: #c0392b;
+  background-color: var(--prestamos-acento-oscuro);
 }
 
-.btn-nueva-despicadora:hover {
+.btn-nueva-persona:hover {
   background-color: #2980b9;
 }
 
@@ -1229,7 +1261,7 @@ h1 {
 }
 
 .tabla-prestamos th {
-  background-color: #e74c3c;
+  background-color: var(--prestamos-acento);
   color: white;
 }
 
@@ -1252,12 +1284,12 @@ h1 {
 }
 
 .estado-badge.activo {
-  background-color: #e74c3c;
+  background-color: var(--prestamos-acento);
   color: white;
 }
 
 .estado-badge.pagado {
-  background-color: #2ecc71;
+  background-color: var(--prestamos-al-corriente);
   color: white;
 }
 
@@ -1318,7 +1350,7 @@ h1 {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border-left-color: #e74c3c;
+  border-left-color: var(--prestamos-acento);
   animation: spin 1s linear infinite;
 }
 
@@ -1391,7 +1423,7 @@ h1 {
 }
 
 /* Formularios */
-.form-prestamo, .form-despicadora, .form-abono {
+.form-prestamo, .form-persona, .form-abono {
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -1440,7 +1472,7 @@ h1 {
 }
 
 .btn-guardar {
-  background-color: #e74c3c;
+  background-color: var(--prestamos-acento);
   color: white;
 }
 
@@ -1545,7 +1577,7 @@ h1 {
 .resumen-item.total {
   font-weight: bold;
   font-size: 1.2em;
-  color: #e74c3c;
+  color: var(--prestamos-acento);
   border-top: 1px solid #ddd;
   padding-top: 10px;
   margin-top: 10px;
@@ -1569,7 +1601,7 @@ h1 {
     flex-direction: column;
   }
   
-  .btn-nuevo-prestamo, .btn-nueva-despicadora {
+  .btn-nuevo-prestamo, .btn-nueva-persona {
     width: 100%;
     justify-content: center;
   }
