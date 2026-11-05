@@ -3,8 +3,11 @@ const crypto = require('crypto');
 // Include every lazy chunk so screens never visited online can also open offline.
 class OfflinePlugin {
   apply(compiler) {
-    compiler.hooks.emit.tap('OfflinePlugin', compilation => {
-      const assets = Object.keys(compilation.assets).filter(name => !/\.map$/.test(name));
+    const { Compilation, sources } = compiler.webpack;
+    compiler.hooks.thisCompilation.tap('OfflinePlugin', compilation => {
+      // REPORT es la última etapa: ya están todos los archivos (incluidos index.html y public/).
+      compilation.hooks.processAssets.tap({ name: 'OfflinePlugin', stage: Compilation.PROCESS_ASSETS_STAGE_REPORT }, () => {
+      const assets = Object.keys(compilation.assets).filter(name => !/\.map$/.test(name) && name !== 'service-worker.js');
       const version = crypto.createHash('sha256');
       // A cache policy change must create a separate shell, even with identical assets.
       version.update('network-refresh-v1');
@@ -44,7 +47,9 @@ self.addEventListener('fetch', event => {
     event.respondWith(caches.open(CACHE).then(async cache => (await cache.match(url.pathname)) || fetch(event.request)));
   }
 });`;
-      compilation.assets['service-worker.js'] = { source: () => source, size: () => Buffer.byteLength(source) };
+      // minimized: Terser no lo reescribe (se conserva legible, igual que antes).
+      compilation.emitAsset('service-worker.js', new sources.RawSource(source), { minimized: true });
+      });
     });
   }
 }

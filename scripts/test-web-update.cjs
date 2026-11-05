@@ -3,8 +3,19 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const OfflinePlugin = require('../build/OfflinePlugin');
 function worker(clientCount) {
-  const compilation = { assets: { 'index.html': { source: () => '<html>test</html>' } } };
-  new OfflinePlugin().apply({ hooks: { emit: { tap: (_, fn) => fn(compilation) } } });
+  // Compilador mínimo con la API de webpack 5 que usa el plugin (processAssets + emitAsset).
+  const compilation = {
+    assets: { 'index.html': { source: () => '<html>test</html>' } },
+    hooks: { processAssets: { tap: (_, fn) => fn() } },
+    emitAsset(name, source) { this.assets[name] = source; }
+  };
+  new OfflinePlugin().apply({
+    webpack: {
+      Compilation: { PROCESS_ASSETS_STAGE_REPORT: 5000 },
+      sources: { RawSource: class { constructor(s) { this.s = s; } source() { return this.s; } } }
+    },
+    hooks: { thisCompilation: { tap: (_, fn) => fn(compilation) } }
+  });
   const listeners = {};
   const state = { activated: false, replies: [], requests: [] };
   vm.runInNewContext(compilation.assets['service-worker.js'].source(), {
