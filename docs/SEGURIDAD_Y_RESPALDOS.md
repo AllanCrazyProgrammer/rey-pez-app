@@ -52,7 +52,7 @@ guardar: sus escrituras pendientes quedarían rechazadas. Por eso va por fases:
    *Correo/contraseña*. Luego crear una cuenta por persona con contraseñas **nuevas** de 8+
    caracteres (las actuales ya son públicas):
    ```bash
-   node scripts/admin/crear-cuentas.js allan edgar      # pide cada contraseña en la terminal
+   node scripts/admin/crear-cuentas.js allan edgar mari # pide cada contraseña en la terminal
    node scripts/admin/crear-cuentas.js --actualizar allan   # para cambiar una contraseña
    ```
    La cuenta de `allan` es `allan@reypez.app` (el dominio se cambia con `AUTH_DOMINIO` en el
@@ -80,9 +80,26 @@ guardar: sus escrituras pendientes quedarían rechazadas. Por eso va por fases:
 3b. **Apagar el login anterior:** poner `VUE_APP_LOGIN_LOCAL=off` en `.env`, volver a
    desplegar web, escritorio y APK. Las contraseñas viejas dejan de estar en el código
    publicado y cualquier sesión vieja sin cuenta de Firebase vuelve a la pantalla de inicio.
-4. **Probar las reglas** con el emulador antes de publicarlas:
-   `firebase emulators:start --only firestore,database,storage` usando los archivos de
-   `seguridad/propuesta/`.
+4. **Probar las reglas** con el emulador antes de publicarlas (**hecho el 5 nov 2026: 21/21
+   pasan**). Necesita Java 21+ (firebase-tools ya no acepta versiones anteriores; en Mac:
+   `brew install openjdk@21` y `export JAVA_HOME=/opt/homebrew/opt/openjdk@21`):
+   ```bash
+   npm run test:reglas                 # reglas propuestas: deben pasar todas
+   REGLAS_DIR=. npm run test:reglas    # reglas actuales: fallan los 9 casos "sin sesión"
+   ```
+   `scripts/test-reglas-propuesta.cjs` levanta los emuladores con
+   `seguridad/firebase.emulador.json` (proyecto `demo-reypez`, nunca el real) y prueba las rutas
+   que usa la app: colecciones de Firestore con subcolecciones (`embarques`, `saldosCuentas`,
+   `papelera`...), `presenciaEmbarques/` y `status/` en Realtime Database, y las fotos de
+   `bitacoras/` (jpeg/png/webp ≤ 10 MB) y `journal/` en Storage. Sin sesión todo se rechaza;
+   con sesión todo funciona igual que hoy. Notas:
+   - Las reglas aceptan **cualquier** sesión de Firebase Auth. En Authentication → *Sign-in
+     method* deja activado **solo** Correo/contraseña (nunca *Anónimo* ni registro abierto
+     desde la app), o cualquiera podría crearse una sesión.
+   - Las Cloud Functions (asistente, respaldo) usan el Admin SDK, que no pasa por las reglas.
+   - Las fotos ya guardadas siguen viéndose: sus URLs de descarga llevan su propio token.
+   - El script de cuentas también se probó con el emulador de Auth (crea, rechaza contraseñas
+     cortas, no sobrescribe sin `--actualizar`, y la cuenta creada inicia sesión).
 5. **Publicar las reglas propuestas** (`seguridad/propuesta/*`): copiarlas sobre
    `firestore.rules`, `database.rules.json` y `storage.rules`, y
    `firebase deploy --only firestore:rules,database,storage`.
