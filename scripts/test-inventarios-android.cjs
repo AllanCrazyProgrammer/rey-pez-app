@@ -32,7 +32,9 @@ async function run() {
       { test: /\.js$/, exclude: /node_modules/, loader: 'babel-loader', options: { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-optional-chaining', '@babel/plugin-transform-nullish-coalescing-operator'] } },
       { test: /\.css$/, use: ['vue-style-loader', { loader: 'css-loader', options: { esModule: false } }] },
       { test: /\.(png|svg|woff2?|ttf)$/, type: 'asset/resource' }
-    ] }, plugins: [new VueLoaderPlugin()], devtool: false
+    ] }, plugins: [new VueLoaderPlugin(),
+      // Como Vue CLI: process.env.* se resuelve al compilar (en el navegador no existe process).
+      new webpack.DefinePlugin({ 'process.env': JSON.stringify({ NODE_ENV: 'development', BASE_URL: '/' }) })], devtool: false
   }, (error, stats) => error || stats.hasErrors() ? reject(error || new Error(stats.toString('errors-only'))) : resolve()));
   fs.writeFileSync(path.join(output, 'index.html'), '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script src="/app.js"></script></html>');
   const server = http.createServer((req, res) => {
@@ -84,7 +86,7 @@ async function run() {
     await page.screenshot({ path: path.join(output, 'acceso-neon.png'), fullPage: true });
     await page.getByLabel('Usuario:', { exact: true }).fill('allan');
     // Usar el acceso existente sin publicar la contraseña en el resultado.
-    const authSource = fs.readFileSync(path.join(root, 'src/stores/auth.js'), 'utf8');
+    const authSource = fs.readFileSync(path.join(root, 'src/services/loginLocal.js') /* usuarios del login de transición */, 'utf8');
     const password = authSource.match(/username: 'allan', password: '([^']+)'/)[1];
     await page.getByLabel('Contraseña:', { exact: true }).fill(password);
     assert.equal(await page.evaluate(() => window.__audioPrueba.contextos), 0, 'Escribir en campos no genera sonidos');

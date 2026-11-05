@@ -9,6 +9,12 @@ import {
   persistentSingleTabManager
 } from "firebase/firestore";
 import { getDatabase, ref, onDisconnect, set } from "firebase/database";
+import {
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  connectAuthEmulator
+} from "firebase/auth";
 
 // Tu configuración de Firebase
 const firebaseConfig = {
@@ -23,6 +29,18 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
+
+// Firebase Auth se inicializa ANTES que Firestore y siempre al arrancar: Firestore guarda las
+// escrituras sin internet en una cola por usuario, y así ve al mismo usuario (la sesión guardada
+// en el equipo, o ninguno) desde el primer momento, sin cambios de usuario a media sesión.
+// initializeAuth (no getAuth) para no incluir el código de ventanas emergentes, que no se usa.
+const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+});
+// Solo para pruebas locales con el emulador de Auth (nunca se define en producción).
+if (process.env.VUE_APP_AUTH_EMULATOR) {
+  connectAuthEmulator(auth, process.env.VUE_APP_AUTH_EMULATOR, { disableWarnings: true });
+}
 
 // Inicializar Firestore con fallback de caché para entornos restringidos
 const initFirestore = () => {
@@ -91,4 +109,4 @@ const handleUserPresence = async (userId, username) => {
   }
 };
 
-export { app, db, rtdb, handleUserPresence };
+export { app, auth, db, rtdb, handleUserPresence };

@@ -9,7 +9,7 @@ está apagado hasta configurar un bucket.
 | Riesgo | Dónde | Consecuencia |
 |---|---|---|
 | Reglas abiertas (`if true`) | `firestore.rules`, `database.rules.json`, `storage.rules` | Cualquiera con la configuración de Firebase (viaja en el JavaScript público de la app) puede **leer, cambiar o borrar** toda la base y las fotos. |
-| Contraseñas en el código del navegador | `src/stores/auth.js` (`USERS`) | Cualquiera que abra las herramientas del navegador ve usuarios y contraseñas. El login solo protege la pantalla, no los datos. |
+| Contraseñas en el código del navegador | `src/services/loginLocal.js` (se elimina del build con `VUE_APP_LOGIN_LOCAL=off`) | Cualquiera que abra las herramientas del navegador ve usuarios y contraseñas. El login solo protege la pantalla, no los datos. |
 | Sin respaldo automático propio | — | Un borrado accidental o malicioso no se puede deshacer desde la app (la papelera solo cubre lo que la app borra). |
 
 ## 1. Respaldo diario (hacerlo primero; es independiente de lo demás)
@@ -48,15 +48,38 @@ Cambiar las reglas antes de que **todas** las instalaciones sepan iniciar sesió
 Firebase dejaría a los equipos viejos (web en caché, escritorio, Android) sin poder
 guardar: sus escrituras pendientes quedarían rechazadas. Por eso va por fases:
 
-1. **Cuentas.** En la consola de Firebase → Authentication, activar *Correo/contraseña*
-   y crear una cuenta por persona (contraseñas de 6+ caracteres, nuevas: las actuales ya
-   son públicas).
-2. **App.** Cambiar `src/stores/auth.js` para iniciar sesión con
-   `signInWithEmailAndPassword` (Firebase Auth guarda la sesión en el equipo y funciona
-   sin internet después del primer inicio) y quitar la lista `USERS`. Las Cloud
-   Functions no cambian: usan el SDK de administrador.
+1. **Cuentas.** En la consola de Firebase → Authentication → *Sign-in method*, activar
+   *Correo/contraseña*. Luego crear una cuenta por persona con contraseñas **nuevas** de 8+
+   caracteres (las actuales ya son públicas):
+   ```bash
+   node scripts/admin/crear-cuentas.js allan edgar      # pide cada contraseña en la terminal
+   node scripts/admin/crear-cuentas.js --actualizar allan   # para cambiar una contraseña
+   ```
+   La cuenta de `allan` es `allan@reypez.app` (el dominio se cambia con `AUTH_DOMINIO` en el
+   script y `VUE_APP_AUTH_DOMINIO` en la app; no tiene que ser un correo real). El script solo
+   escribe en Firebase Auth, nunca en Firestore. Ojo: la contraseña se ve mientras se escribe.
+2. **App (ya hecho en esta rama, modo transición).** El login intenta primero Firebase Auth; si
+   falla y `VUE_APP_LOGIN_LOCAL` no es `off`, todavía acepta el login anterior, así que se
+   puede desplegar antes de crear las cuentas sin dejar a nadie fuera. Detalles importantes:
+   - Firebase Auth se inicializa al arrancar, antes que Firestore (`src/firebase.js`).
+     Firestore guarda los cambios hechos sin internet en una cola **por usuario**: si el
+     usuario cambia con cambios pendientes, esos cambios dejan de subirse hasta que vuelva el
+     usuario anterior (no se pierden). Por eso, antes de iniciar o cerrar sesión, la app espera
+     a que se suba lo pendiente (`src/utils/cambioUsuarioFirestore.js`); si no puede (sin
+     internet), no cambia de usuario: en transición entra con el login anterior y en modo
+     final pide conectarse. Probado con el SDK real: `scripts/test-cambio-usuario-firestore.mjs`.
+   - Después del primer inicio con internet, la sesión queda guardada en el equipo y la app
+     funciona sin conexión. El **primer** inicio de sesión en un equipo sí necesita internet
+     una vez que el login anterior se apague.
+   - Pruebas con el emulador de Auth: `scripts/test-login-firebase.cjs` (8 casos: transición,
+     final, sesión vieja, sin internet, contraseñas fuera del build).
 3. **Desplegar la app a todos:** web (push a `master`), instaladores de escritorio y APK.
-   Confirmar en cada equipo que inicia sesión y guarda.
+   Pedir a cada persona que **cierre sesión y vuelva a entrar con su cuenta nueva, con
+   internet**. En la consola de Firebase → Authentication → *Users* se ve la última vez que
+   entró cada cuenta: cuando todos aparezcan, seguir.
+3b. **Apagar el login anterior:** poner `VUE_APP_LOGIN_LOCAL=off` en `.env`, volver a
+   desplegar web, escritorio y APK. Las contraseñas viejas dejan de estar en el código
+   publicado y cualquier sesión vieja sin cuenta de Firebase vuelve a la pantalla de inicio.
 4. **Probar las reglas** con el emulador antes de publicarlas:
    `firebase emulators:start --only firestore,database,storage` usando los archivos de
    `seguridad/propuesta/`.

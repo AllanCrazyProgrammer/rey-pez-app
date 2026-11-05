@@ -73,6 +73,8 @@ const app = new Vue({
     if (store) {
       const authStore = useAuthStore();
       authStore.checkAuth();
+      // Con VUE_APP_LOGIN_LOCAL=off exige sesión de Firebase Auth (no hace nada en la transición).
+      authStore.exigirSesionFirebase(router);
     }
   }
 }).$mount("#app");
