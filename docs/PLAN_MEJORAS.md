@@ -1,69 +1,53 @@
 # Plan de mejoras — Rey Pez
 
-Plan de menos a más. Regla para todos los pasos: **no cambiar cómo se leen,
-calculan o guardan los datos** (colecciones, nombres de campos, fórmulas).
-Cada paso se verifica con: `npm run build:web`, `npm run lint`,
-`node --test tests/*.test.cjs` y los scripts de `scripts/test-*.cjs`
-comparados contra la línea base (ninguno que pasaba puede empezar a fallar).
+Plan de menos a más, ejecutado en la rama `ccr-04fe34c2-dzh6cs`. Regla para todos los
+pasos: **no cambiar cómo se leen, calculan o guardan los datos** (colecciones, campos,
+fórmulas). Cada paso se verificó contra una línea base tomada antes de tocar nada.
 
-## Hecho en la rama `ccr-04fe34c2-dzh6cs`
+## Resultado
 
-| Paso | Qué | Resultado medido |
+| Medida | Antes (`master`) | Después |
 |---|---|---|
-| 1 | Borrar archivos accidentales de la raíz (`tatus`, `rey-pez@0.1.0`, `vue-cli-service`, `config 12-25-35-222`, `path/`, `ruta/`, log vacío, 13 PNG de 0 bytes) | Repo más limpio |
-| 2 | Borrar 17 archivos de `src/` que nadie importa + `public/vendor/` (pdfmake y fabric sin uso) | `dist/` 16 MB → 14 MB; ~2.5 MB menos en la precarga del service worker |
-| 3 | Quitar 13 dependencias sin uso (axios, express, pdfkit, vue-datepicker-next, …) | Desaparece una segunda copia de Vue 3 del árbol |
-| 4 | `npm run lint` vuelve a funcionar; corregidos errores reales (comilla suelta en `@click.stop`, métodos duplicados, componentes registrados sin usar) | 0 errores, 277 advertencias |
-| 5 | BootstrapVue: registrar solo los plugins usados | Arranque 2.99 MB → 1.87 MB (697 → 445 KB gzip, −37 %) |
-| 6 | Actualizar parches/menores (bootstrap, core-js, moment, pdfmake 0.2.x, pinia, …) | Vulnerabilidades en dependencias de producción: 60 → 34 |
+| JS+CSS que se descarga al abrir la app | 2.99 MB (697 KB gzip) | 1.86 MB (462 KB gzip) |
+| `dist/` | 16 MB | 12 MB |
+| Avisos de seguridad en dependencias de producción (`npm audit`) | 60 | 26 |
+| `npm run lint` | no funcionaba | 0 errores, 220 advertencias |
+| `tests/` | 102 de 104 | 110 de 110 |
+| Rutas del build que abren sin errores (`scripts/recorrer-rutas.cjs`) | 82 de 82 | 82 de 82 |
+| Herramientas | Vue CLI 4 / webpack 4 | Vue CLI 5 / webpack 5 (Vue 2.7) |
 
-Verificación de integridad: se listaron todas las rutas de Firestore/RTDB que
-aparecen en el código antes y después. Solo desaparecieron `costos`,
-`precios_globales` y `abonosAplicados_*`, que usaban únicamente los
-componentes muertos `CostosModal` y `HistorialAbonosAplicadosModal` (ninguna
-pantalla los abría). Los documentos en la base siguen intactos.
+## Pasos hechos
 
-## Siguientes pasos (pendientes, de menos a más)
+1. **Basura de la raíz** fuera (salidas de consola guardadas por error, PNG de 0 bytes, placeholders).
+2. **Código muerto**: 17 archivos de `src/` sin referencias y `public/vendor/` (2.5 MB que el service worker precargaba).
+3. **13 dependencias sin uso** fuera (axios, express, pdfkit, vue-datepicker-next…).
+4. **Lint** reparado; corregidos errores reales (comilla suelta en `@click.stop`, métodos duplicados).
+5. **BootstrapVue selectivo**: arranque −37 %.
+6. **Parches/menores** de librerías.
+7. **Orden**: docs históricos a `docs/historial/`, scripts de admin (solo lectura) a `scripts/admin/`.
+8. **Pruebas rotas en master**: la regla de taras de 25 kg (#179) era la correcta; la prueba era vieja.
+9. **`Rendimientos/` y `reportDelivery`**: se conservan (las pruebas los usan); documentados.
+10. **Toasts invisibles** (Bootstrap 5 + BootstrapVue 2) y × de modales arreglados.
+11. **`SaleNote.vue`**: `</div>` sobrante quitado con la función render idéntica.
+12. **56 imports sin usar** quitados (sin tocar módulos con efectos al importarse).
+13. **firebase 10.14.1**: probado que las escrituras pendientes sin internet sobreviven al cambio de esquema de la caché (`scripts/verificar-migracion-cache-firestore.mjs`).
+14. **Capacitor 6.2.3** (aviso crítico) y **Electron 39.8.10** (pruebas de escritorio sin red pasan).
+15. **jsPDF 4.2.1 / autotable 5 / html2pdf.js 0.14**: PDFs idénticos pixel por pixel (`scripts/pdf-regresion/`).
+16. **Rendimientos.vue**: 16 funciones puras a `src/utils/rendimientosCalculos.js` (163 casos equivalentes).
+17. **Respaldo diario de Firestore** listo (apagado hasta configurar el bucket) y **reglas de seguridad propuestas** con plan por fases: `docs/SEGURIDAD_Y_RESPALDOS.md`.
+18. **Vue CLI 5 / webpack 5**: rutas, service worker offline, PDFs, escritorio y Android verificados.
 
-### Corto plazo (bajo riesgo)
-1. ✅ **Decidido: se conservan** `src/views/Embarques/Rendimientos/` y `src/utils/pdf/reportDelivery.js` (documentados en su README/cabecera).
-   La app no los usa (la ruta carga `Embarques/Rendimientos.vue`), pero
-   `scripts/test-precios-alias-rutas.cjs` y `scripts/test-reportes-backup.cjs`
-   los prueban. O se conectan, o se borran junto con esas pruebas.
-2. **Pruebas que ya fallaban en `master`:** `tests/resumen-totales-pedido-limpio.test.cjs`
-   (2 casos: maquila esperada 89 vs. 82.5 calculada, y un mock sin
-   `normalizarClaveMedida`). Hay que confirmar si cambió la regla de negocio o
-   si es un bug del cálculo.
-3. **`$bvToast` en Preparación no se ve en pantalla** (ya pasaba antes de esta
-   rama). Revisar CSS/z-index del toaster.
-4. **`SaleNote.vue` tiene `</div>` desbalanceados** (Vue lo tolera). Arreglar
-   con captura antes/después para no mover el diseño de la nota.
-5. **Bajar advertencias de lint** por módulo (189 variables/imports sin usar,
-   33 props mutadas).
-6. Mover los `.md` sueltos de la raíz a `docs/` y los scripts de admin
-   (`get-existencias.js`, `test-*.js` de la raíz) a `scripts/admin/`.
+## Pendiente (requiere decisiones o equipos que no hay en el contenedor)
 
-### Mediano plazo (requiere probar en tu equipo/celular)
-7. **firebase 10.12 → 10.14** (última 10.x). Se dejó fuera porque la app usa
-   caché offline persistente y desde el contenedor no se puede conectar a
-   Firebase. Probar: abrir embarques sin internet, guardar, reconectar.
-8. **Electron 39.2 → 39.8** y **Capacitor 6.1 → 6.2.x** (avisos críticos de
-   seguridad en `@capacitor/android`/`ios` < 6.2.1). Alinear las 5 piezas de
-   Capacitor a la misma versión y generar APK/instaladores de prueba.
-9. **jsPDF 2.5 → 3.x** (avisos de seguridad) con comparación visual de los PDF.
-10. Partir los archivos gigantes (`Rendimientos.vue` 5.6k líneas,
-    `PedidoLimpioImpresion.vue`, `StashModalV2.vue` 4.2k) extrayendo la
-    lógica pura a `src/utils/` con pruebas, como ya se hizo con `saldosCuentas`.
-
-### Largo plazo (el que más protege tus datos)
-11. **Reglas de seguridad de Firebase.** Hoy `firestore.rules` y
-    `database.rules.json` permiten leer y escribir todo a cualquiera
-    (`if true`). La configuración de Firebase viaja en el JavaScript público,
-    así que cualquiera con la URL podría leer o borrar la base. Plan: Firebase
-    Auth (el login propio puede emitir un custom token o usar auth anónima) →
-    reglas `request.auth != null` → luego reglas por colección.
-12. **Respaldos automáticos de Firestore** (export programado a Cloud Storage
-    con `gcloud firestore export` o una Cloud Function con horario).
-13. **Vue 2 terminó soporte (dic 2023) y Vue CLI 4 está descontinuado.**
-    Migración por etapas a Vue 3 + Vite; requiere reemplazar BootstrapVue
-    (no soporta Vue 3) y es el paso más grande.
+1. **Seguridad de Firebase** (lo más importante): seguir `docs/SEGURIDAD_Y_RESPALDOS.md`.
+   Hoy las reglas son `if true` y las contraseñas del login están en el código del navegador.
+2. **Activar el respaldo diario** (crear bucket + `functions/.env` + desplegar la función).
+3. **Probar en equipos reales** antes de pasar a `master`: generar APK (Android SDK) e
+   instaladores de escritorio, abrir un embarque sin internet y guardar.
+4. **Pruebas que necesitan el emulador de Firestore** (asistente, embarques, sacadas): el
+   contenedor no puede descargarlo; correrlas en una máquina con `firebase emulators`.
+5. **`test-desktop-pdf`**: el caso del PDF de Rendimientos falla igual en `master`; revisar.
+6. **Vue 3**: Vue 2 ya no tiene soporte. Siguiente etapa: reemplazar BootstrapVue (usa poco:
+   modales, layout y formularios) y migrar por módulos con `@vue/compat`.
+7. Seguir partiendo archivos grandes (`PedidoLimpioImpresion.vue`, `StashModalV2.vue`, `Sacadas.vue`
+   tienen métodos puros listos para extraer) y bajar las 220 advertencias de lint.
