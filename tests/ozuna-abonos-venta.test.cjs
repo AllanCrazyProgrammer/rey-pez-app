@@ -16,6 +16,18 @@ function cargarServicio() {
     orderBy: (...args) => args,
     limit: valor => valor,
     async getDocs(consulta) {
+      // Colección completa (saldo anterior de Ozuna, como en Cuentas Ozuna):
+      // el saldo anterior es la suma del neto de los días previos (300 + 200 = 500).
+      // El `nuevoSaldoAcumulado` guardado está desfasado a propósito y la cuenta
+      // del día posterior no debe contar.
+      if (typeof consulta === 'string') {
+        const docs = [
+          { id: 'a', data: () => ({ fecha: '2026-10-04', totalGeneral: 400, abonos: [{ monto: 100 }], nuevoSaldoAcumulado: 9999 }) },
+          { id: 'b', data: () => ({ fecha: '2026-10-05', totalGeneral: 150, cobros: [{ monto: 50 }] }) },
+          { id: 'c', data: () => ({ fecha: '2026-10-07', totalGeneral: 7777 }) }
+        ];
+        return { docs, empty: false };
+      }
       const anterior = consulta.filtros.some(f => Array.isArray(f) && f[1] === '<');
       const docs = anterior ? [{ data: () => ({ nuevoSaldoAcumulado: 500 }) }] : [];
       return { docs, empty: !docs.length };
