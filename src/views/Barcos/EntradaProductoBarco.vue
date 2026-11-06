@@ -829,6 +829,11 @@ export default {
 }
 
 .entrada-producto-barco {
+  /* El contenedor de la app es flex con overflow oculto: sin min-width: 0 la
+     vista se estira al ancho de su contenido y en móvil se corta a la derecha. */
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
@@ -1845,6 +1850,11 @@ export default {
   .medida-card-header {
     gap: 10px;
     margin-bottom: 14px;
+  }
+
+  .btn-scroll-bottom {
+    padding: 8px 10px;
+    font-size: 0.85em;
   }
 
   .tabla-medida th {
