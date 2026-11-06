@@ -973,8 +973,8 @@ export default {
 .btn-agregar-cliente {
   min-height: 43px;
   margin-top: 4px;
-  color: #b8f4ff;
-  border: 1px dashed rgba(56, 217, 255, .34);
+  color: var(--embarque-acento, #b8f4ff);
+  border: 1px dashed var(--embarque-acento, rgba(56, 217, 255, .34));
   border-radius: 12px;
   background: rgba(56, 217, 255, .055);
   box-shadow: none;
@@ -983,9 +983,9 @@ export default {
 }
 
 .btn-agregar-cliente:hover {
-  color: #06101c;
+  color: var(--embarque-acento-texto, #06101c);
   border-style: solid;
-  background: #38d9ff;
+  background: var(--embarque-acento, #38d9ff);
   box-shadow: 0 0 26px rgba(56, 217, 255, .25);
   transform: translateY(-2px);
 }
@@ -1012,7 +1012,7 @@ export default {
 .sidebar-resumen h4 {
   justify-content: flex-start;
   margin-bottom: 7px;
-  color: #8da0bd;
+  color: var(--embarque-etiquetas, #8da0bd);
   font-size: .62rem;
   font-weight: 800;
   letter-spacing: .09em;
@@ -1021,7 +1021,7 @@ export default {
 }
 
 .sidebar-resumen h4 i {
-  color: #38d9ff;
+  color: var(--embarque-acento, #38d9ff);
   -webkit-text-fill-color: currentColor;
   font-size: .8rem;
 }

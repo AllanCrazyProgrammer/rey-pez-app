@@ -1745,7 +1745,7 @@ export default {
   border: 1px solid rgba(148,163,184,.25); background: rgba(16,27,45,.85); color: #e2e8f0;
   font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; width: fit-content;
 }
-.resumen-embarque-etiqueta { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.resumen-embarque-etiqueta { color: var(--embarque-etiquetas, #94a3b8); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 768px) {
   .resumen-embarque-total { display: flex; margin: 10px 0 2px; width: auto; font-size: 13px; padding: 8px 10px; }
   .resumen-embarque-etiqueta { flex-basis: 100%; text-align: center; }
@@ -2219,7 +2219,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .botones-undo-redo .btn:hover:not(:disabled),
 .scale-control-resumen .btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  border-color: rgba(56, 217, 255, 0.48);
+  border-color: var(--embarque-acento, rgba(56, 217, 255, 0.48));
   background: rgba(27, 45, 74, 0.92);
 }
 

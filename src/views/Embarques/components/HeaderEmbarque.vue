@@ -56,6 +56,7 @@
         <button type="button" @click="abrirConfiguracionMedidas" class="btn-configuracion-medidas">
           <i class="fas fa-sliders-h"></i> Medidas
         </button>
+        <configuracion-tema-embarque />
       </div>
     </div>
 
@@ -148,6 +149,7 @@
 import campoColaborativo from '@/directives/campoColaborativo';
 import PreciosHistorialModal from '@/components/Precios/PreciosHistorialModal.vue';
 import GenerarEsqueletoEmbarqueButton from './GenerarEsqueletoEmbarqueButton.vue';
+import ConfiguracionTemaEmbarque from './ConfiguracionTemaEmbarque.vue';
 import { useUIStore } from '@/stores/ui';
 
 export default {
@@ -155,7 +157,8 @@ export default {
   name: 'HeaderEmbarque',
   components: {
     PreciosHistorialModal,
-    GenerarEsqueletoEmbarqueButton
+    GenerarEsqueletoEmbarqueButton,
+    ConfiguracionTemaEmbarque
   },
   props: {
         editoresColaboracion: { type: Array, default: () => [] },
@@ -561,14 +564,14 @@ label {
 }
 
 .titulo-embarque { margin-right: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.resumen-embarque { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 11px; line-height: 1.4; color: #b8c6db; }
+.resumen-embarque { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 11px; line-height: 1.4; color: var(--embarque-etiquetas, #b8c6db); }
 
 .titulo-embarque h1 {
   display: flex;
   align-items: center;
   gap: 7px;
   margin: 0;
-  color: #f8fbff;
+  color: var(--embarque-etiquetas, #f8fbff);
   font-size: clamp(1.05rem, 1.8vw, 1.35rem);
   font-weight: 780;
   letter-spacing: -.045em;
@@ -580,10 +583,10 @@ label {
   width: 28px;
   height: 28px;
   place-items: center;
-  color: #06101c;
+  color: var(--embarque-acento-texto, #06101c);
   font-size: .72rem;
   border-radius: 8px;
-  background: linear-gradient(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6);
+  background: var(--embarque-icono-fondo, linear-gradient(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6));
   box-shadow: 0 0 32px rgba(56, 217, 255, .32);
 }
 
@@ -642,7 +645,7 @@ label {
   font-weight: 700;
   line-height: 1;
   color: #dbe7f8;
-  border: 1px solid rgba(148, 163, 184, .17);
+  border: 1px solid var(--embarque-acento, rgba(148, 163, 184, .17));
   border-radius: 8px;
   background: rgba(20, 33, 55, .78);
   box-shadow: inset 0 1px rgba(255,255,255,.06);
@@ -658,7 +661,7 @@ label {
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
   color: #fff;
-  border-color: rgba(56, 217, 255, .5);
+  border-color: var(--embarque-acento, rgba(56, 217, 255, .5));
   background: rgba(28, 48, 78, .95);
   box-shadow: 0 8px 24px rgba(0,0,0,.22), 0 0 18px rgba(56,217,255,.08);
 }
@@ -670,10 +673,10 @@ label {
 
 .btn-navbar-principal i { color: #fbbf24; }
 .btn-sonidos i { color: #a5b4fc; }
-.btn-sonidos:focus-visible { outline: 2px solid #38d9ff; outline-offset: 3px; }
+.btn-sonidos:focus-visible { outline: 2px solid var(--embarque-acento, #38d9ff); outline-offset: 3px; }
 .btn-bloqueo:not(.bloqueado) i { color: #4ade80; }
 .btn-bloqueo.bloqueado i { color: #fb7185; }
-.btn-configuracion-medidas i { color: #38d9ff; }
+.btn-configuracion-medidas i { color: var(--embarque-acento, #38d9ff); }
 
 .btn-volver i,
 .btn-bloqueo i,
@@ -701,7 +704,7 @@ label {
   background: rgba(20, 33, 55, .78);
 }
 
-.btn-info i { color: #38d9ff; }
+.btn-info i { color: var(--embarque-acento, #38d9ff); }
 .btn-success i { color: #4ade80; }
 .btn-warning i { color: #fbbf24; }
 .btn-multi-notas i { color: #c4b5fd; }
@@ -758,8 +761,8 @@ label {
   height: 25px;
   flex: 0 0 25px;
   place-items: center;
-  color: #38d9ff;
-  border: 1px solid rgba(56,217,255,.2);
+  color: var(--embarque-acento, #38d9ff);
+  border: 1px solid var(--embarque-acento, rgba(56,217,255,.2));
   border-radius: 7px;
   background: rgba(56,217,255,.08);
 }
@@ -769,7 +772,7 @@ label {
 .selector-campo label {
   display: block;
   margin: 0 0 2px;
-  color: #71839f;
+  color: var(--embarque-etiquetas, #71839f);
   font-size: .53rem;
   font-weight: 800;
   letter-spacing: .08em;
@@ -826,11 +829,16 @@ label {
 @media (max-width: 768px) {
   .header-embarque { padding: 12px; margin-bottom: 10px; }
   .header-hero { margin-bottom: 0; }
-  .header-embarque:not(.menu-movil-abierto) .botones,
   .header-embarque:not(.menu-movil-abierto) .botones-accion,
   .header-embarque:not(.menu-movil-abierto) .datos-operacion { display: none; }
+  .header-embarque:not(.menu-movil-abierto) .botones {
+    display: flex;
+    flex: 1 0 100%;
+    margin-top: 8px;
+  }
+  .header-embarque:not(.menu-movil-abierto) .botones > :not(.tema-embarque) { display: none; }
   .menu-movil-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1 0 100%; min-height: 44px; padding: 8px 12px; margin-top: 4px; color: #dbeafe; background: rgba(148,163,184,.08); border: 1px solid rgba(148,163,184,.22); border-radius: 10px; font-size: 13px; font-weight: 650; }
-  .menu-movil-toggle:focus-visible { outline: 2px solid #38d9ff; outline-offset: 2px; }
+  .menu-movil-toggle:focus-visible { outline: 2px solid var(--embarque-acento, #38d9ff); outline-offset: 2px; }
   .menu-movil-abierto .botones { margin-top: 8px; }
 }
 </style>
