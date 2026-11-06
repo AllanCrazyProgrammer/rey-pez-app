@@ -2,25 +2,15 @@
 
 const normalizarTexto = (texto) => String(texto || '')
   .normalize('NFD')
-  .replace(/[̀-ͯ]/g, '')
+  .replace(/[\u0300-\u036f]/g, '')
   .toLowerCase()
   .replace(/[.]/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
 
-// Pacotilla chica escrita como "Pac Ch", "Pac. Ch.", "Pacotilla chica", etc.
-const PACOTILLA_CHICA = /^pac(otilla)? ?ch(ica)?$/;
-const PROVEEDORES_PACOTILLA_OTILIO = ['galileo', 'maria guadalupe'];
-
-/**
- * El crudo pertenece a Otilio: cualquier medida que lo mencione, o la pacotilla
- * chica de los barcos (Galileo y Maria Guadalupe).
- */
-function esCrudoDeOtilio(proveedor, nombre) {
-  const medida = normalizarTexto(nombre);
-  if (medida.includes('otilio')) return true;
-  const prov = normalizarTexto(proveedor);
-  return PACOTILLA_CHICA.test(medida) && PROVEEDORES_PACOTILLA_OTILIO.some(p => prov.includes(p));
+/** El crudo pertenece a Otilio: cualquier medida cuyo nombre lo mencione. */
+function esCrudoDeOtilio(nombre) {
+  return normalizarTexto(nombre).includes('otilio');
 }
 
 /**

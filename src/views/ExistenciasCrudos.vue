@@ -796,7 +796,7 @@ export default {
     },
 
     esDeOtilio(proveedor, producto) {
-      return esCrudoDeOtilio(proveedor, producto.nombre);
+      return esCrudoDeOtilio(producto.nombre);
     },
 
     tieneCuartos(productos) {
@@ -1342,7 +1342,7 @@ h1, h2, h3 {
   background-color: #f8f9fa;
 }
 
-/* Crudo de Otilio (y la pacotilla chica de los barcos) */
+/* Crudo de Otilio */
 .productos-table tr.fila-otilio td {
   background-color: #fff176;
 }
