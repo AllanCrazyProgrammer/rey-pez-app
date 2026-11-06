@@ -14,6 +14,16 @@ contextBridge.exposeInMainWorld('desktop', {
     discardPrepared: ticket => ipcRenderer.invoke('drive:discard-prepared', ticket),
     uploadNote: note => ipcRenderer.invoke('drive:upload-note', note)
   },
+  // Actualizaciones de pantallas sin reinstalar (ver electron/actualizaciones.js).
+  actualizacion: {
+    estado: () => ipcRenderer.invoke('desktop:actualizacion-estado'),
+    aplicar: () => ipcRenderer.invoke('desktop:actualizacion-aplicar'),
+    alCambiar(handler) {
+      const listener = (_event, estado) => handler(estado);
+      ipcRenderer.on('desktop:actualizacion-estado', listener);
+      return () => ipcRenderer.removeListener('desktop:actualizacion-estado', listener);
+    }
+  },
   isClosing: () => savedForClose,
   onPrepareClose(handler) {
     const listener = async (_event, requestId) => {

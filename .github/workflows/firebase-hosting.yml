@@ -50,6 +50,19 @@ jobs:
           VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID: ${{ secrets.VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID }}
           VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER: ${{ secrets.VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER }}
 
+      # Paquetes para que las apps instaladas (escritorio y Android) se actualicen sin reinstalar.
+      # Usan las mismas variables que la web; quedan en dist/actualizaciones/.
+      - name: Compilar paquetes de escritorio y Android
+        if: env.TIENE_CUENTA == 'true'
+        run: |
+          node scripts/build-desktop.cjs --assets-only
+          node scripts/build-android.cjs --solo-web
+          node scripts/publicar-actualizaciones.cjs
+        env:
+          VUE_APP_GOOGLE_PICKER_API_KEY: ${{ secrets.VUE_APP_GOOGLE_PICKER_API_KEY }}
+          VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID: ${{ secrets.VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID }}
+          VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER: ${{ secrets.VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER }}
+
       - name: Desplegar a Firebase Hosting
         if: env.TIENE_CUENTA == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0

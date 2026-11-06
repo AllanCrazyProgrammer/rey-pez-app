@@ -54,6 +54,13 @@ Notas importantes del entorno:
   instalación puede no haber terminado aún; si `node_modules` o Playwright no
   están listos, espera o vuelve a correr `npm install` antes de capturar.
 
+## Actualizaciones dentro de la app
+
+Escritorio y Android descargan las pantallas nuevas al publicarse la web (sin reinstalar):
+`docs/ACTUALIZACIONES_EN_APP.md`. Un cambio en `electron/` o en lo nativo de Android necesita
+instalador/APK nuevo **y** subir `reypez.minimoInstalador` en `package.json`.
+Pruebas: `node --test scripts/test-actualizaciones.cjs`.
+
 ## Módulo de Barcos
 
 Entrada de producto por descarga: `src/views/Barcos/EntradaProductoBarco.vue`
