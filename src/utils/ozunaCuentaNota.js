@@ -55,17 +55,26 @@ export function decidirCuentaOzunaNota(existentes, nueva, embarqueId) {
   const origen = { embarqueId: String(embarqueId || ''), firmaEmbarque: firma };
   if (!existentes.length) return { accion: 'crear', datos: { ...nueva, ...origen } };
 
-  const { id, data } = existentes[0];
+  const { id, data: guardada } = existentes[0];
   const aviso = existentes.length > 1 ? `Hay ${existentes.length} cuentas de Ozuna para ${nueva.fecha}; se usó ${id}.` : undefined;
+  // El saldo anterior guardado puede estar desfasado (se editaron días previos);
+  // se usa siempre el recalculado, igual que la pantalla Cuentas Ozuna.
+  const saldoCambio = num(guardada.saldoAcumuladoAnterior) !== num(nueva.saldoAcumuladoAnterior);
+  const data = { ...guardada, saldoAcumuladoAnterior: nueva.saldoAcumuladoAnterior };
+  const conSaldo = { ...data, ...totales(data) };
   const ligada = data.firmaEmbarque && String(data.embarqueId || '') === origen.embarqueId;
-  // Sin firma o editada a mano en Cuentas Ozuna: no se pisa.
+  // Sin firma o editada a mano en Cuentas Ozuna: no se pisan sus renglones.
   if (!ligada || firmaCuentaOzuna(data) !== data.firmaEmbarque) {
     return {
-      accion: 'manual', id, datos: data,
+      accion: 'manual', id, datos: conSaldo,
       aviso: [aviso, `La cuenta de Ozuna del ${nueva.fecha} fue creada o editada a mano; se imprimió tal cual y no se modificó.`].filter(Boolean).join(' '),
     };
   }
-  if (data.firmaEmbarque === firma) return { accion: 'reusar', id, datos: data, aviso };
+  if (data.firmaEmbarque === firma) {
+    return saldoCambio
+      ? { accion: 'actualizar', id, datos: conSaldo, aviso }
+      : { accion: 'reusar', id, datos: guardada, aviso };
+  }
 
   // Cambió el embarque: se reemplazan items y abonos automáticos; se conservan cobros y abonos manuales.
   const abonosManuales = (data.abonos || []).filter((a) => !ABONO_AUTOMATICO.test(a.descripcion || ''));
