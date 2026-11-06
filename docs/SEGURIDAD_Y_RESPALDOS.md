@@ -13,7 +13,8 @@
 - ⏳ **App de Android**: el APK 0.3.20 ya inicia sesión en Firebase, pero la llave del navegador
   rechaza su origen (`https://localhost/`, el WebView de Capacitor): falta agregar
   `https://localhost/*` a sus referentes permitidos en Google Cloud → Credenciales.
-- ⏳ Respaldo diario: apagado hasta configurar el bucket (sección 1).
+- ⏳ Respaldo completo diario: listo en el código; falta publicar la función (sección 1, 3 pasos).
+- ⏳ PDF a Google Drive desde la web: falta activar la Google Picker API (sección 1).
 - ⏳ Siguiente nivel opcional: reglas por colección y App Check (paso 7).
 
 La llave de API del navegador (Google Cloud → Credenciales) solo acepta: Heroku, localhost,
@@ -31,35 +32,56 @@ La llave de API del navegador (Google Cloud → Credenciales) solo acepta: Herok
 | Contraseñas en el código del navegador | `src/services/loginLocal.js` (se elimina del build con `VUE_APP_LOGIN_LOCAL=off`) | Cualquiera que abriera las herramientas del navegador veía usuarios y contraseñas. |
 | Sin respaldo automático propio | — | Un borrado accidental o malicioso no se puede deshacer desde la app (la papelera solo cubre lo que la app borra). |
 
-## 1. Respaldo diario (hacerlo primero; es independiente de lo demás)
+## 1. Respaldos
 
-La función `respaldoDiarioFirestore` (`functions/respaldo.js`) pide a Google un export
-completo de Firestore a Cloud Storage todos los días a las 03:15 (hora de México).
-Es de **solo lectura** sobre la base. Probada con un cliente simulado:
-`node --test scripts/test-respaldo-firestore.cjs`.
+Hay tres respaldos distintos; se complementan:
 
-1. Crear el bucket (misma región que Firestore) y una regla de ciclo de vida que borre
-   respaldos de más de, por ejemplo, 30 días:
+| Qué | Cuándo copia | Qué cubre | Dónde se ve |
+|---|---|---|---|
+| **Respaldo completo diario** (`functions/respaldo.js`) | Cada noche, 3:15 a. m. (México) | **Toda la base** | Embarques → Recuperación de emergencia (tarjeta "Respaldo completo de la base") |
+| Copia al borrar un embarque (`respaldos_emergencia`) | Cada vez que alguien borra un embarque | Solo ese embarque | Embarques → Recuperación de emergencia ("Embarques borrados") |
+| PDF de notas en Google Drive (botón ☁ Respaldos) | Al generar notas y reportes | Los PDF, no los datos | Tu carpeta de Drive |
+
+### Respaldo completo diario: activarlo (una sola vez)
+
+No hace falta crear nada: se guarda en la carpeta de Storage que el proyecto ya tiene (la de las
+fotos), dentro de `respaldos/firestore/AAAA-MM-DD_HHMM`. Las reglas de Storage no dan acceso a
+`respaldos/` desde la app. Los respaldos de más de 30 días se borran solos. Es de **solo lectura**
+sobre la base. Probado con Google Cloud simulado: `node --test scripts/test-respaldo-firestore.cjs`.
+
+1. Publicar la función (desde la raíz del repo):
    ```bash
-   gcloud storage buckets create gs://reypezapp-1ced2-respaldos --project=reypezapp-1ced2 --location=<región de Firestore>
+   cd functions && npm install && cd ..
+   firebase deploy --only functions:respaldoDiarioFirestore
    ```
-2. Dar a la cuenta de servicio de Cloud Functions
-   (`<número>-compute@developer.gserviceaccount.com`) los roles
-   **Cloud Datastore Import Export Admin** (proyecto) y **Storage Object Admin** (bucket).
-3. Crear `functions/.env` (está en `.gitignore`) con:
+2. Probarlo ya, sin esperar a la noche (usa `admin-key.json`):
+   ```bash
+   node scripts/admin/respaldo-ahora.js
    ```
-   RESPALDO_BUCKET=gs://reypezapp-1ced2-respaldos
-   ```
-4. Desplegar solo esa función: `firebase deploy --only functions:respaldoDiarioFirestore`.
-5. Al día siguiente, comprobar que existe `gs://.../firestore/AAAA-MM-DD/` y revisar los
-   logs (`firebase functions:log --only respaldoDiarioFirestore`).
+3. Revisar en la app: Embarques → Recuperación de emergencia → "✅ Último respaldo completo".
 
-Restaurar (manual, solo si hace falta, idealmente primero en un proyecto de prueba):
+**Si aparece "Falta permiso para exportar la base"** (en la app o en el script): en Google Cloud →
+IAM, dar el rol **Cloud Datastore Import Export Admin** a la cuenta que indica el mensaje. Para la
+función diaria es `512757841511-compute@developer.gserviceaccount.com` (cuenta de servicio de
+Cloud Functions); para el script, la cuenta de `admin-key.json`. En proyectos donde esa cuenta ya
+tiene el rol *Editor* no hace falta.
+
+Opcional en `functions/.env`: `RESPALDO_DIAS=60` (conservar más días), `RESPALDO_BUCKET=gs://otro`
+(otro bucket) o `RESPALDO_BUCKET=off` (apagarlo).
+
+**Restaurar** (manual, solo si hace falta; mejor primero en un proyecto de prueba):
 ```bash
-gcloud firestore import gs://reypezapp-1ced2-respaldos/firestore/AAAA-MM-DD
+gcloud firestore import gs://reypezapp-1ced2.firebasestorage.app/respaldos/firestore/AAAA-MM-DD_HHMM
 ```
-El import **sobrescribe** los documentos con el mismo ID; no borra los que no estén en
-el respaldo. Las fotos de Storage se protegen activando *Object Versioning* en su bucket.
+El import **sobrescribe** los documentos con el mismo ID y no borra los que no estén en el
+respaldo. Las fotos de Storage se protegen activando *Object Versioning* en su bucket.
+
+### PDF en Google Drive desde la web
+
+En la web, elegir la carpeta de Drive usa Google Picker con la llave de navegador del proyecto.
+Requiere activar una vez la **Google Picker API**: Google Cloud → APIs y servicios → Biblioteca →
+"Google Picker API" → Habilitar. Si esa llave tiene "Restricciones de API", agregar ahí también la
+Google Picker API. En el escritorio no hace falta (usa su propia configuración de Google).
 
 ## 2. Cerrar el acceso a la base (en este orden)
 

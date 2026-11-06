@@ -16,6 +16,32 @@
       </div>
     </div>
 
+    <!-- Respaldo completo diario de toda la base -->
+    <div class="respaldo-completo-section">
+      <div class="respaldo-completo-card" :class="'estado-' + estadoRespaldoClase">
+        <h3>🗄️ Respaldo completo de la base</h3>
+        <p v-if="cargandoEstadoRespaldo">Consultando el último respaldo…</p>
+        <template v-else-if="estadoRespaldo && estadoRespaldo.estado === 'completo'">
+          <p class="estado-principal">✅ Último respaldo completo: <strong>{{ fechaHora(estadoRespaldo.ultimoRespaldo) }}</strong></p>
+          <p>Se copia toda la base (embarques, cuentas, pedidos, todo) cada noche a las 3:15 a. m. y se conservan los últimos {{ estadoRespaldo.diasConservados || 30 }} días.</p>
+          <p v-if="estadoRespaldo.aviso" class="estado-aviso">⚠️ {{ estadoRespaldo.aviso }}</p>
+        </template>
+        <template v-else-if="estadoRespaldo && estadoRespaldo.estado === 'error'">
+          <p class="estado-principal">⚠️ El último respaldo falló ({{ fechaHora(estadoRespaldo.fechaError) }}).</p>
+          <p class="estado-error">{{ estadoRespaldo.error }}</p>
+          <p v-if="estadoRespaldo.ultimoRespaldo">El último que sí se completó fue el {{ fechaHora(estadoRespaldo.ultimoRespaldo) }}.</p>
+        </template>
+        <template v-else-if="errorEstadoRespaldo">
+          <p class="estado-error">No se pudo consultar el estado del respaldo: {{ errorEstadoRespaldo }}</p>
+        </template>
+        <template v-else>
+          <p class="estado-principal">Todavía no hay respaldos completos de la base.</p>
+          <p>Se activan al publicar la función <code>respaldoDiarioFirestore</code> (pasos en <code>docs/SEGURIDAD_Y_RESPALDOS.md</code>).</p>
+        </template>
+        <p class="nota-restaurar">Restaurar la base completa desde uno de estos respaldos se hace en la consola de Google, no desde aquí.</p>
+      </div>
+    </div>
+
     <!-- Búsqueda por fecha específica -->
     <div class="search-section">
       <div class="search-card">
@@ -83,23 +109,32 @@
     <!-- Buscar en respaldos de emergencia -->
     <div class="respaldos-section">
       <div class="respaldos-card">
-        <h3>💾 Buscar en respaldos de emergencia</h3>
-        <p>Si no se encontró el embarque, buscar en respaldos automáticos</p>
-        <button @click="buscarEnRespaldos" class="btn-search-respaldos" :disabled="buscandoRespaldos">
-          <i class="icon">💾</i>
-          {{ buscandoRespaldos ? 'Buscando respaldos...' : 'Buscar respaldos' }}
-        </button>
+        <h3>💾 Embarques borrados</h3>
+        <p>Cada vez que alguien borra un embarque, la app guarda una copia aquí. Abajo aparecen los últimos borrados; también puedes buscarlos por la fecha de arriba.</p>
+        <div class="respaldos-botones">
+          <button @click="cargarRespaldosRecientes" class="btn-search-respaldos" :disabled="buscandoRespaldos">
+            <i class="icon">🕒</i>
+            {{ buscandoRespaldos ? 'Buscando…' : 'Ver los últimos borrados' }}
+          </button>
+          <button @click="buscarEnRespaldos" class="btn-search-respaldos" :disabled="buscandoRespaldos">
+            <i class="icon">💾</i>
+            Buscar por la fecha de arriba
+          </button>
+        </div>
+        <p v-if="!buscandoRespaldos && respaldosConsultados && respaldosEncontrados.length === 0" class="sin-respaldos">
+          No hay embarques borrados{{ tituloRespaldos ? ' ' + tituloRespaldos : '' }}. Si nunca se ha borrado un embarque, aquí no aparece nada.
+        </p>
       </div>
     </div>
 
     <!-- Resultados de respaldos -->
     <div v-if="respaldosEncontrados.length > 0" class="respaldos-resultados">
-      <h3>💾 Respaldos encontrados</h3>
+      <h3>💾 {{ tituloRespaldos ? 'Embarques borrados ' + tituloRespaldos : 'Embarques borrados' }}</h3>
       <div class="respaldos-grid">
         <div v-for="respaldo in respaldosEncontrados" :key="respaldo.id" class="respaldo-card">
           <div class="respaldo-header">
-            <h4>Respaldo del {{ formatearFecha(respaldo.fechaEmbarqueOriginal) }}</h4>
-            <span class="respaldo-tipo">{{ respaldo.razonRespaldo }}</span>
+            <h4>Embarque del {{ formatearFecha(respaldo.fechaEmbarqueOriginal || (respaldo.datosOriginales && respaldo.datosOriginales.fecha)) }}</h4>
+            <span class="respaldo-tipo">{{ razonLegible(respaldo.razonRespaldo) }}</span>
           </div>
           <div class="respaldo-details">
             <p><strong>ID original:</strong> {{ respaldo.embarqueOriginalId }}</p>
@@ -107,7 +142,8 @@
             <p><strong>Productos:</strong> {{ respaldo.totalProductos }}</p>
             <p><strong>Kilos limpios:</strong> {{ respaldo.kilosLimpiosAprox }} kg</p>
             <p><strong>Kilos crudos:</strong> {{ respaldo.kilosCrudosAprox }} kg</p>
-            <p><strong>Respaldado:</strong> {{ formatearFecha(respaldo.fechaRespaldo) }}</p>
+            <p><strong>Carga con:</strong> {{ respaldo.cargaConOriginal || (respaldo.datosOriginales && respaldo.datosOriginales.cargaCon) || 'No especificado' }}</p>
+            <p><strong>Borrado el:</strong> {{ fechaHora(respaldo.fechaRespaldo) }}</p>
           </div>
           <div class="respaldo-actions">
             <button @click="recuperarDesdeRespaldo(respaldo.id)" class="btn-recuperar-respaldo">
@@ -224,12 +260,27 @@ export default {
       resultadosBusqueda: [],
       duplicadosEncontrados: [],
       embarquesPorFecha: {},
-      respaldosEncontrados: []
+      respaldosEncontrados: [],
+      respaldosConsultados: false,
+      tituloRespaldos: '',
+      estadoRespaldo: null,
+      cargandoEstadoRespaldo: true,
+      errorEstadoRespaldo: ''
     };
   },
+  computed: {
+    estadoRespaldoClase() {
+      if (this.cargandoEstadoRespaldo) return 'cargando';
+      if (this.errorEstadoRespaldo || (this.estadoRespaldo && this.estadoRespaldo.estado === 'error')) return 'error';
+      return this.estadoRespaldo && this.estadoRespaldo.estado === 'completo' ? 'ok' : 'vacio';
+    }
+  },
   mounted() {
-    // Establecer fecha por defecto al 17 de julio de 2025
-    this.fechaBusqueda = '2025-07-17';
+    // La búsqueda empieza en la fecha de hoy (hora local).
+    const hoy = new Date();
+    this.fechaBusqueda = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    this.cargarEstadoRespaldo();
+    this.cargarRespaldosRecientes();
   },
   methods: {
     formatearFecha,
@@ -380,6 +431,49 @@ export default {
       }
     },
 
+    async cargarEstadoRespaldo() {
+      this.cargandoEstadoRespaldo = true;
+      this.errorEstadoRespaldo = '';
+      try {
+        this.estadoRespaldo = await BackupService.obtenerEstadoRespaldoCompleto();
+      } catch (error) {
+        console.error('Error al consultar el estado del respaldo completo:', error);
+        this.errorEstadoRespaldo = error.message || String(error);
+      } finally {
+        this.cargandoEstadoRespaldo = false;
+      }
+    },
+
+    async cargarRespaldosRecientes() {
+      this.buscandoRespaldos = true;
+      try {
+        this.respaldosEncontrados = await BackupService.listarRespaldosRecientes(20);
+        this.tituloRespaldos = 'recientemente';
+        this.respaldosConsultados = true;
+      } catch (error) {
+        console.error('Error al cargar los embarques borrados:', error);
+      } finally {
+        this.buscandoRespaldos = false;
+      }
+    },
+
+    fechaHora(valor) {
+      if (!valor) return '—';
+      const fecha = typeof valor.toDate === 'function' ? valor.toDate()
+        : typeof valor.seconds === 'number' ? new Date(valor.seconds * 1000) : new Date(valor);
+      if (Number.isNaN(fecha.getTime())) return '—';
+      return fecha.toLocaleString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    },
+
+    razonLegible(razon) {
+      const razones = {
+        eliminacion_manual_usuario: 'Borrado a mano',
+        eliminacion_offline: 'Borrado sin internet',
+        eliminacion_automatica: 'Borrado automático'
+      };
+      return razones[razon] || razon || 'Borrado';
+    },
+
     async buscarEnRespaldos() {
       if (!this.fechaBusqueda) {
         alert('Por favor selecciona una fecha');
@@ -393,12 +487,8 @@ export default {
         const respaldos = await BackupService.buscarRespaldosPorFecha(this.fechaBusqueda);
         
         this.respaldosEncontrados = respaldos;
-        
-        if (respaldos.length === 0) {
-          alert(`No se encontraron respaldos para la fecha ${this.fechaBusqueda}`);
-        } else {
-          alert(`¡Encontrados ${respaldos.length} respaldos para el ${this.fechaBusqueda}!`);
-        }
+        this.tituloRespaldos = `del ${this.fechaBusqueda}`;
+        this.respaldosConsultados = true;
         
       } catch (error) {
         console.error('Error al buscar respaldos:', error);
@@ -829,6 +919,29 @@ export default {
   margin-top: 20px;
   color: #d32f2f;
 }
+
+/* Respaldo completo diario */
+.respaldo-completo-section { margin-bottom: 30px; }
+.respaldo-completo-card {
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
+  border-radius: 20px;
+  padding: 24px 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border-left: 5px solid #9e9e9e;
+  display: grid;
+  gap: 8px;
+}
+.respaldo-completo-card h3, .respaldo-completo-card p { margin: 0; }
+.respaldo-completo-card.estado-ok { border-left-color: #2e7d32; }
+.respaldo-completo-card.estado-error { border-left-color: #d32f2f; }
+.respaldo-completo-card .estado-principal { font-size: 1.05rem; }
+.respaldo-completo-card .estado-error { color: #b71c1c; overflow-wrap: anywhere; }
+.respaldo-completo-card .estado-aviso { color: #8d5800; }
+.respaldo-completo-card .nota-restaurar { color: #666; font-size: 0.9rem; }
+.respaldo-completo-card code { background: #f1f1f1; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; overflow-wrap: anywhere; }
+.respaldos-botones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.sin-respaldos { color: #555; margin-top: 12px; }
 
 /* Estilos para respaldos */
 .respaldos-section {

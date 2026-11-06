@@ -171,7 +171,14 @@ export const embarqueClientesMixin = {
       const nombreNormalizado = String(cliente.nombre).trim();
       if (!nombreNormalizado) return;
 
-      const nombresExistentes = new Set([...this.clientesPredefinidos, ...this.clientesPersonalizados]
+      // Solo cuentan los clientes que realmente están en ESTE embarque: la lista
+      // clientesPersonalizados también trae clientes de embarques anteriores
+      // (localStorage), y con ellos un nombre nuevo salía como "refri (4)".
+      const idsEnEmbarque = new Set(((this.embarque && this.embarque.productos) || [])
+        .map(p => String(p.clienteId)));
+      const personalizadosEnEmbarque = (this.clientesPersonalizados || [])
+        .filter(c => idsEnEmbarque.has(String(c.id)));
+      const nombresExistentes = new Set([...this.clientesPredefinidos, ...personalizadosEnEmbarque]
         .map(c => String(c.nombre).toLowerCase()));
       let nombreFinal = nombreNormalizado;
       if (nombresExistentes.has(nombreFinal.toLowerCase())) {

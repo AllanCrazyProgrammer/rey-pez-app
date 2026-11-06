@@ -1,5 +1,5 @@
 // Servicio de respaldo de emergencia para embarques
-import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { normalizarFechaValor } from '@/utils/dateUtils';
 
 class BackupService {
@@ -146,6 +146,23 @@ class BackupService {
       console.error('[BACKUP] Error al buscar respaldos por fecha:', error);
       throw error;
     }
+  }
+
+  /**
+   * Últimas copias de embarques borrados (las más recientes primero), sin elegir fecha.
+   */
+  async listarRespaldosRecientes(cantidad = 20) {
+    const snapshot = await getDocs(query(collection(this.db, 'respaldos_emergencia'), orderBy('fechaRespaldo', 'desc'), limit(cantidad)));
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+  }
+
+  /**
+   * Estado del respaldo completo diario de la base (lo escribe la Cloud Function
+   * respaldoDiarioFirestore en sistema/respaldos). null si todavía no hay ninguno.
+   */
+  async obtenerEstadoRespaldoCompleto() {
+    const snap = await getDoc(doc(this.db, 'sistema', 'respaldos'));
+    return snap.exists() ? snap.data() : null;
   }
 
   // Métodos auxiliares para calcular estadísticas

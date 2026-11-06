@@ -154,7 +154,10 @@ export default {
       this.crearGrafica('gananciasChart', 'Ganancias', this.ganancias, '#2196F3');
     },
     crearGrafica(refName, label, datos, color) {
-      const ctx = this.$refs[refName].getContext('2d');
+      // Si se salió de la pantalla antes de que llegaran los datos, ya no hay canvas.
+      const canvas = this.$refs[refName];
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
       
       if (this[refName]) {
         this[refName].destroy();

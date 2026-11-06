@@ -19,7 +19,7 @@ El push a `master` dispara el despliegue.
 ## Verificación antes de subir
 
 - `node --test tests/*.test.cjs` y los `scripts/test-*.cjs` relevantes.
-- `node scripts/recorrer-rutas.cjs dist` (tras `npm run build:web`): abre las 82 rutas
+- `node scripts/recorrer-rutas.cjs dist` (tras `npm run build:web`): abre las 89 rutas
   del build de producción y reporta errores de JavaScript.
 - Cambios en librerías de PDF: `scripts/pdf-regresion/` (comparación pixel por pixel).
 - Cambios en el SDK de Firebase: `scripts/verificar-migracion-cache-firestore.mjs`.
