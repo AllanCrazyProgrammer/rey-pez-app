@@ -1,6 +1,6 @@
-import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction } from 'firebase/firestore';
 import {
-  sincronizarCuentaOzunaNota,
+  decidirCuentaOzunaNota,
   esNotaOzunaPendienteDeEmbarque,
   fusionarNotaOzunaConEmbarque
 } from '../utils/ozunaCuentaNota';
@@ -1768,6 +1768,65 @@ export const crearCuentaCatarro = async (embarqueData, router) => {
   }
 };
 
+function errorCuentaOzunaDuplicada(fechaISO) {
+  const error = new Error(
+    `Ya existe una cuenta de Ozuna registrada para la fecha ${fechaISO}. ` +
+    'No se pueden crear cuentas duplicadas.'
+  );
+  error.code = 'cuenta-duplicada';
+  return error;
+}
+
+function traducirFalloDeRedOzuna(error) {
+  if (error?.code === 'unavailable' || /offline|network/i.test(String(error?.message || ''))) {
+    return new Error(
+      'No hay conexión con el servidor. La cuenta de Ozuna NO se creó ' +
+      'para evitar duplicados; intenta de nuevo cuando tengas internet.'
+    );
+  }
+  return error;
+}
+
+/**
+ * La consulta descubre ids (no siempre iguales a la fecha). La decisión y la
+ * escritura van dentro de la transacción, leyendo otra vez cada documento: si
+ * entra un abono después de la consulta, el commit falla y se fusiona la
+ * versión fresca. No se usa el arreglo de abonos de la consulta.
+ */
+async function aplicarCuentaOzuna(db, fecha, decidir) {
+  const consulta = await getDocs(
+    query(collection(db, 'cuentasOzuna'), where('fecha', '==', fecha))
+  );
+  const ids = [...new Set(consulta.docs.map((item) => item.id))];
+  try {
+    return await runTransaction(db, async (tx) => {
+      const refs = ids.map((id) => doc(db, 'cuentasOzuna', id));
+      if (!ids.includes(fecha)) refs.push(doc(db, 'cuentasOzuna', fecha));
+      const snaps = [];
+      for (const ref of refs) snaps.push(await tx.get(ref));
+      const canon = snaps.find((snap) => snap.id === fecha);
+      if (canon && canon.exists() && canon.data().fecha !== fecha) {
+        throw errorCuentaOzunaDuplicada(fecha);
+      }
+      const notas = snaps
+        .filter((snap) => snap.exists() && snap.data().fecha === fecha)
+        .map((snap) => ({ id: snap.id, data: snap.data() }));
+      const decision = decidir(notas);
+      if (decision.accion === 'crear') {
+        tx.set(doc(db, 'cuentasOzuna', fecha), decision.datos);
+        decision.id = fecha;
+      } else if (decision.accion === 'actualizar') {
+        tx.update(doc(db, 'cuentasOzuna', decision.id), decision.datos);
+      } else if (decision.accion === 'rechazar') {
+        throw errorCuentaOzunaDuplicada(fecha);
+      }
+      return decision.resultado === undefined ? decision.id : decision.resultado;
+    });
+  } catch (error) {
+    throw traducirFalloDeRedOzuna(error);
+  }
+}
+
 /**
  * Crea una cuenta de cliente Ozuna a partir de los datos de un embarque
  * @param {Object} embarqueData - Datos del embarque
@@ -1784,46 +1843,41 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaOzuna(embarqueData);
 
-    // Validar precios y crear de forma atómica (falla si ya existe una cuenta para la fecha)
+    // Validar precios. El alta o la fusión del placeholder ocurren en una transacción.
     validarItemsVentaConPrecio(datosCuenta, 'Ozuna');
     const db = getFirestore();
-    const existentes = (await getDocs(
-      query(collection(db, 'cuentasOzuna'), where('fecha', '==', fechaNormalizada))
-    )).docs.map((d) => ({ id: d.id, data: d.data() }));
-    const placeholder = existentes.filter((nota) => esNotaOzunaPendienteDeEmbarque(nota.data));
-    // El abono del asistente pudo crear la nota de hoy antes del embarque.
-    // Se completa esa misma nota y se conserva el abono. Cualquier otra cuenta
-    // de la fecha sigue siendo duplicado: no se pisa.
-    if (existentes.length === 1 && placeholder.length === 1) {
-      const datos = fusionarNotaOzunaConEmbarque(
-        placeholder[0].data,
-        { ...datosCuenta, fecha: fechaNormalizada },
-        null
-      );
-      await updateDoc(doc(db, 'cuentasOzuna', placeholder[0].id), datos);
-      if (router) {
-        const rutaCompleta = `${window.location.origin}/cuentas-ozuna/${placeholder[0].id}?edit=true`;
-        window.open(rutaCompleta, '_blank');
+    const id = await aplicarCuentaOzuna(db, fechaNormalizada, (notas) => {
+      const placeholder = notas.filter((nota) => esNotaOzunaPendienteDeEmbarque(nota.data));
+      // El abono del asistente pudo crear la nota antes del embarque.
+      // Se completa esa misma nota (aunque su id no sea la fecha) y se conserva
+      // el abono. Cualquier otra cuenta de la fecha sigue siendo duplicado.
+      if (notas.length === 1 && placeholder.length === 1) {
+        return {
+          accion: 'actualizar',
+          id: placeholder[0].id,
+          resultado: placeholder[0].id,
+          datos: fusionarNotaOzunaConEmbarque(
+            placeholder[0].data,
+            { ...datosCuenta, fecha: fechaNormalizada },
+            null
+          )
+        };
       }
-      return placeholder[0].id;
-    }
-    if (existentes.length) {
-      const error = new Error(
-        `Ya existe una cuenta de Ozuna registrada para la fecha ${fechaNormalizada}. ` +
-        'No se pueden crear cuentas duplicadas.'
-      );
-      error.code = 'cuenta-duplicada';
-      throw error;
-    }
-    await crearCuentaSegura('cuentasOzuna', fechaNormalizada, datosCuenta, 'Ozuna');
+      if (notas.length) return { accion: 'rechazar' };
+      return {
+        accion: 'crear',
+        resultado: fechaNormalizada,
+        datos: { ...datosCuenta, fecha: fechaNormalizada }
+      };
+    });
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/cuentas-ozuna/${fechaNormalizada}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-ozuna/${id}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
 
-    return fechaNormalizada;
+    return id;
   } catch (error) {
     console.error('Error al crear cuenta de Ozuna:', error);
     throw error;
@@ -1833,20 +1887,15 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
 /**
  * Cuenta del día de Ozuna para la nota PDF: la crea la primera vez y solo la
  * reescribe si cambiaron los datos del embarque (ver ozunaCuentaNota.js).
+ * La lectura que arma abonos y saldos es la de la transacción, no la consulta previa.
  */
 export const sincronizarCuentaOzunaParaNota = async (embarqueData, embarqueId) => {
   const fecha = normalizarFechaISO(embarqueData?.fecha);
   const nueva = { ...(await prepararDatosCuentaOzuna({ ...embarqueData, fecha })), fecha };
   const db = getFirestore();
-  return sincronizarCuentaOzunaNota({
-    embarqueId,
-    nueva,
-    repo: {
-      buscarPorFecha: async (f) => (await getDocs(query(collection(db, 'cuentasOzuna'), where('fecha', '==', f))))
-        .docs.map((d) => ({ id: d.id, data: d.data() })),
-      crear: (f, datos) => crearCuentaSegura('cuentasOzuna', f, datos, 'Ozuna'),
-      actualizar: (id, datos) => updateDoc(doc(db, 'cuentasOzuna', id), datos),
-    },
+  return aplicarCuentaOzuna(db, fecha, (notas) => {
+    const decision = decidirCuentaOzunaNota(notas, nueva, embarqueId);
+    return { ...decision, resultado: decision };
   });
 };
 

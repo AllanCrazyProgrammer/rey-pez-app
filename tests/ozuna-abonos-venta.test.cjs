@@ -8,6 +8,7 @@ const babel = require('@babel/core');
 function cargarServicio(opciones = {}) {
   let cuenta;
   let actualizado = null;
+  const porId = new Map();
   const firestore = {
     getFirestore: () => ({}),
     collection: (_, nombre) => nombre,
@@ -23,7 +24,9 @@ function cargarServicio(opciones = {}) {
       // El `nuevoSaldoAcumulado` guardado está desfasado a propósito y la cuenta
       // del día posterior no debe contar.
       if (consulta && consulta.filtros && consulta.filtros.some((f) => Array.isArray(f) && f[1] === '==') && opciones.alBuscarFecha) {
-        return opciones.alBuscarFecha();
+        const resultado = opciones.alBuscarFecha();
+        resultado.docs.forEach((item) => porId.set(item.id, item.data()));
+        return resultado;
       }
       if (typeof consulta === 'string') {
         const docs = [
@@ -38,9 +41,13 @@ function cargarServicio(opciones = {}) {
       return { docs, empty: !docs.length };
     },
     async runTransaction(_, callback) {
-      await callback({
-        get: async () => ({ exists: () => !!cuenta }),
-        set: (_, data) => { cuenta = data; }
+      return callback({
+        get: async (ref) => {
+          const data = porId.get(ref.id);
+          return { id: ref.id, exists: () => data !== undefined, data: () => data };
+        },
+        set: (ref, data) => { porId.set(ref.id, data); cuenta = data; },
+        update: (ref, data) => { porId.set(ref.id, data); actualizado = data; }
       });
     }
   };
