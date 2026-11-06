@@ -223,6 +223,13 @@
             >
           </div>
           <button
+            class="btn-scroll-bottom"
+            title="Bajar hasta el final de la tabla"
+            @click="scrollAFinalTabla"
+          >
+            ⬇ Abajo
+          </button>
+          <button
             class="btn-delete-medida"
             title="Eliminar esta medida"
             @click="eliminarMedida(medidaActivaIndex)"
@@ -237,7 +244,7 @@
           v-model="medidaActiva.coloresHilo"
         />
 
-        <div class="tabla-wrapper" :class="{ 'tabla-scrollable': medidaActiva.filas.length > 9 }">
+        <div ref="tablaWrapper" class="tabla-wrapper" :class="{ 'tabla-scrollable': medidaActiva.filas.length > 9 }">
           <table class="tabla-medida">
             <thead>
               <tr>
@@ -293,7 +300,7 @@
           </table>
         </div>
 
-        <div class="acciones-tabla">
+        <div ref="accionesTabla" class="acciones-tabla">
           <button class="btn-add-fila" @click="agregarFila(medidaActiva)">
             <i class="btn-icon">➕</i> Agregar fila
           </button>
@@ -670,6 +677,16 @@ export default {
       const el = this.$refs.medidasTabs;
       if (el && typeof el.scrollIntoView === 'function') {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    },
+    scrollAFinalTabla() {
+      const wrapper = this.$refs.tablaWrapper;
+      if (wrapper && typeof wrapper.scrollTo === 'function') {
+        wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'smooth' });
+      }
+      const el = this.$refs.accionesTabla;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
     },
     eliminarFila(medida, index) {
@@ -1228,6 +1245,25 @@ export default {
   font-size: 1.1em;
   transition: all 0.3s ease;
   flex-shrink: 0;
+}
+
+.btn-scroll-bottom {
+  background: #eaf2fb;
+  color: #1f618d;
+  border: 2px solid #3498db;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.btn-scroll-bottom:hover {
+  background: #d6eaf8;
+  transform: translateY(2px);
 }
 
 .btn-delete-medida:hover {
