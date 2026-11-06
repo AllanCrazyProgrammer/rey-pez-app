@@ -2,7 +2,10 @@ import { uploadPdf } from '../../electron/driveUpload';
 const DB_NAME = 'ReyPezDriveNotasDB';
 const STORE = 'notasPendientes';
 const WEB_CLIENT_ID = process.env.VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID || '512757841511-a0r0kosltjrihl9vl0bgn7hqvuanhk7h.apps.googleusercontent.com';
-const PICKER_API_KEY = process.env.VUE_APP_GOOGLE_PICKER_API_KEY || '';
+// Llave para el selector de carpetas de Drive (Google Picker) en la web. Por defecto es la misma
+// llave de navegador del proyecto que ya usa Firebase (pública, limitada a los sitios de la app).
+// Requiere tener activada la "Google Picker API" en Google Cloud (ver docs/SEGURIDAD_Y_RESPALDOS.md).
+const PICKER_API_KEY = process.env.VUE_APP_GOOGLE_PICKER_API_KEY || 'AIzaSyDEXrriJ15Gg2IyPYh56gNktfGaSsP6KeE';
 const GOOGLE_PROJECT_NUMBER = process.env.VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER || '512757841511';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const FOLDER_KEY = 'reypez.googleDrive.web.folder';

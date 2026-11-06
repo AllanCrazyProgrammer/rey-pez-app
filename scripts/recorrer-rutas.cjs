@@ -4,6 +4,8 @@
 // Firestore se ignoran; lo que importa es que cada pantalla cargue su código sin romperse.
 //
 // uso: node scripts/recorrer-rutas.cjs <carpetaDist> [puerto] [salida.json]
+// Con login de Firebase obligatorio (VUE_APP_LOGIN_LOCAL=off) las rutas protegidas redirigen al
+// login sin sesión; para recorrerlas, compila con VUE_APP_LOGIN_LOCAL distinto de off.
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -21,7 +23,8 @@ const server = http.createServer((req, res) => {
 });
 
 const router = fs.readFileSync(path.join(__dirname, '..', 'src', 'router.js'), 'utf8');
-const rutas = [...new Set([...router.matchAll(/path:\s*'([^']+)'/g)].map(m => m[1]))]
+// Rutas con comillas simples o dobles (p. ej. path: "/embarques/:id").
+const rutas = [...new Set([...router.matchAll(/path:\s*(['"])([^'"]+)\1/g)].map(m => m[2]))]
   .map(r => r.replace(/:([a-zA-Z]+)\?/g, 'demo').replace(/:fecha/g, '2026-11-05').replace(/:([a-zA-Z]+)/g, 'demo'));
 
 (async () => {
