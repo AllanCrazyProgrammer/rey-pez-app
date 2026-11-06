@@ -10,8 +10,9 @@
 - ✅ Web (Firebase Hosting y Heroku) y escritorio (Mac y Windows) inician sesión en Firebase.
   El escritorio identifica sus peticiones de Auth con el dominio de la web
   (`electron/authReferer.js`), porque la llave del navegador tiene restricción de sitios web.
-- ⏳ **App de Android**: todavía no inicia sesión en Firebase; con estas reglas no puede leer
-  ni guardar hasta generar un APK nuevo.
+- ⏳ **App de Android**: el APK 0.3.20 ya inicia sesión en Firebase, pero la llave del navegador
+  rechaza su origen (`https://localhost/`, el WebView de Capacitor): falta agregar
+  `https://localhost/*` a sus referentes permitidos en Google Cloud → Credenciales.
 - ⏳ Respaldo diario: apagado hasta configurar el bucket (sección 1).
 - ⏳ Siguiente nivel opcional: reglas por colección y App Check (paso 7).
 

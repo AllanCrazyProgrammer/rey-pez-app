@@ -3,6 +3,7 @@
     <header class="mobile-header"><router-link to="/" class="mobile-brand"><span class="rp-brand-mark"><MobileIcon name="fish" /></span><span>ReyPez<small>INVENTARIOS</small></span></router-link><div class="rp-header-actions"><button type="button" class="rp-icon-button rp-sound-toggle" :class="{ 'rp-sound-on': sonidosActivos }" :aria-pressed="String(sonidosActivos)" :aria-label="sonidosActivos ? 'Silenciar sonidos' : 'Activar sonidos'" :title="sonidosActivos ? 'Silenciar sonidos' : 'Activar sonidos'" data-sin-sonido @click="alternarSonidos"><MobileIcon :name="sonidosActivos ? 'volume' : 'muted'" /></button><button v-if="autenticado" class="rp-logout" @click="salir">Salir</button></div></header>
     <p v-if="!online" class="mobile-offline" role="status">Sin conexión. Las existencias pueden no estar actualizadas.</p>
     <main class="mobile-content"><router-view :key="$route.path" /></main>
+    <AppUpdateNotice v-if="fuenteActualizacion" :fuente="fuenteActualizacion" movil />
     <nav v-if="autenticado" class="mobile-nav" aria-label="Inventarios"><router-link to="/" exact><MobileIcon name="home" />Inicio</router-link><router-link to="/existencias" :class="{ activo: $route.meta.grupo === 'limpios' }"><MobileIcon name="box" />Limpios</router-link><router-link to="/existencias-crudos" :class="{ activo: $route.meta.grupo === 'crudos' }"><MobileIcon name="fish" />Crudos</router-link></nav>
   </div>
 </template>
@@ -12,6 +13,8 @@ import { Capacitor } from '@capacitor/core';
 import { useAuthStore } from '@/stores/auth';
 import { crearSonidosTerminal } from '@/utils/sonidosTerminal';
 import MobileIcon from './MobileIcon.vue';
+import AppUpdateNotice from '@/components/layout/AppUpdateNotice.vue';
+import { fuenteActualizacionAndroid } from './arranqueActualizacion';
 import '@fontsource/roboto/latin-400.css';
 import '@fontsource/roboto/latin-700.css';
 import '@fontsource/orbitron/latin-700.css';
@@ -23,7 +26,7 @@ function leerSonidos() {
   try { return localStorage.getItem(claveSonidos) !== '0'; } catch (_) { return true; }
 }
 export default {
-  components: { MobileIcon }, data: () => ({ online: navigator.onLine, sonidosActivos: leerSonidos() }),
+  components: { MobileIcon, AppUpdateNotice }, data: () => ({ online: navigator.onLine, sonidosActivos: leerSonidos(), fuenteActualizacion: fuenteActualizacionAndroid }),
   computed: { autenticado() { return useAuthStore().isAuthenticated; } },
   methods: {
     actualizarConexion() { this.online = navigator.onLine; },

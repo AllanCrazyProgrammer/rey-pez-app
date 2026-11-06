@@ -1,5 +1,13 @@
 {
   "appId": "com.reypez.app",
   "appName": "Rey Pez App",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "statsUrl": "",
+      "appReadyTimeout": 20000,
+      "resetWhenUpdate": true
+    }
+  }
 }

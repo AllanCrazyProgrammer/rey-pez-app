@@ -13,6 +13,7 @@
     <DriveBackupNotice @open-settings="abrirOpcionesOffline" />
     <PdfPreview />
     <WebUpdateNotice v-if="!desktopApp" :before-update="guardarAntesDeActualizarWeb" />
+    <AppUpdateNotice v-else-if="fuenteActualizacion" :fuente="fuenteActualizacion" :before-update="guardarAntesDeActualizarWeb" />
     <dialog ref="offlineDialog" class="offline-dialog" aria-labelledby="offline-dialog-title">
       <header class="offline-dialog-header">
         <h2 id="offline-dialog-title">Conexión y respaldos</h2>
@@ -38,6 +39,8 @@
 import DriveBackupNotice from './components/layout/DriveBackupNotice.vue';
 import PdfPreview from './components/layout/PdfPreview.vue';
 import WebUpdateNotice from './components/layout/WebUpdateNotice.vue';
+import AppUpdateNotice from './components/layout/AppUpdateNotice.vue';
+import { fuenteActualizacionEscritorio } from './services/actualizacionEscritorio';
 import EmbarquesSync from './services/EmbarquesSync';
 import EmbarquesOfflineStatus from './components/layout/EmbarquesOfflineStatus.vue';
 import Navbar from "./components/layout/NavBar.vue";
@@ -52,10 +55,11 @@ export default {
     DriveBackupNotice,
     PdfPreview,
     WebUpdateNotice,
+    AppUpdateNotice,
     EmbarquesOfflineStatus,
     Footer
   },
-  data: () => ({ offlineOpened: false, desktopApp: Boolean(window.desktop) }),
+  data: () => ({ offlineOpened: false, desktopApp: Boolean(window.desktop), fuenteActualizacion: Object.freeze(fuenteActualizacionEscritorio()) }),
   watch: { '$route'() { this.$refs.offlineDialog?.close(); } },
   methods: {
     cerrarNotificacion(id) { useUIStore().dismissNotification(id); },

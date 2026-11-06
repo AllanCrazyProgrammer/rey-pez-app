@@ -1,10 +1,11 @@
-const { app, BrowserWindow, shell, ipcMain, dialog, safeStorage, session } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog, safeStorage, session, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { initGoogleDrive } = require('./googleDrive');
 const { renderHtmlPdf } = require('./printHtml');
 const { identificarPeticionesDeAuth } = require('./authReferer');
+const { crearActualizador, urlDeActualizaciones } = require('./actualizaciones');
 
 // A separate profile supports isolated QA without touching real shipments.
 const profile = app.commandLine.getSwitchValue('user-data-dir');
@@ -14,9 +15,16 @@ if (profile) {
   app.setPath('sessionData', path.resolve(profile));
 }
 const devUrl = !app.isPackaged && process.env.ELECTRON_DEV_URL;
-const localIndex = path.join(__dirname, '..', 'desktop-dist', 'index.html');
+const carpetaIncluida = path.join(__dirname, '..', 'desktop-dist');
 let mainWindow;
 let quitting = false;
+let actualizador = null;
+// Paquete de pantallas cargado ahora (el del instalador o uno descargado; ver actualizaciones.js).
+let paqueteCargado = { carpeta: carpetaIncluida, version: 'instalador', numero: 0, descargado: false };
+let aplicarActualizacion = null;
+const ESPERA_ARRANQUE_MS = 60000;
+const REVISAR_CADA_MS = 30 * 60 * 1000;
+const indexDe = paquete => path.join(paquete.carpeta, 'index.html');
 initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWindow: () => mainWindow });
 
 function isExternal(url) {
@@ -89,8 +97,41 @@ function createMainWindow() {
   let closeApproved = false;
   let closeRequest = null;
   let closeTimer;
+  let recargarTrasGuardar = false;
+  let recargando = false;
+  let vigilancia = null;
+  const cargarPaquete = paquete => {
+    paqueteCargado = paquete;
+    readyToSave = false;
+    clearTimeout(vigilancia);
+    // Un paquete descargado que no avisa que arrancó (renderer-ready) se descarta y vuelve el del instalador.
+    if (paquete.descargado) vigilancia = setTimeout(() => regresarAlInstalador('no arrancó a tiempo'), ESPERA_ARRANQUE_MS);
+    if (devUrl) return win.loadURL(devUrl + '/#/embarques');
+    return win.loadFile(indexDe(paquete), { hash: '/embarques' }).catch(() => {});
+  };
+  const regresarAlInstalador = motivo => {
+    if (!paqueteCargado.descargado || win.isDestroyed()) return;
+    console.error(`[desktop] el paquete ${paqueteCargado.version} ${motivo}`);
+    actualizador.marcarFallida(paqueteCargado.version);
+    cargarPaquete(actualizador.paqueteParaCargar());
+  };
+  const recargarConVersionNueva = () => {
+    recargarTrasGuardar = false;
+    if (!actualizador.activarLista()) return;
+    recargando = true;
+    Promise.resolve(cargarPaquete(actualizador.paqueteParaCargar())).finally(() => { recargando = false; });
+  };
+  aplicarActualizacion = () => {
+    if (win.isDestroyed()) return;
+    // Mismo guardado que al cerrar la ventana; al confirmarse, se recarga en vez de cerrar.
+    if (!readyToSave) return recargarConVersionNueva();
+    recargarTrasGuardar = true;
+    win.close();
+  };
   const rendererReady = event => {
-    if (event.sender === win.webContents) readyToSave = true;
+    if (event.sender !== win.webContents) return;
+    readyToSave = true;
+    clearTimeout(vigilancia);
   };
   const saved = (event, result) => {
     if (event.sender !== win.webContents || !closeRequest || result.requestId !== closeRequest) return;
@@ -98,9 +139,12 @@ function createMainWindow() {
     closeRequest = null;
     if (result.error) {
       quitting = false;
+      recargarTrasGuardar = false;
       dialog.showMessageBox(win, { type: 'error', title: 'No se pudo guardar', message: 'La aplicación seguirá abierta para proteger tus cambios.', detail: result.error });
       return;
     }
+    if (recargarTrasGuardar && !quitting) return recargarConVersionNueva();
+    recargarTrasGuardar = false;
     closeApproved = true;
     win.close();
   };
@@ -115,17 +159,19 @@ function createMainWindow() {
     closeTimer = setTimeout(() => {
       closeRequest = null;
       quitting = false;
+      recargarTrasGuardar = false;
       dialog.showMessageBox(win, { type: 'warning', message: 'No se pudo confirmar el guardado local. La ventana seguirá abierta; intenta cerrar de nuevo.' });
     }, 15000);
   });
   win.webContents.on('will-prevent-unload', event => {
     // Only after the editor confirmed its IndexedDB transaction completed.
-    if (closeApproved) event.preventDefault();
+    if (closeApproved || recargando) event.preventDefault();
   });
   win.once('ready-to-show', () => win.show());
   win.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     if (isMainFrame && code !== -3) {
       console.error('[desktop] load failed', code, description, url);
+      if (paqueteCargado.descargado) return regresarAlInstalador(`no cargó (${description})`);
       dialog.showErrorBox('No se pudo abrir ReyPez', 'Faltan archivos de la aplicación. Reinstala ReyPez; los datos locales se conservan.');
     }
   });
@@ -134,8 +180,9 @@ function createMainWindow() {
     // Local PDF previews can open in a sandboxed window.
     return { action: url.startsWith('blob:') ? 'allow' : 'deny' };
   });
+  win.webContents.on('render-process-gone', () => regresarAlInstalador('se cerró inesperadamente'));
   win.webContents.on('will-navigate', (event, url) => {
-    const permitted = devUrl ? url.startsWith(devUrl + '/') : url.split('#')[0] === pathToFileURL(localIndex).href;
+    const permitted = devUrl ? url.startsWith(devUrl + '/') : url.split('#')[0] === pathToFileURL(indexDe(paqueteCargado)).href;
     if (!permitted) {
       event.preventDefault();
       if (isExternal(url)) shell.openExternal(url);
@@ -143,13 +190,36 @@ function createMainWindow() {
   });
   win.on('closed', () => {
     clearTimeout(closeTimer);
+    clearTimeout(vigilancia);
+    aplicarActualizacion = null;
     ipcMain.removeListener('desktop:renderer-ready', rendererReady);
     ipcMain.removeListener('desktop:close-ready', saved);
     mainWindow = null;
     if (quitting) app.quit();
   });
-  if (devUrl) win.loadURL(devUrl + '/#/embarques');
-  else win.loadFile(localIndex, { hash: '/embarques' });
+  cargarPaquete(actualizador.paqueteParaCargar());
+}
+
+function esVentanaPrincipal(event) {
+  return mainWindow && event.sender === mainWindow.webContents && event.senderFrame === event.sender.mainFrame;
+}
+ipcMain.handle('desktop:actualizacion-estado', event => {
+  if (!esVentanaPrincipal(event) || !actualizador) return null;
+  return actualizador.estadoPublico(paqueteCargado);
+});
+ipcMain.handle('desktop:actualizacion-aplicar', event => {
+  if (!esVentanaPrincipal(event) || !aplicarActualizacion) return false;
+  aplicarActualizacion();
+  return true;
+});
+
+async function revisarActualizaciones() {
+  try {
+    const estado = await actualizador.buscar(paqueteCargado);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop:actualizacion-estado', estado);
+  } catch (error) {
+    console.warn('[desktop] no se pudo revisar actualizaciones:', error.message);
+  }
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -161,7 +231,17 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => { quitting = true; });
   app.whenReady().then(() => {
     identificarPeticionesDeAuth(session.defaultSession);
+    actualizador = crearActualizador({
+      carpetaDatos: app.getPath('userData'), carpetaIncluida, versionInstalador: app.getVersion(),
+      urlBase: urlDeActualizaciones(), fetch: (url, opciones) => net.fetch(url, opciones),
+      log: mensaje => console.log('[desktop] actualizaciones:', mensaje)
+    });
     createMainWindow();
+    // En desarrollo (electron:dev) las pantallas vienen del servidor local; no se descarga nada.
+    if (!devUrl) {
+      setTimeout(revisarActualizaciones, 15000);
+      setInterval(revisarActualizaciones, REVISAR_CADA_MS);
+    }
     app.on('activate', () => { if (!mainWindow) createMainWindow(); });
   });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
