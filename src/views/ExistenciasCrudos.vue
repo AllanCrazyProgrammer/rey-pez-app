@@ -57,13 +57,12 @@
           <h3>{{ proveedor }}</h3>
           <div class="crudos-tarjetas-movil" :aria-label="`Productos de ${proveedor}`">
             <button v-for="producto in productos" v-if="tieneKilosVisibles(producto.kilos)" :key="producto.clave"
-              type="button" class="crudo-tarjeta" aria-haspopup="dialog"
+              type="button" class="crudo-tarjeta" :class="{ 'crudo-otilio': esDeOtilio(proveedor, producto) }" aria-haspopup="dialog"
               :aria-label="`Ver detalle de ${producto.nombre}, ${proveedor}, ${formatNumber(producto.kilos)} kg`"
               @click="abrirDetalleCrudo(producto, proveedor, productos, $event.currentTarget)">
               <span class="crudo-tarjeta-cuarto">{{ producto.cuarto || 's/c' }}</span>
               <span class="crudo-tarjeta-nombre">{{ producto.nombre }}</span>
               <span class="crudo-tarjeta-kilos">{{ formatNumber(producto.kilos) }} <small>kg</small></span>
-              <span v-if="tieneDato(producto.piezas)" class="crudo-tarjeta-piezas">Pcz: {{ producto.piezas }}</span>
               <span class="crudo-tarjeta-detalle">Ver detalle <span aria-hidden="true">↗</span></span>
             </button>
           </div>
@@ -71,7 +70,6 @@
             <thead>
               <tr>
                 <th scope="col">Medida</th>
-                <th v-if="tienePiezas(productos)" scope="col">Pcz</th>
                 <th v-if="tieneCuartos(productos)" scope="col">Cuarto</th>
                 <th scope="col">Kilos</th>
                 <th v-if="!soloInventario" scope="col">Taras</th>
@@ -80,7 +78,8 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="producto in productos" :key="producto.clave" v-if="tieneKilosVisibles(producto.kilos)">
+              <tr v-for="producto in productos" :key="producto.clave" v-if="tieneKilosVisibles(producto.kilos)"
+                :class="{ 'fila-otilio': esDeOtilio(proveedor, producto) }">
                 <td data-label="Medida" class="medida-cell">
                   <button
                     class="medida-button"
@@ -94,7 +93,6 @@
                     Asignar cuarto
                   </button>
                 </td>
-                <td v-if="tienePiezas(productos)" data-label="Pcz">{{ tieneDato(producto.piezas) ? producto.piezas : '—' }}</td>
                 <td v-if="tieneCuartos(productos)" data-label="Cuarto">
                   <button 
                     class="cuarto-button"
@@ -307,6 +305,7 @@ import EntradasPorProveedorModal from '@/components/Existencias/EntradasPorProve
 import RegistroCrudos from './RegistroCrudos.vue';
 import { formatNumber, formatearFechaHora, formatearPrecio } from '@/utils/formatters';
 import { useUIStore } from '@/stores/ui';
+import { esCrudoDeOtilio, agruparLotesPorMedida } from '@/utils/existenciasCrudosVista';
 
 export default {
   name: 'ExistenciasCrudos',
@@ -386,7 +385,7 @@ export default {
         const lista = productos
           .map(p => {
             const sub = (p.cuartos || [p]).find(c => c.cuarto === this.filtroCuarto);
-            return sub ? { ...p, ...sub, clave: p.clave, cuartos: [sub], valor: sub.kilos * sub.ultimoPrecio } : null;
+            return sub ? { ...p, ...sub, clave: p.clave, cuartos: [sub] } : null;
           })
           .filter(Boolean);
         if (lista.length) filtradas[prov] = lista;
@@ -710,34 +709,12 @@ export default {
 
         // Convertir a formato para mostrar y filtrar productos con kilos <= 0
         // Los lotes se calculan por cuarto (para que las salidas descuenten del cuarto correcto),
-        // pero se muestran agrupados por producto + precio + piezas, con desglose por cuarto.
+        // pero se muestra un renglón por medida (mismo nombre), con desglose por cuarto.
         const existenciasFiltradas = {};
         Object.keys(existencias).forEach(proveedor => {
-          const grupos = {};
-          Object.values(existencias[proveedor])
-            .filter(producto => this.tieneKilosVisibles(producto.kilos))
-            .forEach(producto => {
-              const claveGrupo = JSON.stringify([producto.producto, producto.precioKey, producto.piezas]);
-              if (!grupos[claveGrupo]) {
-                grupos[claveGrupo] = {
-                  ...producto,
-                  clave: claveGrupo,
-                  kilos: 0,
-                  cuartos: []
-                };
-              }
-              grupos[claveGrupo].kilos += producto.kilos;
-              grupos[claveGrupo].cuartos.push({ ...producto });
-            });
-          const productos = Object.values(grupos).map(grupo => {
-            grupo.cuartos.sort((a, b) => a.cuarto.localeCompare(b.cuarto));
-            return {
-              ...grupo,
-              cuarto: grupo.cuartos.length === 1 ? grupo.cuartos[0].cuarto : `${grupo.cuartos.length} cuartos`,
-              valor: grupo.kilos * grupo.ultimoPrecio
-            };
-          });
-          
+          const productos = agruparLotesPorMedida(
+            Object.values(existencias[proveedor]).filter(producto => this.tieneKilosVisibles(producto.kilos))
+          );
           if (productos.length > 0) {
             existenciasFiltradas[proveedor] = productos;
           }
@@ -818,13 +795,8 @@ export default {
       return productos.reduce((total, producto) => total + producto.valor, 0);
     },
 
-    // Missing values are distinct from a valid numeric zero (notably Pcz).
-    tieneDato(valor) {
-      return valor !== null && valor !== undefined && String(valor).trim() !== '';
-    },
-
-    tienePiezas(productos) {
-      return productos.some(producto => this.tieneKilosVisibles(producto.kilos) && this.tieneDato(producto.piezas));
+    esDeOtilio(proveedor, producto) {
+      return esCrudoDeOtilio(proveedor, producto.nombre);
     },
 
     tieneCuartos(productos) {
@@ -1031,6 +1003,11 @@ export default {
           tr:nth-child(even) {
             background-color: #f8f9fa;
           }
+          tr.fila-otilio td {
+            background-color: #fff176;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           .kilos-cell, .taras-cell, .precio-cell, .valor-cell {
             text-align: right;
             font-weight: bold;
@@ -1101,7 +1078,6 @@ export default {
               <thead>
                 <tr>
                   <th>Medida</th>
-                  <th>Pcz</th>
                   <th>Kilos</th>
                   <th>Taras</th>
                   <th>Precio/kg</th>
@@ -1113,9 +1089,8 @@ export default {
         
         productos.forEach(producto => {
           contenidoHTML += `
-            <tr>
-              <td>${producto.nombre}</td>
-              <td>${this.escaparTextoReporte(producto.piezas || '—')}</td>
+            <tr${this.esDeOtilio(proveedor, producto) ? ' class="fila-otilio"' : ''}>
+              <td>${this.escaparTextoReporte(producto.nombre)}</td>
               <td class="kilos-cell">${this.formatNumber(producto.kilos)}</td>
               <td class="taras-cell">${(producto.kilos / 19).toFixed(1)}</td>
               <td class="precio-cell">${producto.ultimoPrecio > 0 ? `$${this.formatearPrecio(producto.ultimoPrecio)}` : '—'}</td>
@@ -1365,6 +1340,11 @@ h1, h2, h3 {
 
 .productos-table tr:nth-child(even) {
   background-color: #f8f9fa;
+}
+
+/* Crudo de Otilio (y la pacotilla chica de los barcos) */
+.productos-table tr.fila-otilio td {
+  background-color: #fff176;
 }
 
 .kilos-cell,
@@ -1722,7 +1702,7 @@ h1, h2, h3 {
   .crudo-tarjeta-nombre { font-size: 15px; font-weight: 700; line-height: 1.3; }
   .crudo-tarjeta-kilos { color: #28569f; font-size: 19px; line-height: 1.25; font-weight: 700; }
   .crudo-tarjeta-kilos small { font-size: 12px; }
-  .crudo-tarjeta-piezas { font-size: 12px; color: #53647d; }
+  .crudo-tarjeta.crudo-otilio { background: #fff176; border-color: #e0c000; }
   .crudo-tarjeta-detalle { margin-top: auto; padding-top: 9px; border-top: 1px solid #d6e1f2; display: flex; justify-content: space-between; gap: 4px; font-size: 12px; font-weight: 600; color: #315eae; }
   .crudo-tarjeta:hover { border-color: #315eae; background: #edf3fc; }
   .crudo-tarjeta:focus-visible { outline: 3px solid #e9a526; outline-offset: 2px; }
