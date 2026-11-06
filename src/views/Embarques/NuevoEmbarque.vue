@@ -1463,6 +1463,23 @@ export default {
     },
 
     // Métodos para la persistencia de clientes
+
+    esRutaDelEmbarqueActual(ruta) {
+      return Boolean(ruta && ruta.name === 'EditarEmbarque' && this.embarqueId &&
+        ruta.params.id === this.embarqueId);
+    },
+
+    // Mantiene el id del embarque abierto en la URL (/embarques/:id) para que
+    // al presionar F5 o recargar la página se vuelva a abrir el mismo embarque
+    // en lugar de uno en blanco.
+    sincronizarUrlConEmbarque(id) {
+      if (!id || id === 'nuevo' || this._destruido) return;
+      const ruta = this.$route;
+      if (!ruta || !['NuevoEmbarque', 'EditarEmbarque'].includes(ruta.name)) return;
+      if (ruta.name === 'EditarEmbarque' && ruta.params.id === id) return;
+      this.$router.replace({ name: 'EditarEmbarque', params: { id }, query: ruta.query, hash: ruta.hash })
+        .catch(() => {});
+    },
   },
 
   watch: {
@@ -1474,6 +1491,7 @@ export default {
       } else {
         this.detenerPresenciaEmbarque();
       }
+      this.sincronizarUrlConEmbarque(nuevoId);
     },
     embarque: {
       handler(nuevoValor) {
@@ -1622,6 +1640,11 @@ export default {
   },
 
   async beforeRouteUpdate(to, from, next) {
+    // Solo se actualizó la URL al id del embarque ya abierto: nada que recargar.
+    if (this.esRutaDelEmbarqueActual(to)) {
+      next();
+      return;
+    }
     try {
       if (this.hasPendingChanges) await this.guardarSnapshotOffline({ pendingSync: true });
       if (this._timerSubidaEnVivo) clearTimeout(this._timerSubidaEnVivo);
@@ -1636,6 +1659,12 @@ export default {
   },
 
   async beforeRouteLeave(to, from, next) {
+    // /nuevo-embarque -> /embarques/:id del mismo embarque (ver
+    // sincronizarUrlConEmbarque): es el mismo editor, no se está saliendo.
+    if (this.esRutaDelEmbarqueActual(to)) {
+      next();
+      return;
+    }
     // 1. Procesar operaciones pendientes en el SaveManager (guardado local)
     if (this.saveManager && this.embarqueId && this.guardadoAutomaticoActivo) {
       const status = this.saveManager.getStatus();
@@ -1671,6 +1700,7 @@ export default {
   },
 
   beforeDestroy() {
+    this._destruido = true;
     EmbarquesSync.editorId = null;
     // The global queue resumes after the editor has released its live writer.
     EmbarquesSync.sync();

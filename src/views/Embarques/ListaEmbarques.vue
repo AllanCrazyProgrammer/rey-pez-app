@@ -811,8 +811,10 @@ export default {
       this.navegacionAperturaEnCurso = true;
       this.limpiarTemporizadoresApertura();
       this.restaurarScrollTrasApertura();
+      // EditarEmbarque lleva el id en la URL (/embarques/:id): así un F5 o
+      // recargar la página vuelve a abrir el mismo embarque.
       this.$router.push({
-        name: 'NuevoEmbarque',
+        name: 'EditarEmbarque',
         params: { id: this.embarqueSeleccionado.id }
       });
     },
