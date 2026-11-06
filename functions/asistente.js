@@ -18,6 +18,7 @@ const { crearHandlersPrecios } = require('./lib/preciosVenta');
 const { crearHandlersRefrigerados } = require('./lib/pedidosLimpioRefrigerados');
 const { crearHandlersNotas } = require('./lib/notasVenta');
 const { crearHandlersDeudas } = require('./lib/deudasProveedor');
+const { crearHandlerEmbarques } = require('./lib/embarquesLectura');
 const { normalizarDestino: normalizarDestinoSalida } = require('./lib/destinoSalida');
 const { pedidoLimpioVacio, pedidoLimpioNuevoAsistente, pedidoLimpioEstaVacio } = require('./lib/pedidoLimpioDia');
 
@@ -3009,6 +3010,7 @@ const pedidosCrudoHandlers = crearHandlersPedidosCrudo({ db, admin, errorRespons
 const preciosHandlers = crearHandlersPrecios({ db, admin, errorResponse });
 const notasHandlers = crearHandlersNotas({ db, FieldValue: admin.firestore.FieldValue, errorResponse, generarAsistenteId });
 const deudasHandlers = crearHandlersDeudas({ db, FieldValue: admin.firestore.FieldValue, errorResponse });
+const embarquesHandlers = crearHandlerEmbarques({ db, errorResponse });
 
 if (process.env.NODE_ENV === 'test') {
   exports._testHandlers = {
@@ -3026,7 +3028,8 @@ if (process.env.NODE_ENV === 'test') {
     ...pedidosCrudoHandlers,
     ...preciosHandlers,
     ...notasHandlers,
-    ...deudasHandlers
+    ...deudasHandlers,
+    handleGetEmbarques: embarquesHandlers.handleGetEmbarques
   };
 }
 
@@ -3165,9 +3168,19 @@ exports.asistente = onRequest(
     if (path === '/precios' && method === 'GET') {
       return preciosHandlers.handleGetPrecios(req, res);
     }
+
+    if (path === '/embarques' && method !== 'GET') {
+      res.setHeader('Allow', 'GET');
+      return errorResponse(res, 405, 'METODO_NO_PERMITIDO',
+        'Solo se permite GET /embarques. Esta ruta no modifica documentos.');
+    }
+
+    if (path === '/embarques' && method === 'GET') {
+      return embarquesHandlers.handleGetEmbarques(req, res);
+    }
     
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer'
+      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer, GET /embarques'
     });
   }
 );

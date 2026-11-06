@@ -27,6 +27,7 @@ La función `asistente` expone endpoints protegidos con autenticación por Beare
 - **POST /precios**, **GET /precios**
 - **POST /notas**, **GET /notas**, **POST /notas/deshacer** (Notas por Cliente)
 - **POST /deudas**, **GET /deudas**, **POST /deudas/deshacer** (Procesos → Deudas con proveedores)
+- **GET /embarques?fecha=YYYY-MM-DD** (solo lectura del embarque del día y sus rendimientos guardados)
 
 Todos los endpoints requieren autenticación mediante el header `Authorization: Bearer <API_KEY>`.
 
@@ -2127,3 +2128,105 @@ Existencias), `proveedores` (resumen por proveedor) y todas las `deudas`. `pendi
 Borra la deuda y sus productos solo si sigue igual: sin abonos, mismos productos y sin `fechaActualizacion` (la app la pone en cada
 abono o edición). Si no, `409 DEUDA_MODIFICADA` con `details.camposCambiados`. Acepta `dryRun`. Repetir con la misma llave devuelve
 la misma respuesta; con otra llave de deshacer, `400 YA_DESHECHO`; sin la operación, `404 OPERACION_NO_ENCONTRADA`.
+
+## GET /embarques
+
+Lectura del embarque que guarda Nuevo embarque y de los datos que usa Rendimientos.
+No escribe, no borra y no recalcula. La colección es `embarques`.
+
+Nuevo embarque guarda `fecha` como texto `YYYY-MM-DD` (`prepararDatosEmbarque`). Un día puede
+tener varios documentos: `camionNumero` es el máximo ya usado ese día más uno. Rendimientos,
+cuando se abre un embarque concreto, fusiona los del mismo día para la pantalla y conserva
+`kilosCrudos` solo del que se abrió. Esta ruta no elige un principal, no fusiona y no filtra
+por cliente: devuelve cada documento del día, ordenado por `camionNumero` y luego por `id`.
+
+Si un documento viejo tiene `fecha` como Timestamp, entra solo cuando ese instante cae en el
+día UTC pedido (el mismo corte que `normalizarFechaISO`). No se lee el resto del histórico
+ni otras colecciones.
+
+`kilosCrudos` y `rendimientos` son los campos guardados (`CAMPOS_RENDIMIENTOS` en
+`src/utils/embarqueRevision.js`, con `kilosCrudos` aparte). El cociente
+`kilosCrudos / totalEmbarcado` lo calcula `Rendimientos.vue` en pantalla y no se persiste.
+`rendimientoManual` sí se devuelve cuando la pantalla lo guardó. `calculados` es `false`:
+no hay campos derivados en la respuesta. `totalGanancias` y `costosPorMedida` se devuelven
+solo si ya estaban guardados, sin volver a calcularlos.
+
+Los Timestamp se serializan como `{ tipo, seconds, nanoseconds, iso }` con los
+`seconds` y `nanoseconds` leídos de Firestore (la base los guarda en microsegundos).
+`iso` es la forma legible y queda en milisegundos.
+
+### Petición
+
+```bash
+curl -X GET "https://asistente-<hash>-uc.a.run.app/embarques?fecha=2026-11-06" \
+  -H "Authorization: Bearer <ASISTENTE_API_KEY>"
+```
+
+`fecha` es obligatoria y tiene que ser una fecha real `YYYY-MM-DD`. Otra forma, un día
+imposible (`2026-02-31`) o un timestamp ISO responden `400 FECHA_INVALIDA`. Sin embarque
+de ese día: `404 EMBARQUE_NO_ENCONTRADO`, sin datos de otros días. POST, PUT, PATCH y
+DELETE responden `405 METODO_NO_PERMITIDO`. Sin Bearer, o con uno distinto: `401`.
+
+Un query extra como `cliente` no filtra: se ignoran y se devuelven todos los clientes y
+todos los camiones de esa fecha.
+
+### Respuesta 200
+
+```json
+{
+  "fecha": "2026-11-06",
+  "total": 1,
+  "criterio": "Colección embarques. Incluye el texto fecha == YYYY-MM-DD que guarda NuevoEmbarque y, si existen, Timestamps de ese día UTC. Varios camiones del día se devuelven todos, ordenados por camionNumero y luego id. No se fusionan ni se filtra por cliente.",
+  "calculados": false,
+  "nota": "kilosCrudos y rendimientos son los valores guardados. El cociente kilosCrudos/totalEmbarcado lo calcula Rendimientos.vue y no se persiste; rendimientoManual sí, cuando la pantalla lo guardó.",
+  "embarques": [
+    {
+      "id": "abc123",
+      "fecha": "2026-11-06",
+      "camionNumero": 1,
+      "cargaCon": "Mario",
+      "borrador": false,
+      "rev": 7,
+      "clientes": [
+        {
+          "id": "4",
+          "nombre": "Ozuna",
+          "productos": [
+            { "id": "p-oz", "medida": "51/60", "kilos": [10, 12.5], "taras": [1, 1], "tipo": "c/h20" }
+          ],
+          "crudos": [
+            { "id": "cr-1", "items": [{ "id": "it-1", "talla": "Gde c/c", "barco": "Galileo", "taras": 3 }] }
+          ]
+        }
+      ],
+      "kilosCrudos": {
+        "51/60": 180,
+        "16/20-21/25 mix": { "medida1": 40, "medida2": 35, "etiqueta1": "16/20", "etiqueta2": "21/25" }
+      },
+      "rendimientos": {
+        "rendimientoManual": { "31/40": 1.18 },
+        "notaRendimientos": "guardado en pantalla",
+        "pesoTaraCosto": 19,
+        "pesoTaraVenta": 20,
+        "medidaOculta": {},
+        "analizarGanancia": { "31/40": true },
+        "analizarGananciaCrudos": {},
+        "analizarMaquilaGanancia": {},
+        "precioMaquila": {},
+        "nombresMedidasPersonalizados": {},
+        "totalGanancias": 4200,
+        "costosPorMedida": { "51/60": 95 }
+      },
+      "ultimaEdicion": {
+        "userId": "uid",
+        "username": "Allan",
+        "timestamp": { "tipo": "timestamp", "seconds": 1762428240, "nanoseconds": 123456000, "iso": "2025-11-06T11:24:00.123Z" }
+      }
+    }
+  ]
+}
+```
+
+Cada elemento de `embarques` es un embarque. `clientes[].productos` y `clientes[].crudos`
+salen como los guardó el editor. Si ese día hay otro camión, aparece como otro elemento;
+no se mezclan sus productos ni sus `kilosCrudos`.
