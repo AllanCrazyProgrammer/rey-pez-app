@@ -5,8 +5,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 const babel = require('@babel/core');
 
-function cargarServicio() {
+function cargarServicio(opciones = {}) {
   let cuenta;
+  let actualizado = null;
   const firestore = {
     getFirestore: () => ({}),
     collection: (_, nombre) => nombre,
@@ -15,11 +16,15 @@ function cargarServicio() {
     where: (...args) => args,
     orderBy: (...args) => args,
     limit: valor => valor,
+    async updateDoc(_ref, data) { actualizado = data; },
     async getDocs(consulta) {
       // Colección completa (saldo anterior de Ozuna, como en Cuentas Ozuna):
       // el saldo anterior es la suma del neto de los días previos (300 + 200 = 500).
       // El `nuevoSaldoAcumulado` guardado está desfasado a propósito y la cuenta
       // del día posterior no debe contar.
+      if (consulta && consulta.filtros && consulta.filtros.some((f) => Array.isArray(f) && f[1] === '==') && opciones.alBuscarFecha) {
+        return opciones.alBuscarFecha();
+      }
       if (typeof consulta === 'string') {
         const docs = [
           { id: 'a', data: () => ({ fecha: '2026-10-04', totalGeneral: 400, abonos: [{ monto: 100 }], nuevoSaldoAcumulado: 9999 }) },
@@ -60,7 +65,8 @@ function cargarServicio() {
   }
   return {
     servicio: load(path.resolve(__dirname, '../src/services/EmbarqueCuentasService.js')),
-    cuenta: () => cuenta
+    cuenta: () => cuenta,
+    actualizado: () => actualizado
   };
 }
 
@@ -113,6 +119,34 @@ test('Ozuna: combina abonos de limpio y crudo y evita duplicar la cuenta', async
     fecha: '2026-10-06', productos: [], clienteCrudos: {}
   }), error => error.code === 'cuenta-duplicada');
   assert.equal(contexto.cuenta().abonos.length, 2);
+});
+
+test('Ozuna: crear la nota del embarque completa el abono de hoy sin duplicarlo', async () => {
+  const abono = { descripcion: '06/10/2026 - Efectivo', monto: 150, stashItemId: 's1', esEfectivo: true };
+  const placeholder = {
+    fecha: '2026-10-06', items: [], cobros: [], abonos: [abono],
+    saldoAcumuladoAnterior: 0, totalGeneral: 0, totalSaldo: -150, nuevoSaldoAcumulado: -150,
+    pendienteEmbarque: true, origenAsistente: 'abono-ozuna'
+  };
+  const ctx = cargarServicio({
+    alBuscarFecha: () => ({ docs: [{ id: '2026-10-06', data: () => placeholder }], empty: false })
+  });
+  const id = await ctx.servicio.crearCuentaOzuna({
+    fecha: '2026-10-06',
+    productos: [{ medida: '61/70', kilos: [50], taras: [5], precio: 21, esVenta: false }],
+    clienteCrudos: {}
+  }, null);
+  assert.equal(id, '2026-10-06');
+  assert.equal(ctx.cuenta(), undefined);
+  const datos = ctx.actualizado();
+  assert.equal(datos.abonos.length, 1);
+  assert.equal(datos.abonos[0].monto, 150);
+  assert.equal(datos.abonos[0].stashItemId, 's1');
+  assert.equal(datos.pendienteEmbarque, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(datos, 'firmaEmbarque'), false);
+  assert.equal(datos.totalGeneral, 1050);
+  assert.equal(datos.nuevoSaldoAcumulado, 500 + 1050 - 150);
+  assert.equal(datos.totalSaldo, datos.nuevoSaldoAcumulado);
 });
 
 test('Ozuna: no genera abonos para maquila ni ventas sin kilos o sin taras', async () => {

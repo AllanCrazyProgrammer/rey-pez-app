@@ -1,5 +1,9 @@
 import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction, updateDoc } from 'firebase/firestore';
-import { sincronizarCuentaOzunaNota } from '../utils/ozunaCuentaNota';
+import {
+  sincronizarCuentaOzunaNota,
+  esNotaOzunaPendienteDeEmbarque,
+  fusionarNotaOzunaConEmbarque
+} from '../utils/ozunaCuentaNota';
 import { saldoAcumuladoAntesDeFecha } from '../utils/ozunaCuentasSaldo';
 import {
   formatDate,
@@ -1782,6 +1786,35 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
 
     // Validar precios y crear de forma atómica (falla si ya existe una cuenta para la fecha)
     validarItemsVentaConPrecio(datosCuenta, 'Ozuna');
+    const db = getFirestore();
+    const existentes = (await getDocs(
+      query(collection(db, 'cuentasOzuna'), where('fecha', '==', fechaNormalizada))
+    )).docs.map((d) => ({ id: d.id, data: d.data() }));
+    const placeholder = existentes.filter((nota) => esNotaOzunaPendienteDeEmbarque(nota.data));
+    // El abono del asistente pudo crear la nota de hoy antes del embarque.
+    // Se completa esa misma nota y se conserva el abono. Cualquier otra cuenta
+    // de la fecha sigue siendo duplicado: no se pisa.
+    if (existentes.length === 1 && placeholder.length === 1) {
+      const datos = fusionarNotaOzunaConEmbarque(
+        placeholder[0].data,
+        { ...datosCuenta, fecha: fechaNormalizada },
+        null
+      );
+      await updateDoc(doc(db, 'cuentasOzuna', placeholder[0].id), datos);
+      if (router) {
+        const rutaCompleta = `${window.location.origin}/cuentas-ozuna/${placeholder[0].id}?edit=true`;
+        window.open(rutaCompleta, '_blank');
+      }
+      return placeholder[0].id;
+    }
+    if (existentes.length) {
+      const error = new Error(
+        `Ya existe una cuenta de Ozuna registrada para la fecha ${fechaNormalizada}. ` +
+        'No se pueden crear cuentas duplicadas.'
+      );
+      error.code = 'cuenta-duplicada';
+      throw error;
+    }
     await crearCuentaSegura('cuentasOzuna', fechaNormalizada, datosCuenta, 'Ozuna');
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente

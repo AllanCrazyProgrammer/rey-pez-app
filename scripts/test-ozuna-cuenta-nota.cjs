@@ -59,6 +59,47 @@ test('reimprimir con cambios actualiza la misma cuenta y conserva cobros/abonos 
   assert.equal((await sync(repo, nueva(120, 2))).accion, 'reusar');
 });
 
+test('la nota del abono de hoy se completa, conserva un solo abono y recalcula el saldo', async () => {
+  const abono = { descripcion: '06/11/2026 - Efectivo', monto: 150, stashItemId: 'abono-1', esEfectivo: true };
+  const repo = repoMemoria({
+    [fecha]: {
+      fecha, items: [], cobros: [], abonos: [abono],
+      saldoAcumuladoAnterior: 500, totalGeneral: 0, totalSaldo: 350, nuevoSaldoAcumulado: 350,
+      pendienteEmbarque: true, origenAsistente: 'abono-ozuna',
+    },
+  });
+  const r = await sync(repo, nueva(100));
+  assert.equal(r.accion, 'actualizar');
+  assert.equal(repo.docs.size, 1);
+  const g = repo.docs.get(fecha);
+  assert.equal(g.items[0].kilos, 100);
+  assert.equal(g.abonos.length, 1);
+  assert.equal(g.abonos[0].monto, 150);
+  assert.equal(g.abonos[0].stashItemId, 'abono-1');
+  assert.equal(g.pendienteEmbarque, false);
+  assert.equal(g.embarqueId, 'emb1');
+  assert.ok(g.firmaEmbarque);
+  assert.equal(g.nuevoSaldoAcumulado, 500 + 2000 - 150);
+  assert.equal(g.totalSaldo, g.nuevoSaldoAcumulado);
+  const otra = await sync(repo, nueva(100));
+  assert.equal(otra.accion, 'reusar');
+  assert.equal(repo.docs.get(fecha).abonos.length, 1);
+});
+
+test('abono pendiente con productos ya capturados no se pisa', async () => {
+  const manual = {
+    fecha, items: [{ kilos: 7, medida: 'x', costo: 1, total: 7 }], cobros: [],
+    abonos: [{ descripcion: '06/11/2026 - Efectivo', monto: 10 }],
+    pendienteEmbarque: true, saldoAcumuladoAnterior: 1,
+  };
+  const repo = repoMemoria({ abc: manual });
+  const r = await sync(repo, nueva());
+  assert.equal(r.accion, 'manual');
+  assert.equal(repo.escrituras.length, 0);
+  assert.equal(r.datos.items[0].kilos, 7);
+  assert.equal(r.datos.abonos.length, 1);
+});
+
 test('cuenta hecha a mano o editada a mano no se pisa', async () => {
   const manual = { fecha, items: [{ kilos: 7, medida: 'x', costo: 1, total: 7 }], abonos: [], cobros: [] };
   const repo = repoMemoria({ abc: manual });

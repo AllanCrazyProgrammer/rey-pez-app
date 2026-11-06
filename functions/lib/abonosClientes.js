@@ -2,6 +2,12 @@
  * Abonos de clientes con la misma forma que StashModalV2.
  * Cascada: nota pendiente más antigua primero, un stashItemId compartido,
  * ventana de las 50 notas más recientes (igual que la UI).
+ *
+ * Ozuna en modo cascada no reparte hacia la nota vieja: el abono dictado
+ * entra en la nota del día de hoy (America/Mexico_City). Si esa nota no
+ * existe, se crea marcada pendienteEmbarque para que el embarque la
+ * complete después sin duplicar el abono. `fecha` del request sigue siendo
+ * la fecha del pago en la descripción, no el id de la nota.
  */
 
 const LIMITE_NOTAS_UI = 50;
@@ -74,6 +80,150 @@ function descripcionAbono(fecha, metodo) {
   const iso = String(fecha).split('T')[0];
   const [year, month, day] = iso.split('-');
   return `${day}/${month}/${year} - ${metodo}`;
+}
+
+/** Día calendario en México, el mismo "hoy" que ve la app al armar la nota del embarque. */
+function fechaHoyMexico(ahora = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(ahora);
+}
+
+function fechaDiaNota(fecha) {
+  if (!fecha) return '';
+  if (typeof fecha === 'string') {
+    const match = fecha.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+  }
+  if (typeof fecha.toDate === 'function') return fechaHoyMexico(fecha.toDate());
+  const segundos = fecha.seconds ?? fecha._seconds;
+  if (typeof segundos === 'number') return fechaHoyMexico(new Date(segundos * 1000));
+  return '';
+}
+
+/**
+ * Neto del día como Cuentas Ozuna (totalGeneral + cobros - abonos).
+ * No usa nuevoSaldoAcumulado: ese campo puede estar desfasado.
+ */
+function netoDiaOzuna(data) {
+  return redondearMonto(
+    (Number(data?.totalGeneral) || 0) + sumarMontos(data?.cobros) - sumarMontos(data?.abonos)
+  );
+}
+
+function saldoAnteriorOzuna(notasPrevias) {
+  return redondearMonto((notasPrevias || []).reduce((suma, nota) => suma + netoDiaOzuna(nota.data), 0));
+}
+
+function saldosNotaOzuna(data, abonosNuevos, saldoAnterior) {
+  const totalSaldo = redondearMonto(
+    saldoAnterior + (Number(data?.totalGeneral) || 0) + sumarMontos(data?.cobros) - sumarMontos(abonosNuevos)
+  );
+  return {
+    update: {
+      abonos: abonosNuevos,
+      saldoAcumuladoAnterior: redondearMonto(saldoAnterior),
+      totalSaldo,
+      nuevoSaldoAcumulado: totalSaldo,
+      ultimaActualizacion: new Date().toISOString()
+    },
+    nuevoSaldoAcumulado: totalSaldo,
+    saldoPendienteDespues: totalSaldo
+  };
+}
+
+/**
+ * Arma la aplicación del abono de Ozuna sobre la nota de hoy.
+ * docsHoy: notas cuya fecha ya es hoy. directSnap: el documento con id = hoy, o null.
+ */
+function contenidoSnap(snap) {
+  if (!snap) return null;
+  const existe = typeof snap.exists === 'function' ? snap.exists() : !!snap.exists;
+  if (!existe) return null;
+  const data = typeof snap.data === 'function' ? snap.data() : snap.data;
+  if (!data) return null;
+  return { id: snap.id, data };
+}
+
+function armarAbonoOzunaHoy({ hoy, monto, meta, stashItemId, docsHoy, notasPrevias, directSnap }) {
+  if (docsHoy.length > 1) {
+    throw {
+      code: 'NOTA_AMBIGUA',
+      status: 409,
+      message: `Hay más de una nota de Ozuna para ${hoy}`,
+      details: { notas: docsHoy.map((nota) => ({ id: nota.id, fecha: nota.data?.fecha || nota.fecha })) }
+    };
+  }
+
+  const saldoAnterior = saldoAnteriorOzuna(notasPrevias);
+  const abono = construirAbono({ ...meta, stashItemId }, monto);
+  const directo = contenidoSnap(directSnap);
+  let crear = false;
+  let notaId;
+  let data;
+
+  if (docsHoy.length === 1) {
+    notaId = docsHoy[0].id;
+    data = docsHoy[0].data;
+  } else if (directo) {
+    const fechaDirecta = fechaDiaNota(directo.data.fecha);
+    if (fechaDirecta && fechaDirecta !== hoy) {
+      throw {
+        code: 'NOTA_ID_OCUPADO',
+        status: 409,
+        message: `El id ${hoy} ya pertenece a la nota del ${fechaDirecta}`
+      };
+    }
+    notaId = directo.id;
+    data = directo.data;
+  } else {
+    crear = true;
+    notaId = hoy;
+    data = {
+      fecha: hoy,
+      items: [],
+      cobros: [],
+      abonos: [],
+      totalGeneral: 0,
+      saldoAcumuladoAnterior: saldoAnterior
+    };
+  }
+
+  const saldoPendienteAntes = redondearMonto(
+    saldoAnterior + (Number(data.totalGeneral) || 0) + sumarMontos(data.cobros) - sumarMontos(data.abonos)
+  );
+  const abonosNuevos = [...(data.abonos || []), abono];
+  const saldos = saldosNotaOzuna(data, abonosNuevos, saldoAnterior);
+  const documento = crear ? {
+    fecha: hoy,
+    items: [],
+    cobros: [],
+    totalGeneral: 0,
+    ...saldos.update,
+    pendienteEmbarque: true,
+    origenAsistente: 'abono-ozuna'
+  } : null;
+
+  return {
+    crear,
+    documento,
+    aplicacion: {
+      notaId,
+      fecha: fechaDiaNota(data.fecha) || hoy,
+      saldoPendienteAntes,
+      monto: redondearMonto(monto),
+      abono,
+      saldoPendienteDespues: saldos.saldoPendienteDespues,
+      nuevoSaldoAcumulado: saldos.nuevoSaldoAcumulado,
+      estadoPagado: false,
+      update: saldos.update,
+      crear,
+      documento
+    }
+  };
 }
 
 /**
@@ -288,6 +438,40 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
     return { snap: porFecha.docs[0] };
   }
 
+  function notasDesdeSnap(snap) {
+    return snap.docs.map((doc) => ({ id: doc.id, data: doc.data(), fecha: doc.data().fecha }));
+  }
+
+  /**
+   * Lee la nota de hoy y las anteriores. `get` es db o la transacción:
+   * ambos exponen get() de un DocumentReference o de una Query.
+   */
+  async function planAbonoOzunaHoy(clientePlan, hoy, montoNumero, metaBase, stashItemId, get) {
+    const col = db.collection(clientePlan.coleccion);
+    // Lecturas en serie: la transacción de Firestore no admite get() concurrentes.
+    const hoySnap = await get(col.where('fecha', '==', hoy));
+    const previasSnap = await get(col.where('fecha', '<', hoy));
+    const directSnap = await get(col.doc(hoy));
+    const armado = armarAbonoOzunaHoy({
+      hoy,
+      monto: montoNumero,
+      meta: metaBase,
+      stashItemId,
+      docsHoy: notasDesdeSnap(hoySnap),
+      notasPrevias: notasDesdeSnap(previasSnap),
+      directSnap
+    });
+    return {
+      modo: 'hoy',
+      fechaNota: hoy,
+      notaCreada: armado.crear,
+      aplicaciones: [armado.aplicacion],
+      sobrante: 0,
+      totalAplicado: redondearMonto(montoNumero),
+      notasFuente: armado.crear ? [] : [{ id: armado.aplicacion.notaId, data: notasDesdeSnap(hoySnap)[0]?.data || directSnap.data() }]
+    };
+  }
+
   async function handlePostAbonos(req, res) {
     const {
       cliente: clienteEntrada,
@@ -342,8 +526,13 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
 
       let plan;
       let stashItemId = db.collection(cliente.stash).doc().id;
+      const hoyOzuna = cliente.ozuna && modoNormalizado === 'cascada' ? fechaHoyMexico() : null;
 
-      if (modoNormalizado === 'nota') {
+      if (hoyOzuna) {
+        plan = await planAbonoOzunaHoy(
+          cliente, hoyOzuna, montoNumero, metaBase, stashItemId, (ref) => ref.get()
+        );
+      } else if (modoNormalizado === 'nota') {
         const encontrada = await resolverNotaExplicita(cliente.coleccion, String(nota).trim());
         if (encontrada.ambiguo) {
           return errorResponse(res, 409, 'NOTA_AMBIGUA', 'Hay más de una nota con esa fecha', { notas: encontrada.ambiguo });
@@ -383,23 +572,25 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
         };
       }
 
-      const fuentes = new Map(plan.notasFuente.map((nota) => [nota.id, nota.data]));
-      const aplicaciones = plan.aplicaciones.map((aplicacion) => {
-        const data = fuentes.get(aplicacion.notaId) || {};
-        const abonosNuevos = [...(data.abonos || []), aplicacion.abono];
-        const saldos = camposSaldoTrasAbono(data, abonosNuevos, cliente.ozuna, aplicacion.monto);
-        return {
-          notaId: aplicacion.notaId,
-          fecha: aplicacion.fecha,
-          monto: aplicacion.monto,
-          saldoPendienteAntes: aplicacion.saldoPendienteAntes,
-          saldoPendienteDespues: saldos.saldoPendienteDespues,
-          nuevoSaldoAcumulado: saldos.nuevoSaldoAcumulado,
-          estadoPagado: saldos.estadoPagado,
-          abono: aplicacion.abono,
-          update: saldos.update
-        };
-      });
+      const fuentes = new Map((plan.notasFuente || []).map((notaItem) => [notaItem.id, notaItem.data]));
+      const aplicaciones = plan.modo === 'hoy'
+        ? plan.aplicaciones
+        : plan.aplicaciones.map((aplicacion) => {
+          const data = fuentes.get(aplicacion.notaId) || {};
+          const abonosNuevos = [...(data.abonos || []), aplicacion.abono];
+          const saldos = camposSaldoTrasAbono(data, abonosNuevos, cliente.ozuna, aplicacion.monto);
+          return {
+            notaId: aplicacion.notaId,
+            fecha: aplicacion.fecha,
+            monto: aplicacion.monto,
+            saldoPendienteAntes: aplicacion.saldoPendienteAntes,
+            saldoPendienteDespues: saldos.saldoPendienteDespues,
+            nuevoSaldoAcumulado: saldos.nuevoSaldoAcumulado,
+            estadoPagado: saldos.estadoPagado,
+            abono: aplicacion.abono,
+            update: saldos.update
+          };
+        });
 
       let stashSobrante = null;
       if (plan.sobrante > 0) {
@@ -425,8 +616,10 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
         monto: montoNumero,
         metodo,
         fecha,
+        fechaNota: plan.fechaNota || null,
+        notaCreada: plan.notaCreada === true,
         stashItemId: aplicaciones.length ? stashItemId : (stashSobrante ? stashSobrante.id : stashItemId),
-        aplicaciones: aplicaciones.map(({ update, ...publica }) => publica),
+        aplicaciones: aplicaciones.map(({ update, crear, documento, ...publica }) => publica),
         totalAplicado: plan.totalAplicado,
         sobrante: plan.sobrante,
         stashSobranteId: stashSobrante ? stashSobrante.id : null
@@ -450,7 +643,15 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
         let sobranteFinal = plan.sobrante;
         let totalFinal = plan.totalAplicado;
 
-        if (plan.modo === 'cascada') {
+        if (plan.modo === 'hoy') {
+          const fresco = await planAbonoOzunaHoy(
+            cliente, plan.fechaNota, montoNumero, metaBase, stashItemId, (ref) => transaction.get(ref)
+          );
+          aplicadas = fresco.aplicaciones;
+          sobranteFinal = 0;
+          totalFinal = fresco.totalAplicado;
+          plan.notaCreada = fresco.notaCreada;
+        } else if (plan.modo === 'cascada') {
           const snapsVentana = [];
           for (const id of plan.ventanaIds) {
             snapsVentana.push(await transaction.get(db.collection(cliente.coleccion).doc(id)));
@@ -499,7 +700,9 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
         }
 
         aplicadas.forEach((aplicacion) => {
-          transaction.update(db.collection(cliente.coleccion).doc(aplicacion.notaId), aplicacion.update);
+          const ref = db.collection(cliente.coleccion).doc(aplicacion.notaId);
+          if (aplicacion.crear) transaction.set(ref, aplicacion.documento);
+          else transaction.update(ref, aplicacion.update);
         });
 
         const sobranteDoc = sobranteFinal > 0 ? {
@@ -520,8 +723,9 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
         }
 
         if (aplicadas.length) {
+          const tipoHistorial = plan.modo === 'hoy' ? 'hoy' : (plan.modo === 'nota' ? 'nota' : 'cascada');
           transaction.set(db.collection(cliente.historial).doc(), {
-            tipo: plan.modo === 'nota' ? 'nota' : 'cascada',
+            tipo: tipoHistorial,
             fecha: new Date().toISOString(),
             abonosAplicados: aplicadas.map((aplicacion) => ({
               cuentaId: aplicacion.notaId,
@@ -533,14 +737,18 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
             })),
             totalAplicado: totalFinal,
             cuentasAfectadas: aplicadas.length,
-            descripcion: `Aplicación en ${plan.modo === 'nota' ? 'nota' : 'cascada'} a ${aplicadas.length} cuenta(s)`
+            descripcion: plan.modo === 'hoy'
+              ? `Abono en la nota de Ozuna del ${plan.fechaNota}`
+              : `Aplicación en ${plan.modo === 'nota' ? 'nota' : 'cascada'} a ${aplicadas.length} cuenta(s)`
           });
         }
 
         const respuestaFinal = {
           ...response,
+          fechaNota: plan.fechaNota || null,
+          notaCreada: !!aplicadas[0]?.crear,
           stashItemId: aplicadas.length ? stashItemId : (sobranteId || stashItemId),
-          aplicaciones: aplicadas.map(({ update, ...publica }) => publica),
+          aplicaciones: aplicadas.map(({ update, crear, documento, ...publica }) => publica),
           totalAplicado: totalFinal,
           sobrante: sobranteFinal,
           stashSobranteId: sobranteId
@@ -670,6 +878,23 @@ function crearHandlersAbonos({ db, admin, errorResponse }) {
             };
           }
           const restantes = abonos.filter((abono) => abono !== encontrado);
+          const notaSoloDeEsteAbono = cliente.ozuna
+            && data.pendienteEmbarque === true
+            && !data.firmaEmbarque
+            && !(Array.isArray(data.items) && data.items.length)
+            && !(Array.isArray(data.cobros) && data.cobros.length)
+            && restantes.length === 0;
+          if (notaSoloDeEsteAbono) {
+            transaction.delete(refs[index]);
+            response.notasActualizadas.push({
+              notaId: esperado.notaId,
+              eliminada: true,
+              saldoPendiente: 0,
+              nuevoSaldoAcumulado: 0,
+              estadoPagado: false
+            });
+            return;
+          }
           const saldos = camposSaldoTrasAbono(data, restantes, cliente.ozuna, 0);
           if (cliente.ozuna) {
             const devuelto = redondearMonto((Number(data.nuevoSaldoAcumulado) || 0) + esperado.monto);
@@ -743,6 +968,7 @@ module.exports = {
   distribuirCascada,
   construirAbono,
   descripcionAbono,
+  fechaHoyMexico,
   normalizarFechaSeleccionada,
   canonMetodo,
   camposSaldoTrasAbono,

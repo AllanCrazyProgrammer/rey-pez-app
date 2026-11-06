@@ -10,6 +10,35 @@ import { formatNumber } from './formatters';
 export const OZUNA_CLIENTE_ID = '4';
 const ABONO_AUTOMATICO = /^Venta de (limpio|crudo): /;
 
+/**
+ * Nota creada por un abono del asistente, todavía sin productos del embarque.
+ * El embarque la completa; una nota con renglones capturados a mano no entra aquí.
+ */
+export function esNotaOzunaPendienteDeEmbarque(data) {
+  if (!data || data.pendienteEmbarque !== true || data.firmaEmbarque) return false;
+  return !(Array.isArray(data.items) && data.items.length);
+}
+
+/** Items del embarque + abonos automáticos de venta, conservando los abonos manuales. */
+export function fusionarNotaOzunaConEmbarque(guardada, nueva, origen) {
+  const abonosManuales = (guardada.abonos || []).filter((a) => !ABONO_AUTOMATICO.test(a.descripcion || ''));
+  const datos = {
+    ...guardada,
+    items: nueva.items,
+    abonos: [...(nueva.abonos || []), ...abonosManuales],
+    cobros: guardada.cobros || [],
+    saldoAcumuladoAnterior: nueva.saldoAcumuladoAnterior,
+    ultimaActualizacion: nueva.ultimaActualizacion,
+  };
+  if (origen) Object.assign(datos, origen);
+  if (guardada.pendienteEmbarque) datos.pendienteEmbarque = false;
+  const fusion = { ...datos, ...totales(datos) };
+  Object.keys(fusion).forEach((clave) => {
+    if (fusion[clave] === undefined) delete fusion[clave];
+  });
+  return fusion;
+}
+
 const num = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
 /** Parte de la cuenta que sale del embarque: items y abonos automáticos de venta. */
@@ -62,6 +91,14 @@ export function decidirCuentaOzunaNota(existentes, nueva, embarqueId) {
   const saldoCambio = num(guardada.saldoAcumuladoAnterior) !== num(nueva.saldoAcumuladoAnterior);
   const data = { ...guardada, saldoAcumuladoAnterior: nueva.saldoAcumuladoAnterior };
   const conSaldo = { ...data, ...totales(data) };
+  // Abono dictado antes de que exista el embarque: se completa esta misma nota.
+  if (esNotaOzunaPendienteDeEmbarque(guardada)) {
+    return {
+      accion: 'actualizar', id,
+      datos: fusionarNotaOzunaConEmbarque(guardada, nueva, origen),
+      aviso,
+    };
+  }
   const ligada = data.firmaEmbarque && String(data.embarqueId || '') === origen.embarqueId;
   // Sin firma o editada a mano en Cuentas Ozuna: no se pisan sus renglones.
   if (!ligada || firmaCuentaOzuna(data) !== data.firmaEmbarque) {
@@ -77,17 +114,11 @@ export function decidirCuentaOzunaNota(existentes, nueva, embarqueId) {
   }
 
   // Cambió el embarque: se reemplazan items y abonos automáticos; se conservan cobros y abonos manuales.
-  const abonosManuales = (data.abonos || []).filter((a) => !ABONO_AUTOMATICO.test(a.descripcion || ''));
-  const datos = {
-    ...data,
-    items: nueva.items,
-    abonos: [...nueva.abonos, ...abonosManuales],
-    cobros: data.cobros || [],
-    saldoAcumuladoAnterior: nueva.saldoAcumuladoAnterior,
-    ...origen,
-    ultimaActualizacion: nueva.ultimaActualizacion,
+  return {
+    accion: 'actualizar', id,
+    datos: fusionarNotaOzunaConEmbarque(data, nueva, origen),
+    aviso,
   };
-  return { accion: 'actualizar', id, datos: { ...datos, ...totales(datos) }, aviso };
 }
 
 /**
