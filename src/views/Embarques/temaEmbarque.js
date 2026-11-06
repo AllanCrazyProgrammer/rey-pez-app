@@ -2,11 +2,19 @@
 // del embarque: vive en el dispositivo y sigue disponible sin conexión.
 export const CLAVE_TEMA_EMBARQUE = 'embarque:tema-colores';
 export const FONDO_CABINA = '#121e34';
-export const CONTRASTE_MINIMO = 3;
+export const CONTRASTE_ACENTO = 3;
+export const CONTRASTE_ETIQUETAS = 4.5;
 export const COLORES_ORIGINALES = {
   acento: '#38d9ff',
-  etiquetas: '#8da0bd',
+  etiquetas: '#71839f',
 };
+export const PROPIEDADES_TEMA = [
+  '--embarque-acento',
+  '--embarque-acento-texto',
+  '--embarque-etiquetas',
+  '--embarque-icono-fondo',
+  '--cian',
+];
 
 export function normalizarHex(valor) {
   if (typeof valor !== 'string') return null;
@@ -44,19 +52,22 @@ export function colorTextoSobre(fondo) {
   return contraste(hex, '#06101c') >= 4.5 ? '#06101c' : '#f8fbff';
 }
 
-export function colorUtilizable(valor, fondo = FONDO_CABINA) {
+export function colorUtilizable(valor, rol = 'acento', fondo = FONDO_CABINA) {
   const hex = normalizarHex(valor);
   if (!hex) return null;
-  if (hex === COLORES_ORIGINALES.acento || hex === COLORES_ORIGINALES.etiquetas) return hex;
-  if (contraste(hex, fondo) < CONTRASTE_MINIMO) return null;
+  const etiquetas = rol === 'etiquetas';
+  const original = etiquetas ? COLORES_ORIGINALES.etiquetas : COLORES_ORIGINALES.acento;
+  if (hex === original) return hex;
+  const minimo = etiquetas ? CONTRASTE_ETIQUETAS : CONTRASTE_ACENTO;
+  if (contraste(hex, fondo) < minimo) return null;
   return hex;
 }
 
 export function sanearTema(tema) {
   const origen = tema && typeof tema === 'object' && !Array.isArray(tema) ? tema : {};
   return {
-    acento: colorUtilizable(origen.acento) || COLORES_ORIGINALES.acento,
-    etiquetas: colorUtilizable(origen.etiquetas) || COLORES_ORIGINALES.etiquetas,
+    acento: colorUtilizable(origen.acento, 'acento') || COLORES_ORIGINALES.acento,
+    etiquetas: colorUtilizable(origen.etiquetas, 'etiquetas') || COLORES_ORIGINALES.etiquetas,
   };
 }
 
@@ -114,6 +125,11 @@ function pintar(elemento, nombre, valor, activo) {
   else elemento.style.removeProperty(nombre);
 }
 
+export function quitarTema(elemento) {
+  if (!elemento || !elemento.style || typeof elemento.style.removeProperty !== 'function') return;
+  PROPIEDADES_TEMA.forEach((nombre) => elemento.style.removeProperty(nombre));
+}
+
 export function aplicarTema(elemento, tema) {
   const seguro = sanearTema(tema);
   if (!elemento || !elemento.style || typeof elemento.style.setProperty !== 'function') return seguro;
@@ -122,6 +138,7 @@ export function aplicarTema(elemento, tema) {
   pintar(elemento, '--embarque-acento', seguro.acento, acentoPropio);
   pintar(elemento, '--cian', seguro.acento, acentoPropio);
   pintar(elemento, '--embarque-acento-texto', colorTextoSobre(seguro.acento), acentoPropio);
+  pintar(elemento, '--embarque-icono-fondo', seguro.acento, acentoPropio);
   pintar(elemento, '--embarque-etiquetas', seguro.etiquetas, etiquetasPropias);
   return seguro;
 }

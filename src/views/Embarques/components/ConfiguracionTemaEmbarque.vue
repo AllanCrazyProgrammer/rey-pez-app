@@ -16,9 +16,10 @@
 
     <div
       v-if="abierto"
+      ref="overlay"
       v-portal-cuerpo
       class="tema-overlay"
-      @click.self="cerrar"
+      @click.self="cerrar()"
     >
       <div
         id="tema-embarque-panel"
@@ -31,7 +32,7 @@
       >
         <header class="tema-cabecera">
           <h2 id="tema-embarque-titulo">Colores del embarque</h2>
-          <button type="button" class="tema-cerrar" aria-label="Cerrar configuración de colores" @click="cerrar">
+          <button type="button" class="tema-cerrar" aria-label="Cerrar configuración de colores" @click="cerrar()">
             <i class="fas fa-times" aria-hidden="true"></i>
           </button>
         </header>
@@ -70,7 +71,7 @@
             <button type="button" class="tema-restaurar" @click="restaurar">
               Volver a los colores originales
             </button>
-            <button type="button" class="tema-listo" @click="cerrar">
+            <button type="button" class="tema-listo" @click="cerrar()">
               Cerrar
             </button>
           </div>
@@ -103,19 +104,26 @@ import {
   colorUtilizable,
   guardarTema,
   leerTema,
+  quitarTema,
   restaurarTema,
 } from '../temaEmbarque';
+
+const FOCABLES = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default {
   name: 'ConfiguracionTemaEmbarque',
   directives: {
     // El botón vive en el encabezado, cuyo backdrop-filter recorta un fixed.
-    // Solo el cuadro de colores pasa a body; el botón se queda en la cabina.
+    // Solo el cuadro pasa a body. unbind lo retira: Vue 2 no siempre
+    // desmonta un nodo que ya no está en el padre original.
     portalCuerpo: {
       inserted(el) {
         if (typeof document !== 'undefined' && el.parentNode !== document.body) {
           document.body.appendChild(el);
         }
+      },
+      unbind(el) {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
       },
     },
   },
@@ -128,11 +136,16 @@ export default {
   },
   computed: {
     estiloMuestra() {
-      return {
-        '--embarque-acento': this.tema.acento,
-        '--embarque-etiquetas': this.tema.etiquetas,
-        '--embarque-acento-texto': colorTextoSobre(this.tema.acento),
-      };
+      const estilo = {};
+      if (this.tema.acento !== COLORES_ORIGINALES.acento) {
+        estilo['--embarque-acento'] = this.tema.acento;
+        estilo['--embarque-acento-texto'] = colorTextoSobre(this.tema.acento);
+        estilo['--embarque-icono-fondo'] = this.tema.acento;
+      }
+      if (this.tema.etiquetas !== COLORES_ORIGINALES.etiquetas) {
+        estilo['--embarque-etiquetas'] = this.tema.etiquetas;
+      }
+      return estilo;
     },
   },
   mounted() {
@@ -141,40 +154,91 @@ export default {
   },
   beforeDestroy() {
     document.removeEventListener('keydown', this.alTecla, true);
+    this.liberarFondo();
+    this.abierto = false;
+    quitarTema(this.raizEmbarque());
   },
   methods: {
+    raizEmbarque() {
+      const desdeAqui = this.$el && this.$el.closest && this.$el.closest('.nuevo-embarque-container');
+      if (desdeAqui) return desdeAqui;
+      return document.querySelector('.nuevo-embarque-container');
+    },
     aplicar() {
-      const raiz = (this.$el && this.$el.closest && this.$el.closest('.nuevo-embarque-container'))
-        || document.querySelector('.nuevo-embarque-container');
-      aplicarTema(raiz, this.tema);
+      aplicarTema(this.raizEmbarque(), this.tema);
+    },
+    focables() {
+      const panel = this.$refs.panel;
+      if (!panel) return [];
+      return Array.from(panel.querySelectorAll(FOCABLES));
     },
     abrir() {
       if (this.abierto) return;
       this.abierto = true;
       document.addEventListener('keydown', this.alTecla, true);
       this.$nextTick(() => {
+        this.aislarFondo();
         if (this.$refs.panel) this.$refs.panel.focus();
       });
     },
-    cerrar() {
+    cerrar(opciones = {}) {
       if (!this.abierto) return;
       this.abierto = false;
       document.removeEventListener('keydown', this.alTecla, true);
+      this.liberarFondo();
+      const devolverFoco = opciones.devolverFoco !== false;
       this.$nextTick(() => {
-        if (this.$refs.boton) this.$refs.boton.focus();
+        const boton = this.$refs.boton;
+        if (devolverFoco && boton && document.contains(boton)) boton.focus();
       });
     },
+    aislarFondo() {
+      const overlay = this.$refs.overlay;
+      this._aislados = [];
+      Array.from(document.body.children).forEach((nodo) => {
+        if (!nodo || nodo === overlay || nodo.nodeType !== 1) return;
+        if (nodo.hasAttribute('inert')) return;
+        nodo.setAttribute('inert', '');
+        this._aislados.push(nodo);
+      });
+    },
+    liberarFondo() {
+      (this._aislados || []).forEach((nodo) => {
+        if (nodo && nodo.removeAttribute) nodo.removeAttribute('inert');
+      });
+      this._aislados = [];
+    },
     alTecla(evento) {
-      if (evento.key !== 'Escape' || !this.abierto) return;
-      evento.preventDefault();
-      evento.stopPropagation();
-      this.cerrar();
+      if (!this.abierto) return;
+      if (evento.key === 'Escape') {
+        evento.preventDefault();
+        evento.stopPropagation();
+        this.cerrar();
+        return;
+      }
+      if (evento.key !== 'Tab') return;
+      const lista = this.focables();
+      if (!lista.length) return;
+      const indice = lista.indexOf(document.activeElement);
+      if (evento.shiftKey) {
+        if (indice <= 0) {
+          evento.preventDefault();
+          lista[lista.length - 1].focus();
+        }
+        return;
+      }
+      if (indice === -1 || indice === lista.length - 1) {
+        evento.preventDefault();
+        lista[0].focus();
+      }
     },
     cambiar(clave, evento) {
       const valor = evento && evento.target ? evento.target.value : '';
-      const hex = colorUtilizable(valor);
+      const hex = colorUtilizable(valor, clave);
       if (!hex) {
-        this.aviso = 'Ese color no se distingue sobre el fondo del embarque. Se conserva el anterior.';
+        this.aviso = clave === 'etiquetas'
+          ? 'Ese color de etiquetas no se lee en texto pequeño. Se conserva el anterior.'
+          : 'Ese color de acento no se distingue en iconos y bordes. Se conserva el anterior.';
         if (evento && evento.target) evento.target.value = this.tema[clave];
         return;
       }
@@ -186,7 +250,7 @@ export default {
     restaurar() {
       this.tema = restaurarTema();
       this.aviso = '';
-      this.aplicar();
+      quitarTema(this.raizEmbarque());
     },
   },
 };
@@ -406,12 +470,16 @@ export default {
   place-items: center;
   color: var(--embarque-acento-texto, #06101c);
   border-radius: 8px;
-  background: var(--embarque-acento, #38d9ff);
+  background: var(--embarque-icono-fondo, linear-gradient(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6));
 }
 
-.muestra-encabezado,
+.muestra-encabezado {
+  color: var(--embarque-etiquetas, #f8fbff);
+  font-weight: 800;
+}
+
 .muestra-etiqueta {
-  color: var(--embarque-etiquetas, #8da0bd);
+  color: var(--embarque-etiquetas, #71839f);
   font-weight: 800;
 }
 
@@ -432,7 +500,7 @@ export default {
   min-height: 38px;
   padding: 8px 12px;
   color: #dbe7f8;
-  border: 1px solid var(--embarque-acento, #38d9ff);
+  border: 1px solid var(--embarque-acento, rgba(148, 163, 184, .17));
   border-radius: 8px;
   background: rgba(20, 33, 55, .78);
   font-weight: 750;

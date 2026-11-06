@@ -21,8 +21,10 @@ const tema = loadSource('src/views/Embarques/temaEmbarque.js');
 const {
   CLAVE_TEMA_EMBARQUE,
   COLORES_ORIGINALES,
-  CONTRASTE_MINIMO,
+  CONTRASTE_ACENTO,
+  CONTRASTE_ETIQUETAS,
   FONDO_CABINA,
+  PROPIEDADES_TEMA,
   aplicarTema,
   colorTextoSobre,
   colorUtilizable,
@@ -30,6 +32,7 @@ const {
   guardarTema,
   leerTema,
   normalizarHex,
+  quitarTema,
   restaurarTema,
   sanearTema,
 } = tema;
@@ -50,9 +53,14 @@ test('solo acepta hex y lo aplica como variables, nunca el texto crudo', () => {
     assert.equal(normalizarHex(malo), null, String(malo));
     assert.equal(colorUtilizable(malo), null, String(malo));
   }
-  assert.ok(contraste(COLORES_ORIGINALES.acento, FONDO_CABINA) >= CONTRASTE_MINIMO);
-  assert.ok(contraste(COLORES_ORIGINALES.etiquetas, FONDO_CABINA) >= CONTRASTE_MINIMO);
-  assert.equal(colorUtilizable('#ffb000'), '#ffb000');
+  assert.ok(contraste(COLORES_ORIGINALES.acento, FONDO_CABINA) >= CONTRASTE_ACENTO);
+  assert.ok(contraste('#71839f', FONDO_CABINA) < CONTRASTE_ETIQUETAS);
+  assert.equal(colorUtilizable('#71839f', 'etiquetas'), '#71839f');
+  assert.equal(colorUtilizable('#5c6b82', 'acento'), '#5c6b82');
+  assert.equal(colorUtilizable('#5c6b82', 'etiquetas'), null);
+  assert.equal(colorUtilizable('#4e6078', 'acento'), null);
+  assert.equal(colorUtilizable('#ffb000', 'acento'), '#ffb000');
+  assert.equal(colorUtilizable('#ffb000', 'etiquetas'), '#ffb000');
   assert.equal(colorUtilizable('#102033'), null);
   assert.equal(colorTextoSobre('#38d9ff'), '#06101c');
   assert.equal(colorTextoSobre('#1e293b'), '#f8fbff');
@@ -90,12 +98,12 @@ test('solo acepta hex y lo aplica como variables, nunca el texto crudo', () => {
   assert.equal(cabina.style.getPropertyValue('--cian'), '#ffb000');
   assert.equal(cabina.style.getPropertyValue('--embarque-etiquetas'), '#d6e4ff');
   assert.equal(cabina.style.getPropertyValue('--embarque-acento-texto'), colorTextoSobre('#ffb000'));
+  assert.equal(cabina.style.getPropertyValue('--embarque-icono-fondo'), '#ffb000');
 
   assert.deepEqual(restaurarTema(store), { ...COLORES_ORIGINALES });
   assert.equal(store.getItem(CLAVE_TEMA_EMBARQUE), null);
-  aplicarTema(cabina, leerTema(store));
-  assert.equal(cabina.style.getPropertyValue('--embarque-acento'), '');
-  assert.equal(cabina.style.getPropertyValue('--embarque-etiquetas'), '');
+  quitarTema(cabina);
+  PROPIEDADES_TEMA.forEach((nombre) => assert.equal(cabina.style.getPropertyValue(nombre), '', nombre));
   assert.deepEqual(sanearTema('no-es-objeto'), { ...COLORES_ORIGINALES });
   dom.window.close();
 });
@@ -260,8 +268,8 @@ test('al volver a montar el componente real recupera el tema y puede restaurarlo
   assert.equal(cabina.style.getPropertyValue('--embarque-etiquetas'), '');
   assert.deepEqual(JSON.parse(JSON.stringify(segundo.window.tema.leerTema())), { ...COLORES_ORIGINALES });
   const muestra = segundo.window.document.querySelector('.muestra-cabina');
-  assert.equal(muestra.style.getPropertyValue('--embarque-acento'), COLORES_ORIGINALES.acento);
-  assert.equal(muestra.style.getPropertyValue('--embarque-etiquetas'), COLORES_ORIGINALES.etiquetas);
+  assert.equal(muestra.style.getPropertyValue('--embarque-acento'), '');
+  assert.equal(muestra.style.getPropertyValue('--embarque-etiquetas'), '');
   segundo.window.app.$destroy();
   segundo.dom.window.close();
 });
@@ -280,5 +288,81 @@ test('un localStorage alterado no se inyecta al montar el componente', async () 
   assert.doesNotMatch(cabina.getAttribute('style') || '', /onerror|expression|style>/i);
   assert.deepEqual(JSON.parse(JSON.stringify(window.tema.leerTema())), { ...COLORES_ORIGINALES });
   window.app.$destroy();
+  dom.window.close();
+});
+
+test('el CSS productivo conserva el color literal de cada elemento', () => {
+  const header = fs.readFileSync(path.join(root, 'src/views/Embarques/components/HeaderEmbarque.vue'), 'utf8');
+  const sidebar = fs.readFileSync(path.join(root, 'src/components/layout/Sidebar.vue'), 'utf8');
+  const embarque = fs.readFileSync(path.join(root, 'src/views/Embarques/NuevoEmbarque.vue'), 'utf8');
+  assert.match(header, /color: var\(--embarque-etiquetas, #f8fbff\)/);
+  assert.match(header, /color: var\(--embarque-etiquetas, #b8c6db\)/);
+  assert.match(header, /color: var\(--embarque-etiquetas, #71839f\)/);
+  assert.match(header, /border: 1px solid var\(--embarque-acento, rgba\(148, 163, 184, \.17\)\)/);
+  assert.match(header, /border: 1px solid var\(--embarque-acento, rgba\(56,217,255,\.2\)\)/);
+  assert.match(header, /var\(--embarque-icono-fondo, linear-gradient\(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6\)\)/);
+  assert.match(sidebar, /\.sidebar-header h3 \{\s*color: #e8eef9;/);
+  assert.match(sidebar, /linear-gradient\(transparent, #38d9ff, transparent\)/);
+  assert.match(sidebar, /linear-gradient\(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6\)/);
+  assert.match(sidebar, /color: var\(--embarque-acento, #b8f4ff\)/);
+  assert.match(sidebar, /rgba\(56, 217, 255, \.34\)/);
+  assert.match(sidebar, /color: var\(--embarque-etiquetas, #8da0bd\)/);
+  assert.doesNotMatch(sidebar, /var\(--embarque-etiquetas, #e8eef9\)/);
+  assert.match(embarque, /color: var\(--embarque-etiquetas, #94a3b8\)/);
+  assert.match(embarque, /var\(--embarque-acento, rgba\(56, 217, 255, 0\.48\)\)/);
+  const dom = new JSDOM('<div id="cabina"></div>');
+  const cabina = dom.window.document.getElementById('cabina');
+  aplicarTema(cabina, { ...COLORES_ORIGINALES });
+  PROPIEDADES_TEMA.forEach((nombre) => assert.equal(cabina.style.getPropertyValue(nombre), '', nombre));
+  dom.window.close();
+});
+
+test('Tab envuelve el cuadro real, Escape devuelve el foco y destruir no deja el portal', async () => {
+  const { dom, window, tick } = montarComponente();
+  const cabina = window.document.querySelector('.nuevo-embarque-container');
+  const siguiente = window.document.createElement('button');
+  siguiente.type = 'button';
+  siguiente.textContent = 'Siguiente';
+  cabina.appendChild(siguiente);
+  const boton = window.document.querySelector('[aria-label="Configuración de colores del embarque"]');
+  const tecla = (key, shiftKey = false) => window.document.dispatchEvent(new window.KeyboardEvent('keydown', {
+    key, shiftKey, bubbles: true, cancelable: true,
+  }));
+  boton.click();
+  await tick();
+  assert.equal(cabina.hasAttribute('inert'), true);
+  const overlay = window.document.body.querySelector('.tema-overlay');
+  assert.equal(overlay.parentNode, window.document.body);
+  const panel = window.document.getElementById('tema-embarque-panel');
+  const lista = [...panel.querySelectorAll('button, input')];
+  assert.equal(window.document.activeElement, panel);
+  tecla('Tab');
+  assert.equal(window.document.activeElement, lista[0]);
+  tecla('Tab', true);
+  assert.equal(window.document.activeElement, lista[lista.length - 1]);
+  tecla('Tab');
+  assert.equal(window.document.activeElement, lista[0]);
+  tecla('Escape');
+  await tick();
+  await tick();
+  assert.equal(window.document.querySelector('.tema-overlay'), null);
+  assert.equal(window.document.activeElement, boton);
+  assert.equal(cabina.hasAttribute('inert'), false);
+
+  boton.click();
+  await tick();
+  const acento = window.document.getElementById('tema-embarque-acento');
+  acento.value = '#ffb000';
+  acento.dispatchEvent(new window.Event('input'));
+  await tick();
+  assert.equal(cabina.style.getPropertyValue('--embarque-acento'), '#ffb000');
+  window.app.$destroy();
+  await tick();
+  await tick();
+  assert.equal(window.document.querySelector('.tema-overlay'), null);
+  PROPIEDADES_TEMA.forEach((nombre) => assert.equal(cabina.style.getPropertyValue(nombre), '', nombre));
+  siguiente.focus();
+  await tick();
+  assert.equal(window.document.activeElement, siguiente);
   dom.window.close();
 });

@@ -586,7 +586,7 @@ label {
   color: var(--embarque-acento-texto, #06101c);
   font-size: .72rem;
   border-radius: 8px;
-  background: linear-gradient(135deg, #b8f4ff, var(--embarque-acento, #38d9ff) 55%, #8b5cf6);
+  background: var(--embarque-icono-fondo, linear-gradient(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6));
   box-shadow: 0 0 32px rgba(56, 217, 255, .32);
 }
 
