@@ -81,3 +81,24 @@ test('la página del PDF trae las tablas de la cuenta', () => {
   const texto = JSON.stringify(pagina);
   for (const t of ['Cuentas Ozuna', 'Detalles de la cuenta', 'Resumen de saldo', '41/50', 'Saldo Anterior', 'Venta de limpio: 1 taras']) assert.ok(texto.includes(t), t);
 });
+
+test('reimprimir con saldo anterior desfasado lo corrige y recalcula el total', async () => {
+  const repo = repoMemoria();
+  await sync(repo, nueva(100, 2));
+  const r = await sync(repo, { ...nueva(100, 2), saldoAcumuladoAnterior: 800 });
+  assert.equal(r.accion, 'actualizar');
+  assert.equal(r.datos.saldoAcumuladoAnterior, 800);
+  assert.equal(r.datos.totalSaldo, 800 + 2000 - 200);
+  assert.equal(repo.docs.get(fecha).nuevoSaldoAcumulado, 2600);
+  // Después, sin cambios, ya se reusa.
+  assert.equal((await sync(repo, { ...nueva(100, 2), saldoAcumuladoAnterior: 800 })).accion, 'reusar');
+});
+
+test('cuenta editada a mano se imprime con el saldo anterior recalculado sin escribirla', async () => {
+  const repo = repoMemoria({ [fecha]: { ...nueva(), saldoAcumuladoAnterior: 100 } });
+  const r = await sync(repo, { ...nueva(), saldoAcumuladoAnterior: 900 });
+  assert.equal(r.accion, 'manual');
+  assert.equal(r.datos.saldoAcumuladoAnterior, 900);
+  assert.equal(r.datos.totalSaldo, 900 + 2000);
+  assert.equal(repo.escrituras.length, 0);
+});

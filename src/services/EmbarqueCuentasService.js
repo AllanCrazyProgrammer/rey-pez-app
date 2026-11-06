@@ -1,5 +1,6 @@
 import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction, updateDoc } from 'firebase/firestore';
 import { sincronizarCuentaOzunaNota } from '../utils/ozunaCuentaNota';
+import { saldoAcumuladoAntesDeFecha } from '../utils/ozunaCuentasSaldo';
 import {
   formatDate,
   normalizarFechaISO,
@@ -186,6 +187,24 @@ const obtenerMultiplicadorVentaCrudoVeronica = (talla) => {
  * @param {string} fecha - Fecha para la que se busca el saldo anterior (formato YYYY-MM-DD)
  * @returns {Promise<number>} - El saldo acumulado anterior
  */
+/**
+ * Saldo anterior de Ozuna con la misma regla que la pantalla Cuentas Ozuna:
+ * suma del neto de cada cuenta con fecha estrictamente anterior.
+ */
+const obtenerSaldoAnteriorOzuna = async (fecha) => {
+  try {
+    const snapshot = await getDocs(collection(getFirestore(), 'cuentasOzuna'));
+    const cuentas = snapshot.docs.map((d) => ({ id: d.id, fecha: d.data().fecha, data: d.data() }));
+    return saldoAcumuladoAntesDeFecha(cuentas, fecha);
+  } catch (error) {
+    console.error('Error al calcular saldo anterior de Ozuna:', error);
+    throw new Error(
+      'No se pudo consultar el saldo anterior de Ozuna (¿problema de conexión?). ' +
+      'La cuenta NO se creó para no registrar un saldo incorrecto. Intenta de nuevo.'
+    );
+  }
+};
+
 const obtenerSaldoAcumuladoAnterior = async (coleccion, fecha) => {
   try {
     const db = getFirestore();
@@ -1193,8 +1212,9 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
   // Calcular total general
   const totalGeneral = items.reduce((sum, item) => sum + (item.total || 0), 0);
   
-  // Obtener saldo acumulado anterior
-  const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOzuna', fecha);
+  // Saldo anterior calculado igual que en Cuentas Ozuna (suma de todos los días
+  // previos), no con el `nuevoSaldoAcumulado` guardado, que puede estar desfasado.
+  const saldoAcumuladoAnterior = await obtenerSaldoAnteriorOzuna(fecha);
   const abonos = [];
   if (tarasVentaLimpio > 0) {
     abonos.push({
