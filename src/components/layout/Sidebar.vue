@@ -839,7 +839,7 @@ export default {
   right: -1px;
   width: 1px;
   height: 22%;
-  background: linear-gradient(transparent, #38d9ff, transparent);
+  background: linear-gradient(transparent, var(--embarque-acento, #38d9ff), transparent);
   box-shadow: 0 0 14px rgba(56, 217, 255, .75);
   animation: rail-scan 5s ease-in-out infinite;
 }
@@ -852,7 +852,7 @@ export default {
 }
 
 .sidebar-header h3 {
-  color: #e8eef9;
+  color: var(--embarque-etiquetas, #e8eef9);
   font-size: .76rem;
   font-weight: 800;
   letter-spacing: .13em;
@@ -865,11 +865,11 @@ export default {
   width: 34px;
   height: 34px;
   place-items: center;
-  color: #06101c;
+  color: var(--embarque-acento-texto, #06101c);
   -webkit-text-fill-color: currentColor;
   font-size: .9rem;
   border-radius: 11px;
-  background: linear-gradient(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6);
+  background: linear-gradient(135deg, #b8f4ff, var(--embarque-acento, #38d9ff) 55%, #8b5cf6);
   box-shadow: 0 0 24px rgba(56, 217, 255, .25);
 }
 
@@ -884,7 +884,7 @@ export default {
 }
 
 .toggle-sidebar-btn:hover {
-  color: #38d9ff;
+  color: var(--embarque-acento, #38d9ff);
   border-color: rgba(56, 217, 255, .4);
   background: rgba(56, 217, 255, .08);
   transform: translateX(-2px);
@@ -973,8 +973,8 @@ export default {
 .btn-agregar-cliente {
   min-height: 43px;
   margin-top: 4px;
-  color: #b8f4ff;
-  border: 1px dashed rgba(56, 217, 255, .34);
+  color: var(--embarque-acento, #b8f4ff);
+  border: 1px dashed var(--embarque-acento, rgba(56, 217, 255, .34));
   border-radius: 12px;
   background: rgba(56, 217, 255, .055);
   box-shadow: none;
@@ -983,9 +983,9 @@ export default {
 }
 
 .btn-agregar-cliente:hover {
-  color: #06101c;
+  color: var(--embarque-acento-texto, #06101c);
   border-style: solid;
-  background: #38d9ff;
+  background: var(--embarque-acento, #38d9ff);
   box-shadow: 0 0 26px rgba(56, 217, 255, .25);
   transform: translateY(-2px);
 }
@@ -1012,7 +1012,7 @@ export default {
 .sidebar-resumen h4 {
   justify-content: flex-start;
   margin-bottom: 7px;
-  color: #8da0bd;
+  color: var(--embarque-etiquetas, #8da0bd);
   font-size: .62rem;
   font-weight: 800;
   letter-spacing: .09em;
@@ -1021,7 +1021,7 @@ export default {
 }
 
 .sidebar-resumen h4 i {
-  color: #38d9ff;
+  color: var(--embarque-acento, #38d9ff);
   -webkit-text-fill-color: currentColor;
   font-size: .8rem;
 }
