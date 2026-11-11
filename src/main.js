@@ -1,6 +1,7 @@
 import Vue from "vue";
 import App from "./App.vue";
 import router from "./router";
+import { Capacitor } from "@capacitor/core";
 import { createPinia, PiniaVuePlugin } from "pinia";
 import { useAuthStore } from "./stores/auth";
 
@@ -78,3 +79,11 @@ const app = new Vue({
     }
   }
 }).$mount("#app");
+
+// En la APK (no en web ni escritorio): avisar al actualizador que esta versión arrancó y buscar
+// versiones nuevas. La importación es diferida para no meter el plugin de Capacitor en la web.
+if (Capacitor.isNativePlatform()) {
+  import('./mobile/arranqueActualizacion')
+    .then(m => m.iniciarActualizacionesAndroid())
+    .catch(error => console.warn('No se pudo iniciar el actualizador:', error));
+}
