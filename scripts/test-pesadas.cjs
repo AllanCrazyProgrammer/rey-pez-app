@@ -14,7 +14,7 @@ require.extensions['.js'] = (module, filename) => {
   });
   module._compile(result.code, filename);
 };
-const { decimalPesada, elementosPesadas, resumenPesadas, aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoPesada } = require('../src/utils/pesadas');
+const { decimalPesada, elementosPesadas, ordenInsercionPesadas, resumenPesadas, aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoPesada } = require('../src/utils/pesadas');
 const { documentoPesadas } = require('../src/utils/pdf/pesadas');
 const { PesadasOutbox } = require('../src/services/pesadasOutbox');
 
@@ -444,4 +444,20 @@ test('weighing cash opens with one-peso coins by default', () => {
   const vm = { cuentasDatos: '77.2\n19', $refs: { cuentas: { procesarDatos(value) { input = value; } } } };
   methods.calcularCuentas.call(vm);
   assert.deepEqual(input, { data: ['77.2', '19'], isTwo: false });
+});
+
+test('inserts a row above or below without touching existing rows', () => {
+  const personas = { a: { nombre: 'Luisa', orden: '0' }, b: { nombre: 'Vianey', orden: '1731000000000-b' }, c: { nombre: 'Mildred', orden: '1731000005000-c' } };
+  const lista = elementosPesadas(personas);
+  const ids = map => elementosPesadas(map).map(row => row.id);
+  for (const [indice, posicion, esperado] of [[0, 'arriba', ['n', 'a', 'b', 'c']], [0, 'abajo', ['a', 'n', 'b', 'c']], [1, 'abajo', ['a', 'b', 'n', 'c']], [2, 'abajo', ['a', 'b', 'c', 'n']], [2, 'arriba', ['a', 'b', 'n', 'c']]]) {
+    const { orden, reordenar } = ordenInsercionPesadas(lista, indice, posicion);
+    assert.deepEqual(reordenar, {});
+    assert.deepEqual(ids({ ...personas, n: { nombre: '', orden } }), esperado);
+  }
+  // Neighbours with no room in between: existing rows are renumbered, same relative order.
+  const juntos = { a: { nombre: 'A', orden: '5' }, b: { nombre: 'B', orden: '6' } };
+  const { orden, reordenar } = ordenInsercionPesadas(elementosPesadas(juntos), 0, 'abajo');
+  const nuevo = { a: { ...juntos.a, orden: reordenar.a }, b: { ...juntos.b, orden: reordenar.b }, n: { nombre: '', orden } };
+  assert.deepEqual(ids(nuevo), ['a', 'n', 'b']);
 });

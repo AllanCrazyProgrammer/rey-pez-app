@@ -43,11 +43,31 @@ export function formatoFechaPesadas(fecha) {
   return `${Number(day)}/${Number(month)}/${year}`;
 }
 
+const numeroOrden = value => {
+  const match = String(value == null ? '' : value).match(/^-?\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+};
+
+/*
+ * Orden para una fila nueva arriba o abajo de `lista[indice]` (lista ya ordenada
+ * con elementosPesadas). Devuelve { orden, reordenar }: normalmente solo el orden
+ * nuevo; si no cabe un entero entre los vecinos, `reordenar` trae un orden nuevo
+ * para cada fila existente (mismo orden relativo, sin tocar sus datos).
+ */
+export function ordenInsercionPesadas(lista, indice, posicion) {
+  const destino = posicion === 'arriba' ? indice : indice + 1;
+  const anterior = lista[destino - 1];
+  const siguiente = lista[destino];
+  const seguro = value => Number.isSafeInteger(value) && value !== Number.MAX_SAFE_INTEGER;
+  const bajo = anterior ? numeroOrden(anterior.orden) : numeroOrden(siguiente && siguiente.orden) - 2000;
+  const alto = siguiente ? numeroOrden(siguiente.orden) : numeroOrden(anterior && anterior.orden) + 2000;
+  if (seguro(bajo) && seguro(alto) && alto - bajo >= 2) return { orden: String(Math.floor((bajo + alto) / 2)), reordenar: {} };
+  const reordenar = {};
+  lista.forEach((fila, index) => { reordenar[fila.id] = String((index + (index >= destino ? 1 : 0)) * 1000); });
+  return { orden: String(destino * 1000), reordenar };
+}
+
 export function elementosPesadas(map = {}) {
-  const numeroOrden = value => {
-    const match = String(value == null ? '' : value).match(/^-?\d+/);
-    return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
-  };
   return Object.entries(map).map(([id, value]) => ({ ...value, id }))
     .filter(value => !value.eliminado)
     .sort((a, b) => numeroOrden(a.orden) - numeroOrden(b.orden)

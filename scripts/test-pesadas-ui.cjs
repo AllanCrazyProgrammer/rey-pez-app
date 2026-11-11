@@ -173,6 +173,56 @@ async function run() {
     await page.getByRole('button', { name: 'Crear esta jornada de nuevo', exact: true }).click();
     await page.getByLabel('Nombre despicadora 1', { exact: true }).waitFor();
     assert.equal(await page.getByLabel('Nombre despicadora 1', { exact: true }).inputValue(), '');
+    // Right-click a name: insert a row above/below without touching existing rows.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByLabel('Nombre despicadora 1', { exact: true }).fill('Ana');
+    await page.getByLabel('Nombre despicadora 1', { exact: true }).press('Enter');
+    await page.getByLabel('Nombre despicadora 2', { exact: true }).fill('Beto');
+    await page.getByLabel('Nombre despicadora 2', { exact: true }).press('Enter');
+    await page.getByLabel('Kilos de Beto, columna 1', { exact: true }).fill('3.5');
+    await page.getByLabel('Kilos de Beto, columna 1', { exact: true }).press('Tab');
+    const nombres = () => page.locator('.pesadas-grid tbody .name-editor input').evaluateAll(inputs => inputs.map(input => input.value));
+    await page.getByLabel('Nombre despicadora 2', { exact: true }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '↑ Agregar fila arriba' }).click();
+    await page.waitForFunction(() => document.activeElement.getAttribute('aria-label') === 'Nombre despicadora 2');
+    await page.keyboard.type('Carla');
+    await page.keyboard.press('Enter');
+    await page.getByLabel('Nombre despicadora 1', { exact: true }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '↓ Agregar fila abajo' }).click();
+    await page.waitForFunction(() => document.activeElement.getAttribute('aria-label') === 'Nombre despicadora 2');
+    await page.keyboard.type('Dora');
+    await page.keyboard.press('Tab');
+    assert.deepEqual(await nombres(), ['Ana', 'Dora', 'Carla', 'Beto', '']);
+    await page.getByLabel('Nombre despicadora 3', { exact: true }).click({ button: 'right' });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.getByRole('menu').count(), 0);
+    await page.waitForFunction(() => document.querySelector('.pesadas-status').textContent === 'Guardado');
+    await page.reload();
+    await page.getByLabel('Kilos de Beto, columna 1', { exact: true }).waitFor();
+    assert.deepEqual(await nombres(), ['Ana', 'Dora', 'Carla', 'Beto', '']);
+    assert.equal(await page.getByLabel('Kilos de Beto, columna 1', { exact: true }).inputValue(), '3.5');
+    // Mobile: long-press the name opens the same menu.
+    const phone = page;
+    await phone.setViewportSize({ width: 390, height: 844 });
+    const cdp = await context.newCDPSession(phone);
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    await phone.getByLabel('Nombre despicadora 4', { exact: true }).scrollIntoViewIfNeeded();
+    const box = await phone.getByLabel('Nombre despicadora 4', { exact: true }).boundingBox();
+    const punto = [{ x: box.x + 10, y: box.y + box.height / 2 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: punto });
+    await phone.waitForTimeout(800);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await phone.getByRole('menuitem', { name: '↓ Agregar fila abajo' }).waitFor();
+    await phone.screenshot({ path: path.join(output, 'mobile-row-menu.png'), animations: 'disabled' });
+    await phone.getByRole('menuitem', { name: '↓ Agregar fila abajo' }).click();
+    await phone.waitForFunction(() => document.querySelectorAll('.pesadas-grid tbody tr').length === 6);
+    assert.deepEqual(await phone.locator('.pesadas-grid tbody .name-editor input').evaluateAll(inputs => inputs.map(input => input.value)), ['Ana', 'Dora', 'Carla', 'Beto', '', '']);
+    // A short tap must not open the menu.
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: punto });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await phone.waitForTimeout(800);
+    assert.equal(await phone.getByRole('menu').count(), 0);
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
     assert.deepEqual(errors, []);
     console.log('PASS: Enter, precision, totals, reload, separate days, two tabs, offline recovery, PDF download, mobile navigation, cancel/confirm deletion and reload.');
   } finally {

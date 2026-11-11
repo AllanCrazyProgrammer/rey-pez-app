@@ -27,7 +27,7 @@
         <p v-if="erroresLista.length" class="pesadas-alert" role="alert">{{ erroresLista[0] }} Los campos marcados no se han guardado.</p>
         <p v-if="pagosNegativos" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
-        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :totales-columnas="resumen.kilosPorColumna" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @flecha="flechaCelda" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
+        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :totales-columnas="resumen.kilosPorColumna" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @flecha="flechaCelda" @eliminar-persona="eliminarPersona" @insertar-persona="insertarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
         <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ pago(resumen.pagosRedondeados) }}</strong><strong>A pagar promedio: ${{ pago(resumen.pagoPromedioRedondeado) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></strong></footer>
       </section>
     </template>
@@ -56,7 +56,7 @@ import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/components/Pesadas/Cuentas.vue';
 import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
-import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
+import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, ordenInsercionPesadas, resumenPesadas } from '@/utils/pesadas';
 import PesadasTabla from './PesadasTabla.vue';
 import PesadasResumen from './PesadasResumen.vue';
 import './pesadas.css';
@@ -230,6 +230,16 @@ export default {
       this.guardarCampos({ [`personas.${id}.nombre`]: '', [`personas.${id}.orden`]: `${Date.now()}-${id}` });
       this.enfocar(`nombre-${id}`);
       return id;
+    },
+    insertarPersona({ personaId, posicion }) {
+      const indice = this.personas.findIndex(row => row.id === personaId);
+      if (indice < 0) return;
+      const { orden, reordenar } = ordenInsercionPesadas(this.personas, indice, posicion);
+      const id = nanoid();
+      const campos = { [`personas.${id}.nombre`]: '', [`personas.${id}.orden`]: orden };
+      Object.entries(reordenar).forEach(([filaId, nuevoOrden]) => { campos[`personas.${filaId}.orden`] = nuevoOrden; });
+      this.guardarCampos(campos);
+      this.enfocar(`nombre-${id}`);
     },
     enterNombre(id) {
       const index = this.personas.findIndex(row => row.id === id);
