@@ -91,9 +91,22 @@ _____|____|____|______
           <span class="btn-text">BUSCAR_SALIDAS</span>
         </button>
         <button
+          type="button"
+          @click="exportarHistorialCrudos"
+          class="btn-action btn-historial-crudos"
+          :disabled="exportandoCrudos"
+          :aria-busy="exportandoCrudos ? 'true' : 'false'"
+          title="Descarga un resumen de los crudos embarcados por día para compararlos entre años"
+          :style="getMenuItem3dStyle(4)"
+        >
+          <span class="btn-prefix">[5]</span>
+          <span class="btn-icon">⇩</span>
+          <span class="btn-text">{{ exportandoCrudos ? 'EXPORTANDO_CRUDOS...' : 'EXPORTAR_HISTORIAL_CRUDOS' }}</span>
+        </button>
+        <button
           @click="recuperacionEmergencia"
           class="btn-action btn-emergencia"
-          :style="getMenuItem3dStyle(4)"
+          :style="getMenuItem3dStyle(5)"
         >
           <span class="btn-prefix">[!]</span>
           <span class="btn-icon">⚠</span>
@@ -139,6 +152,7 @@ export default {
       conexion: estadoOffline,
       mostrarSalidasRendimientos: false,
       mostrarBuscarSalidas: false,
+      exportandoCrudos: false,
       isNavigatingCuentaFletes: false,
       cuentaFletesComponentPreloaded: false,
       scroll3dProgress: 0,
@@ -181,6 +195,43 @@ export default {
     }
   },
   methods: {
+    // Resumen de crudos por día (fecha, cliente, talla, taras, kilos) para
+    // comparar años en la página de Claude. Ver src/utils/crudosHistorico.js.
+    async exportarHistorialCrudos() {
+      if (this.exportandoCrudos) return;
+      this.exportandoCrudos = true;
+      try {
+        const [{ db }, { collection, getDocs }, { exportarHistorialCrudos }] = await Promise.all([
+          import('@/firebase'),
+          import('firebase/firestore'),
+          import('@/utils/crudosHistorico')
+        ]);
+        const snapshot = await getDocs(collection(db, 'embarques'));
+        const embarques = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const datos = exportarHistorialCrudos(embarques);
+        const texto = JSON.stringify(datos);
+        const nombre = `historial-crudos-${datos.generado.slice(0, 10)}.json`;
+        const url = URL.createObjectURL(new Blob([texto], { type: 'application/json' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nombre;
+        document.body.appendChild(link);
+        try { link.click(); } finally { link.remove(); }
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        let copiado = false;
+        try {
+          await navigator.clipboard.writeText(texto);
+          copiado = true;
+        } catch (e) { /* sin portapapeles: queda el archivo */ }
+        alert(`Historial de crudos listo: ${datos.filas.length} renglones de ${embarques.length} embarques.\n` +
+          `Se descargó "${nombre}"${copiado ? ' y también se copió al portapapeles' : ''}.`);
+      } catch (error) {
+        console.error('Error al exportar historial de crudos:', error);
+        alert('No se pudo exportar el historial de crudos: ' + error.message);
+      } finally {
+        this.exportandoCrudos = false;
+      }
+    },
     requestScroll3dUpdate() {
       if (this.scroll3dFrame !== null) return;
 
@@ -704,6 +755,24 @@ export default {
 
 .btn-salidas-rendimientos .btn-prefix {
   color: #4bd3ff;
+}
+
+/* Boton exportar historial de crudos */
+.btn-historial-crudos {
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+
+.btn-historial-crudos:hover {
+  color: var(--terminal-bg);
+}
+
+.btn-historial-crudos:hover::before {
+  background: #fbbf24;
+}
+
+.btn-historial-crudos .btn-prefix {
+  color: #fbbf24;
 }
 
 /* Boton buscar salidas */
