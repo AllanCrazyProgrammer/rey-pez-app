@@ -217,10 +217,20 @@ async function revisarActualizaciones() {
   try {
     const estado = await actualizador.buscar(paqueteCargado);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop:actualizacion-estado', estado);
+    // Auto-actualización: si hay una versión nueva lista, aplicarla sola
+    // (usa el mismo guardado seguro que el botón "Actualizar").
+    if (estado && estado.lista && aplicarActualizacion) {
+      aplicarActualizacion();
+    }
   } catch (error) {
     console.warn('[desktop] no se pudo revisar actualizaciones:', error.message);
   }
 }
+
+// Cuando la app recupera internet, revisar de inmediato (sin esperar los 30 min).
+ipcMain.on('desktop:en-linea', () => {
+  if (actualizador) revisarActualizaciones();
+});
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

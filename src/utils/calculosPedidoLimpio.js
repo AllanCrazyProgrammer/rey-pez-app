@@ -41,6 +41,8 @@ function factorPorTipo(item) {
 
 // Mantener en sincronía con functions/asistente.js.
 export function kilosPorTaraCliente(item, clienteId = 'temporal') {
+  // Con agua: 30 fijo — cada tara de agua lleva 30 bolsas.
+  if (String(item?.tipo || '').trim() === 'C/H20') return 30
   const nota = String(item?.nota || '').trim().toLowerCase()
   return nota === 'sellado' || CLIENTES_TARA_25.has(normalizarCliente(clienteId)) ? 25 : 30
 }

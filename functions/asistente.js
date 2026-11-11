@@ -16,9 +16,16 @@ const { crearHandlersAbonos } = require('./lib/abonosClientes');
 const { crearHandlersPedidosCrudo } = require('./lib/pedidosCrudo');
 const { crearHandlersPrecios } = require('./lib/preciosVenta');
 const { crearHandlersRefrigerados } = require('./lib/pedidosLimpioRefrigerados');
+const { crearHandlersRefriAnterior } = require('./lib/pedidosLimpioRefriAnterior');
+const { crearHandlersEtiquetas } = require('./lib/pedidosLimpioEtiquetas');
+const { crearHandlersTaras } = require('./lib/tarasProveedores');
 const { crearHandlersNotas } = require('./lib/notasVenta');
 const { crearHandlersDeudas } = require('./lib/deudasProveedor');
 const { crearHandlerEmbarques } = require('./lib/embarquesLectura');
+const crearManejadorCuentas = require('./lib/cuentasLectura');
+const { crearHandlersCuentasEscritura } = require('./lib/cuentasEscritura');
+const crearManejadorPreciosLectura = require('./lib/preciosLectura');
+const crearManejadorRendimientos = require('./lib/rendimientos');
 const { normalizarDestino: normalizarDestinoSalida } = require('./lib/destinoSalida');
 const { pedidoLimpioVacio, pedidoLimpioNuevoAsistente, pedidoLimpioEstaVacio } = require('./lib/pedidoLimpioDia');
 
@@ -2158,6 +2165,8 @@ function factorPorTipo(item) {
 
 // Mantener en sincronía con src/utils/calculosPedidoLimpio.js.
 function kilosPorTaraCliente(item, clienteId = 'temporal') {
+  // Con agua: 30 fijo — cada tara de agua lleva 30 bolsas.
+  if (String(item?.tipo || '').trim() === 'C/H20') return 30;
   const nota = String(item?.nota || '').trim().toLowerCase();
   return nota === 'sellado' || CLIENTES_TARA_25.has(normalizarCliente(clienteId)) ? 25 : 30;
 }
@@ -3005,12 +3014,19 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
 
 // Export handlers for testing
 const refrigeradosHandlers = crearHandlersRefrigerados({ db, errorResponse, FieldValue: admin.firestore.FieldValue, generarAsistenteId });
+const refriAnteriorHandlers = crearHandlersRefriAnterior({ db, errorResponse });
+const etiquetasHandlers = crearHandlersEtiquetas({ db, errorResponse, FieldValue: admin.firestore.FieldValue, generarAsistenteId });
+const tarasHandlers = crearHandlersTaras({ db, errorResponse, FieldValue: admin.firestore.FieldValue, generarAsistenteId });
 const abonosHandlers = crearHandlersAbonos({ db, admin, errorResponse });
 const pedidosCrudoHandlers = crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteId });
 const preciosHandlers = crearHandlersPrecios({ db, admin, errorResponse });
 const notasHandlers = crearHandlersNotas({ db, FieldValue: admin.firestore.FieldValue, errorResponse, generarAsistenteId });
 const deudasHandlers = crearHandlersDeudas({ db, FieldValue: admin.firestore.FieldValue, errorResponse });
 const embarquesHandlers = crearHandlerEmbarques({ db, errorResponse });
+const cuentasHandlers = crearManejadorCuentas({ db });
+const cuentasEscrituraHandlers = crearHandlersCuentasEscritura({ db, admin, errorResponse, generarAsistenteId });
+const preciosLecturaHandlers = crearManejadorPreciosLectura({ db });
+const rendimientosHandlers = crearManejadorRendimientos({ db });
 
 if (process.env.NODE_ENV === 'test') {
   exports._testHandlers = {
@@ -3024,12 +3040,18 @@ if (process.env.NODE_ENV === 'test') {
     handlePostSalida,
     handlePostCrudosSalida,
     ...refrigeradosHandlers,
+    ...refriAnteriorHandlers,
     ...abonosHandlers,
     ...pedidosCrudoHandlers,
     ...preciosHandlers,
     ...notasHandlers,
     ...deudasHandlers,
-    handleGetEmbarques: embarquesHandlers.handleGetEmbarques
+    handleGetEmbarques: embarquesHandlers.handleGetEmbarques,
+    handleGetEmbarquesRango: embarquesHandlers.handleGetEmbarquesRango,
+    ...cuentasHandlers,
+    ...cuentasEscrituraHandlers,
+    ...preciosLecturaHandlers,
+    ...rendimientosHandlers
   };
 }
 
@@ -3096,8 +3118,22 @@ exports.asistente = onRequest(
     if (path === '/pedidos/limpio/refrigerados' && method === 'GET') {
       return refrigeradosHandlers.handleGetPedidosLimpioRefrigerados(req, res);
     }
+    if (path === '/pedidos/limpio/refri-anterior' && method === 'GET') {
+      return refriAnteriorHandlers.handleGetRefriAnterior(req, res);
+    }
     if (path === '/pedidos/limpio/refrigerados' && method === 'POST') {
       return refrigeradosHandlers.handlePostPedidosLimpioRefrigerados(req, res);
+    }
+    if (path === '/pedidos/limpio/etiquetas' && method === 'POST') {
+      return etiquetasHandlers.handlePostPedidosLimpioEtiquetas(req, res);
+    }
+
+    // Rutas de taras por proveedor
+    if (path === '/taras' && method === 'GET') {
+      return tarasHandlers.handleGetTaras(req, res);
+    }
+    if (path === '/taras/movimiento' && method === 'POST') {
+      return tarasHandlers.handlePostTarasMovimiento(req, res);
     }
 
     // Rutas de pedidos limpio
@@ -3115,6 +3151,10 @@ exports.asistente = onRequest(
 
     if (path === '/pedidos/crudo/deshacer' && method === 'POST') {
       return pedidosCrudoHandlers.handlePostPedidosCrudoDeshacer(req, res);
+    }
+
+    if (path === '/pedidos/crudo/barcos' && method === 'POST') {
+      return pedidosCrudoHandlers.handlePostPedidosCrudoBarcos(req, res);
     }
 
     if (path === '/pedidos/crudo' && method === 'POST') {
@@ -3176,11 +3216,66 @@ exports.asistente = onRequest(
     }
 
     if (path === '/embarques' && method === 'GET') {
+      if (req.query && (req.query.desde || req.query.hasta)) {
+        return embarquesHandlers.handleGetEmbarquesRango(req, res);
+      }
       return embarquesHandlers.handleGetEmbarques(req, res);
+    }
+
+    // Rutas de cuentas (solo lectura)
+    if (path === '/cuentas' && method === 'GET') {
+      return cuentasHandlers.obtenerCuentas(req, res);
+    }
+
+    // Rutas de cuentas (escritura: correcciones y observaciones, con dryRun e idempotencyKey)
+    if (path === '/cuentas/correcciones/deshacer' && method === 'POST') {
+      return cuentasEscrituraHandlers.handlePostCuentasCorreccionesDeshacer(req, res);
+    }
+
+    if (path === '/cuentas/correcciones' && method === 'POST') {
+      return cuentasEscrituraHandlers.handlePostCuentasCorrecciones(req, res);
+    }
+
+    if (path === '/cuentas/observaciones/deshacer' && method === 'POST') {
+      return cuentasEscrituraHandlers.handlePostCuentasObservacionesDeshacer(req, res);
+    }
+
+    if (path === '/cuentas/observaciones' && method === 'POST') {
+      return cuentasEscrituraHandlers.handlePostCuentasObservaciones(req, res);
+    }
+
+    // Rutas de precios (solo lectura)
+    if (path === '/precios/nota-venta' && method === 'GET') {
+      return preciosLecturaHandlers.obtenerPreciosNotaVenta(req, res);
+    }
+
+    if (path === '/precios/historial' && method === 'GET') {
+      return preciosLecturaHandlers.obtenerHistorialPrecios(req, res);
+    }
+
+    if (path === '/precios/historial-crudos' && method === 'GET') {
+      return preciosLecturaHandlers.obtenerHistorialPreciosCrudos(req, res);
+    }
+
+    // Rutas de rendimientos (GET solo lectura; POST con dryRun e idempotencyKey)
+    if (path === '/rendimientos' && method === 'GET') {
+      return rendimientosHandlers.obtenerRendimientos(req, res);
+    }
+
+    if (path === '/costos' && method === 'GET') {
+      return rendimientosHandlers.obtenerCostos(req, res);
+    }
+
+    if (path === '/rendimientos/guardar' && method === 'POST') {
+      return rendimientosHandlers.guardarRendimientos(req, res);
+    }
+
+    if (path === '/rendimientos/deshacer' && method === 'POST') {
+      return rendimientosHandlers.deshacerRendimientos(req, res);
     }
     
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer, GET /embarques'
+      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, GET /pedidos/limpio/refri-anterior, POST /pedidos/limpio/etiquetas, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /pedidos/crudo/barcos, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer, GET /embarques, GET /cuentas, POST /cuentas/correcciones, POST /cuentas/correcciones/deshacer, POST /cuentas/observaciones, POST /cuentas/observaciones/deshacer, GET /precios/nota-venta, GET /precios/historial, GET /precios/historial-crudos, GET /rendimientos, GET /costos, POST /rendimientos/guardar, POST /rendimientos/deshacer, GET /taras, POST /taras/movimiento'
     });
   }
 );

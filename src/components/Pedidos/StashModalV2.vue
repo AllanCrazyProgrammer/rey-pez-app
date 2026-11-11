@@ -1001,6 +1001,12 @@ export default {
           
           if (cuentaData.abonos && cuentaData.abonos.length > 0) {
             cuentaData.abonos.forEach((abono, index) => {
+              // Ozuna: en el historial no se toman en cuenta los abonos
+              // agregados directo en la nota (sin stashItemId); solo los
+              // que vienen del Stash aparecen en el historial.
+              if (props.cliente === 'ozuna' && !abono.stashItemId) {
+                return
+              }
               const fechaBase =
                 abono.fechaOriginalStash ||
                 abono.fecha ||

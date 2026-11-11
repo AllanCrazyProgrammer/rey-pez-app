@@ -392,6 +392,7 @@ module.exports = {
   CLIENTES_PRECIO,
   normalizarNombreProductoPrecio,
   normalizarMedida,
+  normalizarFechaISO,
   obtenerClavesBusquedaMedida,
   obtenerDetallesPreciosParaFecha,
   obtenerCoincidenciaDeMedida,

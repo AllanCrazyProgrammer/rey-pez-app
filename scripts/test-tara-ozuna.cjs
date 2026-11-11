@@ -46,7 +46,12 @@ for (const [impl, f] of [['funcion', back], ['ui', front]]) {
   assert.equal(f([{ ...bloque[1], esMaquila: true }], 'ozuna').kilosTotal, 250, `${impl} Ozuna Maq`);
   assert.equal(f([{ ...bloque[1], tipo: '1.4' }], 'otilio').kilosTotal, 280, `${impl} Otilio base 20`);
   assert.equal(f([{ ...bloque[1], tipo: '1.5' }], 'ozuna').kilosTotal, 300, `${impl} Ozuna base 20`);
-  assert.equal(f([{ ...bloque[1], tipo: 'C/H20', agua: 0.7 }], 'ozuna').kilosTotal, 175, `${impl} Ozuna agua personalizada`);
+  assert.equal(f([{ ...bloque[1], tipo: 'C/H20', agua: 0.7 }], 'ozuna').kilosTotal, 210, `${impl} Ozuna agua personalizada`);
+  // Con agua: 30 fijo por tara (cada tara de agua lleva 30 bolsas), no 25:
+  // 10 taras C/H20 con agua 0.65 = 195 kg para cualquier cliente.
+  for (const cliente of ['ozuna', 'joselito', 'lorena', 'otilio', 'catarro']) {
+    assert.equal(f([{ kilos: 10, medida: '71/90', tipo: 'C/H20', esTara: true }], cliente).kilosTotal, 195, `${impl} ${cliente} con agua 30 fijo`);
+  }
   console.log(`✓ ${impl}: ${casos.length + 18} casos`);
 }
 console.log('OK');

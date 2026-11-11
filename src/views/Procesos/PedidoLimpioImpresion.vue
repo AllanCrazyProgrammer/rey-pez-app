@@ -679,7 +679,7 @@ import {
 } from '@/utils/calculosPedidoLimpio'
 import { db } from '@/firebase'
 import { useUIStore } from '@/stores/ui'
-import { doc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { formatearUnDecimal } from '@/utils/formatters';
 
 const PDF_PREVIEW_MODAL_ID = 'pedido-limpio-pdf-preview'
@@ -755,6 +755,9 @@ export default {
     return {
       refriAnterior: { fecha: null, filas: [], error: '' },
       refriAnteriorSolicitud: 0,
+      // Marcador del refri anterior ya sumado a los refrigerados del pedido
+      // ({ fecha, kilosPorMedida }). Evita sumarlo dos veces al recargar.
+      refriAnteriorAplicado: null,
       rendimientos: this.rendimientosGuardados || {},
       divisores: this.divisoresGuardados || {},
       mostrarImagenCajas: false,
@@ -862,10 +865,60 @@ export default {
         const anterior = await this.obtenerEmbarquesDelDiaAnterior()
         if (solicitud !== this.refriAnteriorSolicitud) return
         this.refriAnterior = { fecha: anterior.fecha, filas: desglosarRefriEmbarques(anterior.embarques), error: '' }
+        // Si hay refri del embarque anterior, sumarlo a los refrigerados del
+        // pedido (no solo mostrarlo aparte). Es idempotente: el marcador
+        // refriAnteriorAplicado evita sumarlo dos veces.
+        this.aplicarRefriAnteriorAutomaticamente()
       } catch (error) {
         if (solicitud !== this.refriAnteriorSolicitud) return
         this.refriAnterior = { fecha: null, filas: [], error: 'No se pudo consultar el Refri del embarque anterior.' }
       }
+    },
+    // Suma el refri del embarque anterior a los kilosRefrigerados del pedido,
+    // por medida, y lo guarda. No depende de las medidas del pedido (usa las
+    // filas del refri tal como vienen del embarque), así funciona aunque el
+    // pedido no tenga líneas. Solo corre en un pedido existente y una sola vez
+    // por cada embarque anterior (marcador refriAnteriorAplicado en el doc).
+    async aplicarRefriAnteriorAutomaticamente() {
+      if (!this.refriAnterior?.fecha || !Array.isArray(this.refriAnterior.filas) || !this.refriAnterior.filas.length) return
+      if (!this.editando || !this.pedidoId) return
+      const kilosPorMedida = {}
+      this.refriAnterior.filas.forEach((fila) => {
+        const medida = (fila.medida || 'Sin medida').toString().trim()
+        const kilos = Number(fila.kilos) || 0
+        if (!(kilos > 0)) return
+        kilosPorMedida[medida] = Math.round(((kilosPorMedida[medida] || 0) + kilos) * 10) / 10
+      })
+      if (!Object.keys(kilosPorMedida).length) return
+      // Leer el marcador si aún no lo tenemos en memoria.
+      if (!this.refriAnteriorAplicado) {
+        try {
+          const snap = await getDoc(doc(db, 'pedidos', this.pedidoId))
+          this.refriAnteriorAplicado = snap.exists() ? (snap.data().refriAnteriorAplicado || null) : null
+        } catch (error) {
+          console.error('Error al leer refriAnteriorAplicado:', error)
+          return
+        }
+      }
+      if (this.refriAnteriorAplicado && this.refriAnteriorAplicado.fecha === this.refriAnterior.fecha) return
+      const nuevosKilos = { ...this.kilosRefrigerados }
+      Object.entries(kilosPorMedida).forEach(([medida, kilos]) => {
+        const clave = this.resolverClaveRefrigerados(medida) || medida
+        nuevosKilos[clave] = Math.round(((Number(nuevosKilos[clave]) || 0) + kilos) * 10) / 10
+      })
+      this.kilosRefrigerados = nuevosKilos
+      const marcador = { fecha: this.refriAnterior.fecha, kilosPorMedida }
+      this.refriAnteriorAplicado = marcador
+      try {
+        await updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          kilosRefrigerados: this.kilosRefrigerados,
+          refriAnteriorAplicado: marcador
+        })
+      } catch (error) {
+        console.error('Error al aplicar el refri anterior a los refrigerados:', error)
+        return
+      }
+      this.$emit('actualizar-kilos-refrigerados', this.kilosRefrigerados)
     },
     abrirImagenCajas() {
       this.pendientesImagenCajas = []
@@ -1164,7 +1217,15 @@ export default {
           }
         })
         this.kilosRefrigerados = { ...nuevosKilos }
-        await this.persistirKilosRefrigerados()
+        // El acomodo ya incluye el refri anterior: registrar el marcador para
+        // que el auto-aplicado no lo vuelva a sumar al recargar.
+        const marcadorRefri = embarqueAnterior.fecha
+          ? { fecha: embarqueAnterior.fecha, kilosPorMedida: kilosRefriAnteriores }
+          : null
+        if (marcadorRefri) this.refriAnteriorAplicado = marcadorRefri
+        await this.persistirKilosRefrigerados(
+          marcadorRefri ? { refriAnteriorAplicado: marcadorRefri } : null
+        )
 
         const fechaAnteriorTexto = embarqueAnterior.fecha
           ? embarqueAnterior.fecha.split('-').reverse().join('/')
@@ -2063,12 +2124,13 @@ export default {
         // El método ya registra el detalle; se evita una promesa rechazada sin manejar.
       });
     },
-    async persistirKilosRefrigerados() {
+    async persistirKilosRefrigerados(extras = null) {
       // Si estamos en modo edición, guardar directamente en Firebase
       if (this.editando && this.pedidoId) {
         try {
           await updateDoc(doc(db, 'pedidos', this.pedidoId), {
-            kilosRefrigerados: this.kilosRefrigerados
+            kilosRefrigerados: this.kilosRefrigerados,
+            ...(extras || {})
           })
         } catch (error) {
           console.error('Error al actualizar kilos refrigerados:', error);
@@ -2115,6 +2177,9 @@ export default {
     kilosRefrigeradosGuardados: {
       handler(newVal) {
         this.kilosRefrigerados = { ...newVal };
+        // Si el refri anterior ya cargó, intentar sumarlo ahora que los
+        // refrigerados del pedido están listos (idempotente por marcador).
+        this.aplicarRefriAnteriorAutomaticamente();
       },
       deep: true,
       immediate: true

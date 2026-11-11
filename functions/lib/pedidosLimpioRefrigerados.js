@@ -74,7 +74,23 @@ function crearHandlersRefrigerados({ db, errorResponse, FieldValue, generarAsist
     try {
       const pedido = await buscar(req.query || {});
       return res.json(respuesta(pedido, pedido.data.kilosRefrigerados || {}));
-    } catch (err) { return error(res, err, 'GET'); }
+    } catch (err) {
+      // Sin pedido limpio ese día: devolver mapa vacío (éxito) en vez de 404,
+      // para que se pueda poner refrigerado sin pedido y el POST cree el día vacío.
+      if (err && err.code === 'PEDIDO_NO_ENCONTRADO') {
+        const fecha = typeof req.query?.fecha === 'string' ? req.query.fecha : '';
+        return res.json({
+          success: true,
+          pedidoId: null,
+          fecha,
+          kilosRefrigerados: {},
+          totalKilos: 0,
+          medidasPedido: [],
+          pedidoExiste: false
+        });
+      }
+      return error(res, err, 'GET');
+    }
   }
   async function handlePostPedidosLimpioRefrigerados(req, res) {
     try {

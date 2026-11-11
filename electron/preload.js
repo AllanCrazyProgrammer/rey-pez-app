@@ -1,6 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 let savedForClose = false;
 
+// Cuando se recupera internet, avisar al proceso principal para que revise
+// si hay una actualización nueva (sin esperar la revisión de cada 30 min).
+window.addEventListener('online', () => ipcRenderer.send('desktop:en-linea'));
+
 contextBridge.exposeInMainWorld('desktop', {
   platform: process.platform,
   savePdf: (bytes, filename, notePeriod, options = {}) => ipcRenderer.invoke('desktop:save-pdf', { bytes, filename, notePeriod, open: options.open !== false }),

@@ -189,6 +189,90 @@ function revertirCambios(pedidos, cambios) {
   return { pedidos: copia, conflictos };
 }
 
+/**
+ * Columnas válidas para validar barcosPorMedida: las del documento del día;
+ * si el documento no las trae, las base más 'Med ch c/c' (columna adicional
+ * que usa la vista de crudos).
+ */
+function columnasValidasPedidoCrudo(datos) {
+  const delDoc = Array.isArray(datos?.columnas) ? datos.columnas.filter((nombre) => String(nombre || '').trim()) : [];
+  if (delDoc.length) return delDoc.map((nombre) => String(nombre).trim());
+  return COLUMNAS_BASE.map((columna) => columna.nombre).concat(['Med ch c/c']);
+}
+
+function claveMedidaCrudo(nombre) {
+  return claveColumna(quitarAcentos(nombre)).replace(/\s+/g, ' ');
+}
+
+/**
+ * Valida barcosPorMedida contra las columnas válidas del documento.
+ * Devuelve { errores, normalizados } con normalizados como
+ * [{ medida: <nombre canónico de la columna>, barco: <texto> }].
+ * Acepta los alias de la vista (p. ej. 'Med c/c' → 'Med'). Si la misma
+ * medida llega dos veces con alias distintos, gana la última.
+ */
+function validarBarcosPorMedida(entradas, validas) {
+  const errores = [];
+  const porMedida = new Map();
+  const porClave = new Map();
+  validas.forEach((nombre) => porClave.set(claveMedidaCrudo(nombre), nombre));
+
+  Object.entries(entradas || {}).forEach(([medidaEntrada, barco], index) => {
+    const linea = index + 1;
+    const nombreEntrada = String(medidaEntrada || '').trim();
+    if (!nombreEntrada) {
+      errores.push({ linea, campo: 'medida', mensaje: 'La medida es requerida' });
+      return;
+    }
+    const resuelta = resolverColumna(nombreEntrada);
+    if (!resuelta) {
+      errores.push({ linea, campo: 'medida', mensaje: 'La medida es requerida' });
+      return;
+    }
+    const canonica = porClave.get(claveMedidaCrudo(resuelta.nombre));
+    if (!canonica) {
+      const claveEntrada = claveMedidaCrudo(nombreEntrada);
+      const sugerencias = validas.filter((nombre) => {
+        const clave = claveMedidaCrudo(nombre);
+        return clave.includes(claveEntrada) || claveEntrada.includes(clave);
+      }).slice(0, 3);
+      errores.push({
+        linea,
+        campo: 'medida',
+        mensaje: `Medida "${nombreEntrada}" no encontrada o no es válida para pedidos crudo`,
+        sugerencias: sugerencias.length ? sugerencias : validas.slice()
+      });
+      return;
+    }
+    if (typeof barco !== 'string') {
+      errores.push({ linea, campo: 'barco', mensaje: 'El barco debe ser texto' });
+      return;
+    }
+    porMedida.set(canonica, barco);
+  });
+
+  const normalizados = [...porMedida.entries()].map(([medida, barco]) => ({ medida, barco }));
+  return { errores, normalizados };
+}
+
+/**
+ * Fusiona barcos sobre el mapa existente: solo las medidas enviadas cambian
+ * (barco "" borra el barco de esa medida); las demás se conservan.
+ * Devuelve { resultante, cambios } con cambios como { medida, antes, despues }.
+ */
+function fusionarBarcosPorMedida(existente, normalizados) {
+  const resultante = (existente && typeof existente === 'object' && !Array.isArray(existente)) ? { ...existente } : {};
+  const cambios = [];
+  normalizados.forEach(({ medida, barco }) => {
+    const antes = Object.prototype.hasOwnProperty.call(resultante, medida) ? resultante[medida] : null;
+    const despues = barco === '' ? null : barco;
+    if (barco === '') delete resultante[medida];
+    else resultante[medida] = barco;
+    if (antes !== despues) cambios.push({ medida, antes, despues });
+  });
+  return { resultante, cambios };
+}
+
 function crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteId }) {
   function fechaValida(fecha) {
     return typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha);
@@ -376,6 +460,107 @@ function crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteI
     }
   }
 
+  /**
+   * POST /pedidos/crudo/barcos
+   * Guarda de qué barco sale cada medida del pedido crudo del día
+   * (campo barcosPorMedida del documento). Hace MERGE: solo las medidas
+   * enviadas cambian y las demás se conservan; barco "" borra el barco
+   * de esa medida. No crea el pedido si no existe.
+   * El deshacer existente no revierte esta operación (solo busca logs de
+   * pedidos_crudo_create/update y revierte celdas); el log guarda
+   * cambiosBarcos (antes/despues por medida) para una futura reversión.
+   */
+  async function handlePostPedidosCrudoBarcos(req, res) {
+    const body = req.body || {};
+    const { fecha, barcosPorMedida, idempotencyKey, dryRun = false } = body;
+    if (!fechaValida(fecha)) {
+      return errorResponse(res, 400, 'FECHA_INVALIDA', 'La fecha es requerida y debe estar en formato YYYY-MM-DD');
+    }
+    if (!idempotencyKey || typeof idempotencyKey !== 'string' || !idempotencyKey.trim() || idempotencyKey.includes('/')) {
+      return errorResponse(res, 400, 'IDEMPOTENCY_KEY_REQUERIDA', 'idempotencyKey es requerido y no puede contener "/"');
+    }
+    if (!barcosPorMedida || typeof barcosPorMedida !== 'object' || Array.isArray(barcosPorMedida) || Object.keys(barcosPorMedida).length === 0) {
+      return errorResponse(res, 400, 'BARCOS_REQUERIDOS', 'Indica barcosPorMedida con al menos una medida y su barco');
+    }
+
+    try {
+      const idemRef = db.collection('asistenteIdem').doc(idempotencyKey);
+      const idemSnap = await idemRef.get();
+      if (idemSnap.exists && idemSnap.data().operation === 'pedidos_crudo_barcos') {
+        return res.json(idemSnap.data().response);
+      }
+
+      const { snap: existente } = await buscarPedido(fecha);
+      if (!existente) {
+        return errorResponse(res, 404, 'PEDIDO_NO_ENCONTRADO', `No hay pedido crudo para la fecha ${fecha}`);
+      }
+      const validas = columnasValidasPedidoCrudo(existente.data());
+      const validacion = validarBarcosPorMedida(barcosPorMedida, validas);
+      if (validacion.errores.length) {
+        return errorResponse(res, 400, 'VALIDACION_ERROR', 'Errores de validación en barcosPorMedida', { errores: validacion.errores });
+      }
+      const fusion = fusionarBarcosPorMedida(existente.data().barcosPorMedida, validacion.normalizados);
+
+      const response = {
+        success: true,
+        operation: 'pedidos_crudo_barcos',
+        pedidoId: existente.id,
+        fecha,
+        barcosPorMedida: fusion.resultante
+      };
+
+      if (dryRun) {
+        return res.json({ dryRun: true, pedidoId: existente.id, fecha, barcosPorMedida: fusion.resultante });
+      }
+
+      await db.runTransaction(async (transaction) => {
+        const idemActual = await transaction.get(idemRef);
+        if (idemActual.exists && idemActual.data().operation === 'pedidos_crudo_barcos') {
+          throw { code: 'IDEMPOTENTE', response: idemActual.data().response };
+        }
+
+        const pedidoRef = db.collection('pedidos').doc(existente.id);
+        const fresh = await transaction.get(pedidoRef);
+        if (!fresh.exists) {
+          throw { code: 'PEDIDO_ELIMINADO', message: 'El pedido fue eliminado durante la operación', status: 409 };
+        }
+        const datosFrescos = fresh.data();
+        const validasFrescas = columnasValidasPedidoCrudo(datosFrescos);
+        const otraVez = validarBarcosPorMedida(barcosPorMedida, validasFrescas);
+        if (otraVez.errores.length) {
+          throw { code: 'VALIDACION_ERROR', message: 'Errores de validación en barcosPorMedida', status: 400, details: { errores: otraVez.errores } };
+        }
+        const fusionFresca = fusionarBarcosPorMedida(datosFrescos.barcosPorMedida, otraVez.normalizados);
+        response.barcosPorMedida = fusionFresca.resultante;
+
+        transaction.update(pedidoRef, { barcosPorMedida: fusionFresca.resultante });
+        transaction.set(db.collection('asistenteLog').doc(), {
+          operation: 'pedidos_crudo_barcos',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          idempotencyKey,
+          pedidoId: pedidoRef.id,
+          fecha,
+          before: datosFrescos.barcosPorMedida || null,
+          cambiosBarcos: fusionFresca.cambios,
+          request: { fecha, barcosPorMedida }
+        });
+        transaction.set(idemRef, {
+          operation: 'pedidos_crudo_barcos',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          response
+        });
+      });
+
+      const guardada = await idemRef.get();
+      return res.json(guardada.data().response);
+    } catch (error) {
+      if (error.code === 'IDEMPOTENTE') return res.json(error.response);
+      if (error.code) return errorResponse(res, error.status || 500, error.code, error.message, error.details);
+      console.error('Error en POST /pedidos/crudo/barcos:', error);
+      return errorResponse(res, 500, 'ERROR_INTERNO', 'Error al guardar los barcos del pedido crudo: ' + error.message);
+    }
+  }
+
   async function handlePostPedidosCrudoDeshacer(req, res) {
     const { idempotencyKey, undoIdempotencyKey, dryRun = false } = req.body || {};
     if (!idempotencyKey) {
@@ -505,7 +690,7 @@ function crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteI
     }
   }
 
-  return { handleGetPedidosCrudo, handlePostPedidosCrudo, handlePostPedidosCrudoDeshacer };
+  return { handleGetPedidosCrudo, handlePostPedidosCrudo, handlePostPedidosCrudoDeshacer, handlePostPedidosCrudoBarcos };
 }
 
 function hayCeldasAjenas(pedidos, cambios) {
@@ -527,5 +712,8 @@ module.exports = {
   totalesCrudo,
   fusionarPedidoCrudo,
   revertirCambios,
+  columnasValidasPedidoCrudo,
+  validarBarcosPorMedida,
+  fusionarBarcosPorMedida,
   crearHandlersPedidosCrudo
 };
