@@ -7,7 +7,7 @@ ya no se puede actualizar y habría que desinstalarla y volver a instalar.
 
 ## El keystore
 
-- Archivo: `reypez-release.keystore` (JKS), alias `reypez`, RSA 2048, válido 10,000 días.
+- Archivo: `reypez-release.keystore` (PKCS12, el formato actual de keytool), alias `reypez`, RSA 2048, válido 10,000 días.
 - **No está en el repo ni debe subirse a Git.** Hay una copia guardada en 1Password
   (Allan) y su contenido en base64 en el secreto `ANDROID_KEYSTORE_BASE64` del repo.
 - Generarlo de nuevo (solo si se pierde todo y se asume que habrá que reinstalar):
