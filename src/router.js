@@ -540,7 +540,8 @@ const routes = [
 ];
 
 const router = new Router({
-  mode: process.env.VUE_APP_TARGET === 'electron' ? 'hash' : 'history',
+  // En la APK no hay servidor que resuelva rutas, igual que en escritorio: modo hash.
+  mode: ['electron', 'android'].includes(process.env.VUE_APP_TARGET) ? 'hash' : 'history',
   base: process.env.BASE_URL,
   routes
 });
