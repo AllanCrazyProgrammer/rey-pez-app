@@ -2,11 +2,16 @@
 
 Desde la versión **0.3.20**, la app de escritorio (Mac y Windows) y la de Android se actualizan
 solas cuando se publica la web: ya no hay que descargar un instalador o un APK por cada cambio.
+**Desde esta misma versión, la APK de Android es la app completa** (antes era solo Inventarios):
+las instalaciones viejas de Inventarios reciben la app completa por este mismo canal, sin
+reinstalar. Una APK nueva solo hace falta cuando cambia algo nativo; esa APK va firmada con
+la llave de distribución y NO se instala encima de la vieja de Inventarios (firmada con llave
+debug): hay que desinstalar Inventarios primero. Ver `docs/ANDROID_FIRMA.md`.
 
 ## Qué ve la persona
 
-1. Con internet, la app revisa si hay versión nueva (al abrir, cada 30 minutos y, en Android, al
-   volver a la app).
+1. Con internet, la app revisa si hay versión nueva (al abrir, cada 30 minutos, en Android
+   también al volver a la app y **al recuperar internet**, igual que escritorio).
 2. Si la hay, la descarga en segundo plano y muestra **"Hay una versión nueva de ReyPez lista para
    usar · Actualizar"**.
 3. Al pulsar **Actualizar**:
