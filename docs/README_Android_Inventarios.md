@@ -1,5 +1,15 @@
 # ReyPez Inventarios para Android
 
+> **Desde 0.3.20 la APK de Android es la app completa de Rey Pez, no solo Inventarios.**
+> Inventarios sigue existiendo como pantallas dentro de la app completa (Existencias,
+> Sacadas, RegistroCrudos), y sus componentes y pruebas siguen en `src/mobile/`, pero ya
+> no es una entrada aparte: el APK empaqueta `src/main.js` con todas las rutas en modo
+> hash. La APK vieja de solo Inventarios se reemplaza: al publicar la web, las
+> instalaciones viejas reciben la app completa por el canal de actualizaciones
+> (`actualizaciones/android/`), y la APK nueva de Releases se instala desinstalando
+> primero la vieja (cambió la firma: de llave debug a llave de distribución).
+> Ver `docs/ACTUALIZACIONES_EN_APP.md` y `docs/ANDROID_FIRMA.md`.
+
 Aplicación Android con pantallas propias para existencias y movimientos de limpios
 y crudos. Los editores móviles heredan la lógica de `Sacadas.vue` y
 `RegistroCrudos.vue`; los inventarios reutilizan el cálculo de `Existencias.vue`
@@ -55,11 +65,13 @@ habitual. Desde la raíz del proyecto:
 npm run android:apk
 ```
 
-El comando compila la entrada móvil en `android-dist`, sincroniza únicamente
+El comando compila la app completa en `android-dist`, sincroniza únicamente
 Android y genera un APK de prueba firmado con la clave de depuración local en
-`release/android/ReyPez-Inventarios-<versión>.apk`. Puedes copiarlo al teléfono
+`release/android/ReyPez-<versión>.apk`. Puedes copiarlo al teléfono
 e instalarlo habilitando la instalación desde esa aplicación de archivos.
-No es una publicación en Google Play ni un paquete con firma de distribución.
+No es una publicación en Google Play. La APK firmada de distribución se genera
+en CI (`.github/workflows/android-release.yml`) y se publica en GitHub Releases:
+`npm run android:apk:release` (requiere el keystore, ver `docs/ANDROID_FIRMA.md`).
 
 ```sh
 npm run build:android:web
@@ -67,10 +79,8 @@ npm run android:sync
 npm run android:open
 ```
 
-`capacitor.config.js` usa `android-dist` cuando `VUE_APP_TARGET=android` y la
-configuración JSON existente para los demás destinos. La web y el escritorio
-conservan sus entradas y menús completos. Android usa rutas hash para abrir
-las pantallas desde los archivos incluidos en el APK.
+`capacitor.config.js` usa `android-dist` cuando `VUE_APP_TARGET=android`. La app completa
+usa rutas hash para abrir las pantallas desde los archivos incluidos en el APK.
 
 ## Verificación
 
