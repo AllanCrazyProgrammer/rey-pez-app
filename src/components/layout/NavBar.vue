@@ -628,6 +628,13 @@ export default {
   95% { opacity: 0.5; }
 }
 
+/* Rendimiento web: overlay de scanlines y animaciones del navbar apagados.
+   La retícula, el punto y el estado quedan fijos; no cambia nada más. */
+.predator-scanlines { display: none; }
+.reticle-ring,
+.reticle-dot,
+.system-status { animation: none !important; }
+
 /* Mobile toggle */
 .mobile-toggle {
   display: none;

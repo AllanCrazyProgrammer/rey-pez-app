@@ -12,8 +12,8 @@
 
     <DriveBackupNotice @open-settings="abrirOpcionesOffline" />
     <PdfPreview />
-    <WebUpdateNotice v-if="!desktopApp" :before-update="guardarAntesDeActualizarWeb" />
-    <AppUpdateNotice v-else-if="fuenteActualizacion" :fuente="fuenteActualizacion" :before-update="guardarAntesDeActualizarWeb" />
+    <WebUpdateNotice v-if="!desktopApp && !esNativo" :before-update="guardarAntesDeActualizarWeb" />
+    <AppUpdateNotice v-else-if="fuenteActiva" :fuente="fuenteActiva" :before-update="guardarAntesDeActualizarWeb" />
     <dialog ref="offlineDialog" class="offline-dialog" aria-labelledby="offline-dialog-title">
       <header class="offline-dialog-header">
         <h2 id="offline-dialog-title">Conexión y respaldos</h2>
@@ -40,6 +40,7 @@ import DriveBackupNotice from './components/layout/DriveBackupNotice.vue';
 import PdfPreview from './components/layout/PdfPreview.vue';
 import WebUpdateNotice from './components/layout/WebUpdateNotice.vue';
 import AppUpdateNotice from './components/layout/AppUpdateNotice.vue';
+import { Capacitor } from '@capacitor/core';
 import { fuenteActualizacionEscritorio } from './services/actualizacionEscritorio';
 import EmbarquesSync from './services/EmbarquesSync';
 import EmbarquesOfflineStatus from './components/layout/EmbarquesOfflineStatus.vue';
@@ -59,7 +60,7 @@ export default {
     EmbarquesOfflineStatus,
     Footer
   },
-  data: () => ({ offlineOpened: false, desktopApp: Boolean(window.desktop), fuenteActualizacion: Object.freeze(fuenteActualizacionEscritorio()) }),
+  data: () => ({ offlineOpened: false, desktopApp: Boolean(window.desktop), esNativo: Capacitor.isNativePlatform(), fuenteActualizacion: Object.freeze(fuenteActualizacionEscritorio()), fuenteAndroid: null }),
   watch: { '$route'() { this.$refs.offlineDialog?.close(); } },
   methods: {
     cerrarNotificacion(id) { useUIStore().dismissNotification(id); },
@@ -79,6 +80,9 @@ export default {
     }
   },
   computed: {
+    // En la APK manda la fuente de Android (mismo canal que usaba Inventarios); en escritorio
+    // la de Electron; en web no hay fuente instalada y se usa el aviso de WebUpdateNotice.
+    fuenteActiva() { return this.fuenteAndroid || this.fuenteActualizacion; },
     esEditorEmbarques() { return ['NuevoEmbarque', 'EditarEmbarque'].includes(this.$route.name); },
     esEmbarques() { return /embarque/i.test(this.$route.path); },
     esArcade() {
@@ -107,6 +111,14 @@ export default {
     if (this._removeDesktopClose) this._removeDesktopClose();
   },
   mounted() {
+    // En la APK, cargar la fuente de actualizaciones de Android para el aviso (el arranque del
+    // actualizador en sí lo hace main.js). La importación es diferida para no meter el plugin
+    // de Capacitor en la web ni en escritorio.
+    if (this.esNativo) {
+      import('./mobile/arranqueActualizacion')
+        .then(m => { this.fuenteAndroid = m.fuenteActualizacionAndroid; })
+        .catch(error => console.warn('No se pudo cargar el actualizador de Android:', error));
+    }
     // La descarga/sincronización de embarques no debe competir con la carga de la
     // pantalla: se arranca cuando el navegador queda ocioso (máx. 4 s de espera).
     const arrancarSync = () => EmbarquesSync.start();
@@ -176,6 +188,16 @@ html.desktop-app .lista-embarques .fecha-value,
 html.desktop-app .lista-embarques .status-icon { animation: none !important; }
 html.desktop-app .embarque-card-shell::before,
 html.desktop-app .embarque-card-shell::after { display: none; }
+
+/* Rendimiento web: las animaciones decorativas del fondo van apagadas también
+   en la web, igual que ya estaban en escritorio y en embarques. El fondo queda
+   estático; no cambia nada más. */
+.content-wrapper::before,
+.content-wrapper::after { display: none; }
+.content-horizon-grid__plane,
+.content-horizon-grid__sun { animation: none !important; }
+.embarque-card-shell::before,
+.embarque-card-shell::after { display: none; }
 
 .offline-dialog { width: min(760px, calc(100vw - 32px)); max-height: 85vh; padding: 20px; border: 1px solid #c5d5dc; border-radius: 14px; color: #123e50; background: #f8fbfc; box-shadow: 0 20px 70px #0005; }
 .offline-dialog::backdrop { background: #07132188; }
