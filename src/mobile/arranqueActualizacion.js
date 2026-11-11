@@ -19,4 +19,6 @@ export function iniciarActualizacionesAndroid() {
   fuenteActualizacionAndroid.iniciar().catch(error => console.warn('No se pudo iniciar el actualizador:', error));
   // Al volver a la app después de un rato, revisar de nuevo.
   NativeApp.addListener('resume', () => fuenteActualizacionAndroid.buscar());
+  // Como en escritorio: al recuperar internet, revisar de inmediato sin esperar los 30 min.
+  window.addEventListener('online', () => fuenteActualizacionAndroid.buscar());
 }
