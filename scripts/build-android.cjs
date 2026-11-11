@@ -31,11 +31,17 @@ escribirManifiesto('android', identidad);
 console.log(`Paquete de Android ${identidad.version}`);
 if (soloWeb) process.exit(0);
 run(process.execPath, [require.resolve('@capacitor/cli/bin/capacitor'), 'sync', 'android']);
+// --release: APK firmada con el keystore de distribución (CI de Releases). Sin él, debug local.
+const release = process.argv.includes('--release');
+if (release && (!process.env.REYPEZ_KEYSTORE_FILE || !fs.existsSync(process.env.REYPEZ_KEYSTORE_FILE))) {
+  console.error('Para --release hace falta REYPEZ_KEYSTORE_FILE con el keystore de distribución.');
+  process.exit(1);
+}
 const android = path.join(root, 'android');
-run(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', ['assembleDebug'], android);
+run(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', [release ? 'assembleRelease' : 'assembleDebug'], android);
 const output = path.join(root, 'release/android');
 fs.mkdirSync(output, { recursive: true });
 const version = require('../package.json').version;
-const target = path.join(output, `ReyPez-Inventarios-${version}.apk`);
-fs.copyFileSync(path.join(android, 'app/build/outputs/apk/debug/app-debug.apk'), target);
-console.log(`APK de prueba listo: ${target}`);
+const target = path.join(output, `ReyPez-${version}.apk`);
+fs.copyFileSync(path.join(android, 'app/build/outputs/apk', release ? 'release/app-release.apk' : 'debug/app-debug.apk'), target);
+console.log(`${release ? 'APK firmada lista' : 'APK de prueba lista'}: ${target}`);
