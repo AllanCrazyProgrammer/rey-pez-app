@@ -60,6 +60,10 @@ Escritorio y Android descargan las pantallas nuevas al publicarse la web (sin re
 `docs/ACTUALIZACIONES_EN_APP.md`. Un cambio en `electron/` o en lo nativo de Android necesita
 instalador/APK nuevo **y** subir `reypez.minimoInstalador` en `package.json`.
 Pruebas: `node --test scripts/test-actualizaciones.cjs`.
+Desde 0.3.20 la APK de Android es la app completa (antes solo Inventarios); la APK firmada
+de distribución se publica en GitHub Releases (`.github/workflows/android-release.yml`,
+ver `docs/ANDROID_FIRMA.md`). Arranque de la APK: `npm run test:android:arranque`
+(tras `npm run build:android:web`).
 
 ## Módulo de Barcos
 
