@@ -18,7 +18,8 @@ const isAndroid = process.env.VUE_APP_TARGET === 'android';
 
 module.exports = {
   outputDir: isElectron ? 'desktop-dist' : isAndroid ? 'android-dist' : 'dist',
-  ...(isAndroid ? { pages: { index: { entry: 'src/mobile/main.js', template: 'public/android.html', title: 'ReyPez Inventarios', chunks: 'all' } } } : {}),
+  // Android (APK) usa la app completa: la entrada es src/main.js con el router en hash, igual que
+  // escritorio. La entrada móvil de solo inventarios (src/mobile) ya no se empaqueta en el APK.
   // Configuración del servidor de desarrollo
   devServer: {
     // Permitir acceso desde cualquier IP (otros equipos de la red local)
