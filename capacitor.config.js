@@ -1,6 +1,6 @@
 const base = require('./capacitor.config.json');
 
-// La compilación Android tiene una entrada de inventarios independiente.
+// La compilación Android empaqueta la app completa (android-dist) con el nombre ReyPez.
 module.exports = process.env.VUE_APP_TARGET === 'android'
-  ? { ...base, appName: 'ReyPez Inventarios', webDir: 'android-dist' }
+  ? { ...base, appName: 'ReyPez', webDir: 'android-dist' }
   : base;
