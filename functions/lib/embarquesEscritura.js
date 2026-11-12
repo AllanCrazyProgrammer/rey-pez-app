@@ -126,6 +126,11 @@ function validarPrecio(valor) {
 }
 
 function buscarCliente(clientes, nombre) {
+  const buscadoExacto = String(nombre || '').trim();
+  // Primero coincidencia exacta: el embarque puede tener dos clientes que
+  // solo difieren por mayúsculas (ej. "alito" vacío y "Alito" con kilos).
+  const exacto = (clientes || []).find((c) => String(c.nombre || '').trim() === buscadoExacto);
+  if (exacto) return exacto;
   const buscado = normalizarNombre(nombre);
   const alias = buscado === 'lorena' ? 'veronica' : buscado;
   return (clientes || []).find((c) => {
