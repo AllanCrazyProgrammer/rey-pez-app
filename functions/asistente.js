@@ -22,6 +22,7 @@ const { crearHandlersTaras } = require('./lib/tarasProveedores');
 const { crearHandlersNotas } = require('./lib/notasVenta');
 const { crearHandlersDeudas } = require('./lib/deudasProveedor');
 const { crearHandlerEmbarques } = require('./lib/embarquesLectura');
+const { crearHandlersEmbarquesEscritura } = require('./lib/embarquesEscritura');
 const crearManejadorCuentas = require('./lib/cuentasLectura');
 const { crearHandlersCuentasEscritura } = require('./lib/cuentasEscritura');
 const crearManejadorPreciosLectura = require('./lib/preciosLectura');
@@ -3023,6 +3024,7 @@ const preciosHandlers = crearHandlersPrecios({ db, admin, errorResponse });
 const notasHandlers = crearHandlersNotas({ db, FieldValue: admin.firestore.FieldValue, errorResponse, generarAsistenteId });
 const deudasHandlers = crearHandlersDeudas({ db, FieldValue: admin.firestore.FieldValue, errorResponse });
 const embarquesHandlers = crearHandlerEmbarques({ db, errorResponse });
+const embarquesEscrituraHandlers = crearHandlersEmbarquesEscritura({ db, admin, errorResponse, generarAsistenteId });
 const cuentasHandlers = crearManejadorCuentas({ db });
 const cuentasEscrituraHandlers = crearHandlersCuentasEscritura({ db, admin, errorResponse, generarAsistenteId });
 const preciosLecturaHandlers = crearManejadorPreciosLectura({ db });
@@ -3048,6 +3050,7 @@ if (process.env.NODE_ENV === 'test') {
     ...deudasHandlers,
     handleGetEmbarques: embarquesHandlers.handleGetEmbarques,
     handleGetEmbarquesRango: embarquesHandlers.handleGetEmbarquesRango,
+    ...embarquesEscrituraHandlers,
     ...cuentasHandlers,
     ...cuentasEscrituraHandlers,
     ...preciosLecturaHandlers,
@@ -3209,10 +3212,27 @@ exports.asistente = onRequest(
       return preciosHandlers.handleGetPrecios(req, res);
     }
 
+    // Rutas de embarques (escritura: crear y llenar, con dryRun e idempotencyKey)
+    if (path === '/embarques' && method === 'POST') {
+      return embarquesEscrituraHandlers.handlePostEmbarques(req, res);
+    }
+
+    if (path === '/embarques/cliente' && method === 'POST') {
+      return embarquesEscrituraHandlers.handlePostEmbarquesCliente(req, res);
+    }
+
+    if (path === '/embarques/crudos' && method === 'POST') {
+      return embarquesEscrituraHandlers.handlePostEmbarquesCrudos(req, res);
+    }
+
+    if (path === '/embarques/linea' && method === 'POST') {
+      return embarquesEscrituraHandlers.handlePostEmbarquesLinea(req, res);
+    }
+
     if (path === '/embarques' && method !== 'GET') {
-      res.setHeader('Allow', 'GET');
+      res.setHeader('Allow', 'GET, POST');
       return errorResponse(res, 405, 'METODO_NO_PERMITIDO',
-        'Solo se permite GET /embarques. Esta ruta no modifica documentos.');
+        'Solo se permiten GET /embarques (lectura) y POST /embarques (crear).');
     }
 
     if (path === '/embarques' && method === 'GET') {
@@ -3275,7 +3295,7 @@ exports.asistente = onRequest(
     }
     
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, GET /pedidos/limpio/refri-anterior, POST /pedidos/limpio/etiquetas, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /pedidos/crudo/barcos, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer, GET /embarques, GET /cuentas, POST /cuentas/correcciones, POST /cuentas/correcciones/deshacer, POST /cuentas/observaciones, POST /cuentas/observaciones/deshacer, GET /precios/nota-venta, GET /precios/historial, GET /precios/historial-crudos, GET /rendimientos, GET /costos, POST /rendimientos/guardar, POST /rendimientos/deshacer, GET /taras, POST /taras/movimiento'
+      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, GET /pedidos/limpio/refri-anterior, POST /pedidos/limpio/etiquetas, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /pedidos/crudo/barcos, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer, GET /embarques, POST /embarques, POST /embarques/cliente, POST /embarques/crudos, POST /embarques/linea, GET /cuentas, POST /cuentas/correcciones, POST /cuentas/correcciones/deshacer, POST /cuentas/observaciones, POST /cuentas/observaciones/deshacer, GET /precios/nota-venta, GET /precios/historial, GET /precios/historial-crudos, GET /rendimientos, GET /costos, POST /rendimientos/guardar, POST /rendimientos/deshacer, GET /taras, POST /taras/movimiento'
     });
   }
 );
