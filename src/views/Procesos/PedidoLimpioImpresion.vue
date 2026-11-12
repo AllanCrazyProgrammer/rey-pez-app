@@ -87,7 +87,7 @@
             {{ generandoPreviewPdf ? 'Actualizando...' : 'Aplicar escala' }}
           </button>
           <button type="button" class="btn-download-preview" :disabled="generandoPreviewPdf" @click="generarPDF">
-            <i class="fas fa-download"></i> {{ esAppNativa ? 'Compartir PDF' : 'Descargar PDF' }}
+            <i class="fas fa-download"></i> {{ puedeGuardarEnTelefono ? 'Guardar PDF' : (esAppNativa ? 'Compartir PDF' : 'Descargar PDF') }}
           </button>
         </div>
 
@@ -658,6 +658,7 @@
 import { crearPreviewPedidoLimpio } from '@/utils/pdf/pedidoLimpio'
 import { renderizarPaginasPdf } from '@/utils/pdf/previewPdf'
 import { Capacitor } from '@capacitor/core'
+import { Filesystem, Directory } from '@capacitor/filesystem'
 import moment from 'moment'
 import KilosRefrigeradosModal from '@/components/Existencias/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/Medidas/ListaMedidasPedidoModal.vue'
@@ -811,6 +812,11 @@ export default {
   computed: {
     esAppNativa() {
       return Capacitor.isNativePlatform();
+    },
+    // Guardar en Documentos solo existe con la APK 0.3.21+ (plugin Filesystem).
+    // Con la APK anterior el botón comparte el archivo, como hasta ahora.
+    puedeGuardarEnTelefono() {
+      return this.esAppNativa && Capacitor.isPluginAvailable('Filesystem');
     },
     totalesResumen() {
       return resumirTotalesPedidoLimpio({
@@ -1809,12 +1815,32 @@ export default {
       try {
         const { blob } = await this.crearBlobPDF();
         const nombre = 'Ped-limpio-' + this.fecha + '.pdf';
+        // 1) En la app, guardar el archivo en Documentos del teléfono
+        // (requiere la APK 0.3.21+, que trae el plugin Filesystem).
+        // Ahí queda guardado para imprimirlo o compartirlo desde Archivos.
+        if (this.puedeGuardarEnTelefono) {
+          try {
+            const base64 = await new Promise((resolve, reject) => {
+              const lector = new FileReader();
+              lector.onloadend = () => resolve(lector.result.split(',')[1]);
+              lector.onerror = reject;
+              lector.readAsDataURL(blob);
+            });
+            await Filesystem.writeFile({
+              path: nombre,
+              data: base64,
+              directory: Directory.Documents
+            });
+            alert('PDF guardado en Documentos/' + nombre + '. Ábrelo desde Archivos para imprimirlo o compartirlo.');
+            return;
+          } catch (error) {
+            console.warn('No se pudo guardar en Documentos, intentando compartir:', error);
+          }
+        }
+        // 2) Compartir con la hoja del sistema (ahí se puede guardar en el
+        // teléfono, en Drive o mandarlo por WhatsApp), que es el mismo
+        // mecanismo que ya usa la app para compartir imágenes.
         const archivo = new File([blob], nombre, { type: 'application/pdf' });
-        // En la app de Android el WebView no descarga archivos: el clic en un
-        // enlace de descarga no hace nada. Se comparte el archivo con la hoja
-        // del sistema (ahí se puede guardar en el teléfono, en Drive o mandarlo
-        // por WhatsApp), que es el mismo mecanismo que ya usa la app para
-        // compartir imágenes.
         if (this.esAppNativa && navigator.share && navigator.canShare && navigator.canShare({ files: [archivo] })) {
           try {
             await navigator.share({ files: [archivo] });
@@ -1824,6 +1850,7 @@ export default {
             // Si compartir falla, intentar la descarga directa del navegador.
           }
         }
+        // 3) Web (o respaldo en la app): descarga con el enlace del navegador.
         const url = URL.createObjectURL(blob);
         const enlace = document.createElement('a');
         enlace.href = url;
@@ -2592,7 +2619,13 @@ export default {
 .pdf-preview-page-frame {
   display: block;
   width: 100%;
+  /* La página del PDF es carta (612 x 792 pt): con la proporción fija la
+     altura ya se conoce antes de que cargue la imagen, así la fila de la
+     cuadrícula no se queda con la altura de cuando aún no había imagen
+     (en el WebView de Android eso dejaba solo una franja de cada página). */
+  aspect-ratio: 612 / 792;
   height: auto;
+  object-fit: contain;
   border: 0;
   background: #525659;
 }
