@@ -31,19 +31,19 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Instalar dependencias
         run: npm ci
@@ -80,7 +80,13 @@ jobs:
           TAG_PUSH: ${{ github.ref_name }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          TAG="${TAG_ENTRADA:-${TAG_PUSH:-android-v$VERSION}}"
+          if [ -n "$TAG_ENTRADA" ]; then
+            TAG="$TAG_ENTRADA"
+          elif [[ "$TAG_PUSH" == android-v* ]]; then
+            TAG="$TAG_PUSH"
+          else
+            TAG="android-v$VERSION"
+          fi
           APK="release/android/ReyPez-$VERSION.apk"
           test -f "$APK"
           if gh release view "$TAG" >/dev/null 2>&1; then
