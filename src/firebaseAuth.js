@@ -61,8 +61,10 @@ export function esperarUsuarioFirebase() {
 }
 
 // Mensaje claro para la pantalla de inicio según el error de Firebase.
+// El código entre paréntesis es el diagnóstico: si el inicio falla en un equipo
+// concreto, ese código dice la causa real (sin él solo se ve el mensaje genérico).
 export function mensajeErrorLogin(error) {
-  const codigo = error && error.code;
+  const codigo = (error && error.code) || 'sin-codigo';
   if (codigo === 'reypez/cambios-pendientes') {
     return 'Hay cambios guardados en este equipo que todavía no se suben. Conéctate a internet y vuelve a intentar para no perderlos.';
   }
@@ -75,5 +77,5 @@ export function mensajeErrorLogin(error) {
   if (codigo === 'auth/user-disabled') {
     return 'Esta cuenta está desactivada. Pide que la reactiven.';
   }
-  return 'Usuario o contraseña incorrectos';
+  return `Usuario o contraseña incorrectos (${codigo})`;
 }
