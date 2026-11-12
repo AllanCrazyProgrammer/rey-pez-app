@@ -16,15 +16,6 @@
             <span class="terminal-title">MENU_RAPIDO</span>
           </div>
           <div class="header-content">
-            <pre class="ascii-ship">
-     |    |    |
-    )_)  )_)  )_)
-   )___))___))___)
-  )____)____)_____)
-_____|____|____|______
-\                   /
- \_________________/
-            </pre>
             <h1 class="main-title">
               <span class="prompt">&gt;</span>
               <span class="typing-text">MENU_RAPIDO</span>
@@ -45,7 +36,7 @@ _____|____|____|______
 
           <!-- Pedidos -->
           <div class="menu-fila">
-            <router-link to="/procesos/pedidos" class="btn-action">
+            <router-link to="/procesos/pedidos" class="btn-action btn-c-verde">
               <span class="btn-prefix">[1]</span>
               <span class="btn-text">PEDIDOS</span>
             </router-link>
@@ -57,7 +48,7 @@ _____|____|____|______
 
           <!-- Embarques -->
           <div class="menu-fila">
-            <router-link to="/embarques-menu" class="btn-action">
+            <router-link to="/embarques-menu" class="btn-action btn-c-azul">
               <span class="btn-prefix">[2]</span>
               <span class="btn-text">EMBARQUES</span>
             </router-link>
@@ -73,7 +64,7 @@ _____|____|____|______
 
           <!-- Sacadas -->
           <div class="menu-fila">
-            <router-link to="/sacadas" class="btn-action">
+            <router-link to="/sacadas" class="btn-action btn-c-morado">
               <span class="btn-prefix">[3]</span>
               <span class="btn-text">SACADAS</span>
             </router-link>
@@ -85,7 +76,7 @@ _____|____|____|______
 
           <!-- Cuentas -->
           <div class="menu-fila">
-            <router-link to="/cuentas-mexico" class="btn-action">
+            <router-link to="/cuentas-mexico" class="btn-action btn-c-ambar">
               <span class="btn-prefix">[4]</span>
               <span class="btn-text">CUENTAS</span>
             </router-link>
@@ -93,7 +84,7 @@ _____|____|____|______
 
           <!-- Precios (modal de Precios de Venta que vive en Cuentas) -->
           <div class="menu-fila">
-            <router-link :to="{ path: '/cuentas-mexico', query: { precios: '1' } }" class="btn-action">
+            <router-link :to="{ path: '/cuentas-mexico', query: { precios: '1' } }" class="btn-action btn-c-rosa">
               <span class="btn-prefix">[5]</span>
               <span class="btn-text">PRECIOS</span>
             </router-link>
@@ -101,7 +92,7 @@ _____|____|____|______
 
           <!-- Existencias -->
           <div class="menu-fila">
-            <router-link to="/existencias" class="btn-action">
+            <router-link to="/existencias" class="btn-action btn-c-cian">
               <span class="btn-prefix">[6]</span>
               <span class="btn-text">EXISTENCIAS</span>
             </router-link>
@@ -109,7 +100,7 @@ _____|____|____|______
 
           <!-- Existencias crudos -->
           <div class="menu-fila">
-            <router-link to="/existencias-crudos" class="btn-action">
+            <router-link to="/existencias-crudos" class="btn-action btn-c-naranja">
               <span class="btn-prefix">[7]</span>
               <span class="btn-text">EXISTENCIAS_CRUDOS</span>
             </router-link>
@@ -117,7 +108,7 @@ _____|____|____|______
 
           <!-- Pesadas -->
           <div class="menu-fila">
-            <router-link to="/pesadas" class="btn-action">
+            <router-link to="/pesadas" class="btn-action btn-c-lima">
               <span class="btn-prefix">[8]</span>
               <span class="btn-text">PESADAS</span>
             </router-link>
@@ -348,42 +339,22 @@ export default {
 }
 
 .header-content {
-  padding: 25px;
+  padding: 16px 20px;
   text-align: center;
 }
 
-/* Arte ASCII del barco */
-.ascii-ship {
-  color: var(--matrix-green);
-  font-family: 'VT323', monospace;
-  font-size: 1rem;
-  line-height: 1.2;
-  margin: 0 0 20px 0;
-  text-shadow: 0 0 10px var(--matrix-green-glow);
-  white-space: pre;
-  animation: glow-pulse 2s ease-in-out infinite;
-}
-
-@keyframes glow-pulse {
-  0%, 100% { text-shadow: 0 0 10px var(--matrix-green-glow); }
-  50% { text-shadow: 0 0 20px var(--matrix-green), 0 0 30px var(--matrix-green-glow); }
-}
-
-/* Título principal */
+/* Título principal: discreto */
 .main-title {
   font-family: 'VT323', monospace;
-  font-size: 3rem;
+  font-size: 1.8rem;
   font-weight: 400;
-  margin: 0 0 15px 0;
+  margin: 0 0 8px 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--matrix-green);
-  text-shadow:
-    0 0 10px var(--matrix-green),
-    0 0 20px var(--matrix-green-glow),
-    0 0 40px var(--matrix-green-glow);
+  text-shadow: 0 0 10px var(--matrix-green-glow);
 }
 
 .prompt {
@@ -412,8 +383,8 @@ export default {
 
 .subtitle {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 1.1rem;
-  margin: 0 0 15px 0;
+  font-size: 1rem;
+  margin: 0 0 10px 0;
   color: var(--matrix-green);
   opacity: 0.8;
 }
@@ -429,7 +400,7 @@ export default {
   justify-content: center;
   gap: 30px;
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .status-item {
@@ -485,11 +456,12 @@ export default {
   gap: 10px;
 }
 
-/* Botones estilo terminal */
+/* Botones estilo terminal: cada sección con su color */
 .btn-action {
+  --btn-color: var(--matrix-green);
   background: transparent;
-  border: 1px solid var(--matrix-green);
-  color: var(--matrix-green);
+  border: 1px solid var(--btn-color);
+  color: var(--btn-color);
   padding: 15px 20px;
   font-family: 'VT323', monospace;
   font-size: 1.4rem;
@@ -516,7 +488,7 @@ export default {
   top: 0;
   height: 100%;
   width: 0;
-  background: var(--matrix-green);
+  background: var(--btn-color);
   transition: width 0.3s ease;
   z-index: -1;
 }
@@ -524,9 +496,7 @@ export default {
 .btn-action:hover {
   color: var(--terminal-bg);
   text-shadow: none;
-  box-shadow:
-    0 0 20px var(--matrix-green),
-    inset 0 0 20px rgba(0, 255, 65, 0.1);
+  box-shadow: 0 0 20px var(--btn-color);
 }
 
 .btn-action:hover::before {
@@ -549,7 +519,7 @@ export default {
 }
 
 .btn-prefix {
-  color: var(--amber);
+  color: var(--btn-color);
   font-weight: bold;
   min-width: 35px;
 }
@@ -572,31 +542,22 @@ export default {
   margin-top: 2px;
 }
 
+/* Colores por sección */
+.btn-c-verde { --btn-color: #00ff41; }
+.btn-c-azul { --btn-color: #4bd3ff; }
+.btn-c-morado { --btn-color: #c084fc; }
+.btn-c-ambar { --btn-color: #ffb000; }
+.btn-c-rosa { --btn-color: #ff5da2; }
+.btn-c-cian { --btn-color: #00e5ff; }
+.btn-c-naranja { --btn-color: #ff9f1c; }
+.btn-c-lima { --btn-color: #aaff00; }
+
 /* Atajos "de hoy": variante ámbar */
 .btn-atajo {
+  --btn-color: var(--amber);
   flex: 0 0 42%;
-  border-color: var(--amber);
-  color: var(--amber);
   font-size: 1.2rem;
   letter-spacing: 2px;
-}
-
-.btn-atajo::before {
-  background: var(--amber);
-}
-
-.btn-atajo:hover {
-  box-shadow:
-    0 0 20px var(--amber),
-    inset 0 0 20px rgba(255, 176, 0, 0.1);
-}
-
-.btn-atajo .btn-prefix {
-  color: var(--matrix-green);
-}
-
-.btn-atajo:hover .btn-prefix {
-  color: var(--terminal-bg);
 }
 
 /* Efecto lluvia Matrix */
@@ -638,16 +599,11 @@ export default {
   }
 
   .header-content {
-    padding: 20px 15px;
-  }
-
-  .ascii-ship {
-    font-size: 0.7rem;
-    transform: scale(0.9);
+    padding: 14px 15px;
   }
 
   .main-title {
-    font-size: 2rem;
+    font-size: 1.6rem;
     flex-wrap: wrap;
   }
 
@@ -699,17 +655,11 @@ export default {
   }
 
   .header-content {
-    padding: 15px 10px;
-  }
-
-  .ascii-ship {
-    font-size: 0.55rem;
-    transform: scale(0.8);
-    margin-bottom: 15px;
+    padding: 12px 10px;
   }
 
   .main-title {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     gap: 5px;
   }
 
@@ -743,7 +693,6 @@ export default {
 
 @media (prefers-reduced-motion: reduce) {
   .crt-flicker,
-  .ascii-ship,
   .typing-text,
   .cursor-blink,
   .status-dot,
