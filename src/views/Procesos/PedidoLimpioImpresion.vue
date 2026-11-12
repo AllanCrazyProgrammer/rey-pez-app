@@ -87,7 +87,7 @@
             {{ generandoPreviewPdf ? 'Actualizando...' : 'Aplicar escala' }}
           </button>
           <button type="button" class="btn-download-preview" :disabled="generandoPreviewPdf" @click="generarPDF">
-            <i class="fas fa-download"></i> Descargar PDF
+            <i class="fas fa-download"></i> {{ esAppNativa ? 'Compartir PDF' : 'Descargar PDF' }}
           </button>
         </div>
 
@@ -103,7 +103,7 @@
             <i class="fas fa-circle-notch fa-spin"></i>
             Generando páginas…
           </div>
-          <div v-else-if="pdfPreviewUrl" class="pdf-preview-pages-grid">
+          <div v-else-if="pdfPreviewPageImages.length" class="pdf-preview-pages-grid">
             <article
               v-for="pagina in pdfPreviewPageCount"
               :key="`pdf-page-${pagina}`"
@@ -113,11 +113,12 @@
                 <span>Página {{ pagina }}</span>
                 <small>{{ pagina }} / {{ pdfPreviewPageCount }}</small>
               </header>
-              <iframe
-                :src="urlPreviewPagina(pagina)"
+              <img
+                v-if="pdfPreviewPageImages[pagina - 1]"
+                :src="pdfPreviewPageImages[pagina - 1]"
                 class="pdf-preview-page-frame"
-                :title="`Vista previa de la página ${pagina} del PDF`"
-              ></iframe>
+                :alt="`Vista previa de la página ${pagina} del PDF`"
+              >
             </article>
           </div>
         </div>
@@ -654,7 +655,9 @@
 </template>
 
 <script>
-import { crearDocumentoPedidoLimpio, crearPreviewPedidoLimpio } from '@/utils/pdf/pedidoLimpio'
+import { crearPreviewPedidoLimpio } from '@/utils/pdf/pedidoLimpio'
+import { renderizarPaginasPdf } from '@/utils/pdf/previewPdf'
+import { Capacitor } from '@capacitor/core'
 import moment from 'moment'
 import KilosRefrigeradosModal from '@/components/Existencias/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/Medidas/ListaMedidasPedidoModal.vue'
@@ -767,7 +770,7 @@ export default {
       resaltarMedidas: false,
       mostrarPreviewPdf: false,
       generandoPreviewPdf: false,
-      pdfPreviewUrl: '',
+      pdfPreviewPageImages: [],
       pdfPreviewPageCount: 1,
       bodyOverflowAntesPreview: '',
       completados: this.completadosGuardados || {},
@@ -806,6 +809,9 @@ export default {
     }
   },
   computed: {
+    esAppNativa() {
+      return Capacitor.isNativePlatform();
+    },
     totalesResumen() {
       return resumirTotalesPedidoLimpio({
         tipo: 'limpio',
@@ -1801,9 +1807,31 @@ export default {
     },
     async generarPDF() {
       try {
-        await this.prepararColoresPDF();
-        const docDefinition = this.construirDefinicionPDF();
-        crearDocumentoPedidoLimpio(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
+        const { blob } = await this.crearBlobPDF();
+        const nombre = 'Ped-limpio-' + this.fecha + '.pdf';
+        const archivo = new File([blob], nombre, { type: 'application/pdf' });
+        // En la app de Android el WebView no descarga archivos: el clic en un
+        // enlace de descarga no hace nada. Se comparte el archivo con la hoja
+        // del sistema (ahí se puede guardar en el teléfono, en Drive o mandarlo
+        // por WhatsApp), que es el mismo mecanismo que ya usa la app para
+        // compartir imágenes.
+        if (this.esAppNativa && navigator.share && navigator.canShare && navigator.canShare({ files: [archivo] })) {
+          try {
+            await navigator.share({ files: [archivo] });
+            return;
+          } catch (error) {
+            if (error && error.name === 'AbortError') return;
+            // Si compartir falla, intentar la descarga directa del navegador.
+          }
+        }
+        const url = URL.createObjectURL(blob);
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.download = nombre;
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (error) {
         console.error('Error al generar PDF:', error);
         alert('No se pudo generar el PDF con los colores de las medidas. Intenta nuevamente.');
@@ -1813,12 +1841,6 @@ export default {
       await this.prepararColoresPDF();
       return crearPreviewPedidoLimpio(this.construirDefinicionPDF());
     },
-    liberarPreviewPdfUrl() {
-      if (this.pdfPreviewUrl) {
-        URL.revokeObjectURL(this.pdfPreviewUrl.split('#')[0]);
-        this.pdfPreviewUrl = '';
-      }
-    },
     async actualizarVistaPreviaPDF() {
       if (this.generandoPreviewPdf) return;
 
@@ -1826,9 +1848,10 @@ export default {
       try {
         const { blob, pageCount } = await this.crearBlobPDF();
         if (!this.mostrarPreviewPdf) return;
-        this.liberarPreviewPdfUrl();
         this.pdfPreviewPageCount = pageCount;
-        this.pdfPreviewUrl = URL.createObjectURL(blob);
+        // Las páginas se renderizan a imagen: el WebView de Android no tiene
+        // visor de PDF y los iframes se veían en blanco.
+        this.pdfPreviewPageImages = await renderizarPaginasPdf(blob);
       } catch (error) {
         console.error('Error al generar la vista previa del PDF:', error);
         alert('No se pudo preparar la vista previa del PDF. Intenta nuevamente.');
@@ -1844,13 +1867,9 @@ export default {
       this.mostrarPreviewPdf = true;
       await this.actualizarVistaPreviaPDF();
     },
-    urlPreviewPagina(pagina) {
-      if (!this.pdfPreviewUrl) return '';
-      return `${this.pdfPreviewUrl}#page=${pagina}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`;
-    },
     cerrarVistaPreviaPDF() {
       this.mostrarPreviewPdf = false;
-      this.liberarPreviewPdfUrl();
+      this.pdfPreviewPageImages = [];
       document.body.style.overflow = this.bodyOverflowAntesPreview;
       const uiStore = useUIStore();
       if (uiStore.isModalOpen(PDF_PREVIEW_MODAL_ID)) {
@@ -2240,7 +2259,7 @@ export default {
     if (uiStore.isModalOpen(PDF_PREVIEW_MODAL_ID)) {
       uiStore.closeModal();
     }
-    this.liberarPreviewPdfUrl();
+    this.pdfPreviewPageImages = [];
   }
 }
 </script>
@@ -2573,7 +2592,7 @@ export default {
 .pdf-preview-page-frame {
   display: block;
   width: 100%;
-  height: clamp(300px, 52vh, 420px);
+  height: auto;
   border: 0;
   background: #525659;
 }
@@ -2628,10 +2647,6 @@ export default {
 
   .pdf-preview-pages-grid {
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  }
-
-  .pdf-preview-page-frame {
-    height: 360px;
   }
 }
 
