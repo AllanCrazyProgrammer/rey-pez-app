@@ -40,10 +40,14 @@
               <span class="btn-prefix">[1]</span>
               <span class="btn-text">PEDIDOS</span>
             </router-link>
-            <router-link to="/procesos/pedidos/limpio" class="btn-action btn-atajo">
+            <button class="btn-action btn-atajo" :disabled="pedidoLimpioHoyEstado === 'cargando'" @click="irPedidoLimpioHoy">
               <span class="btn-prefix">&raquo;</span>
-              <span class="btn-text">LIMPIO_HOY</span>
-            </router-link>
+              <span class="btn-text">LIMPIO_HOY
+                <small v-if="pedidoLimpioHoyEstado === 'existe'">HOY SÍ HAY PEDIDO</small>
+                <small v-else-if="pedidoLimpioHoyEstado === 'no-existe'">HOY NO HAY PEDIDO</small>
+                <small v-else-if="pedidoLimpioHoyEstado === 'sin-conexion'">SIN CONEXIÓN</small>
+              </span>
+            </button>
           </div>
 
           <!-- Embarques -->
@@ -56,6 +60,7 @@
               <span class="btn-prefix">&raquo;</span>
               <span class="btn-text">EMBARQUE_HOY
                 <small v-if="embarqueHoyEstado === 'existe'">HOY SÍ HAY EMBARQUE</small>
+                <small v-else-if="embarqueHoyEstado === 'ultimo'">ÚLTIMO: {{ fechaUltimoEmbarque }}</small>
                 <small v-else-if="embarqueHoyEstado === 'no-existe'">HOY NO HAY EMBARQUE</small>
                 <small v-else-if="embarqueHoyEstado === 'sin-conexion'">SIN CONEXIÓN</small>
               </span>
@@ -128,15 +133,19 @@
 <script>
 import moment from 'moment';
 import { getFirestore, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { obtenerFechaActualISO, normalizarFechaISO } from '@/utils/dateUtils';
+import { obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
   name: 'MenuRapido',
   data() {
     return {
       embarqueHoyId: null,
-      // cargando | existe | no-existe | sin-conexion
+      // cargando | existe | ultimo | no-existe | sin-conexion
       embarqueHoyEstado: 'cargando',
+      fechaUltimoEmbarque: '',
+      pedidoLimpioHoyId: null,
+      // cargando | existe | no-existe | sin-conexion
+      pedidoLimpioHoyEstado: 'cargando',
       online: typeof navigator !== 'undefined' ? navigator.onLine : true
     };
   },
@@ -160,6 +169,7 @@ export default {
       return;
     }
     this.buscarEmbarqueHoy();
+    this.buscarPedidoLimpioHoy();
   },
   mounted() {
     window.addEventListener('online', this.actualizarConexion);
@@ -173,6 +183,28 @@ export default {
     actualizarConexion() {
       this.online = navigator.onLine;
     },
+    // Misma convención de fechas que usa la app (ListaEmbarques):
+    // texto 'YYYY-MM-DD' tal cual; Timestamp/Date en fecha LOCAL del teléfono,
+    // no UTC (un embarque de ayer a las 8 pm es de ayer, no de hoy).
+    fechaLocalISO(fecha) {
+      if (!fecha) return null;
+      if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return fecha;
+      }
+      try {
+        const dateObj = fecha instanceof Date
+          ? fecha
+          : (typeof fecha.toDate === 'function' ? fecha.toDate() : new Date(fecha));
+        if (Number.isNaN(dateObj.getTime())) return null;
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      } catch (error) {
+        console.warn('[MenuRapido] Fecha inválida:', fecha, error);
+        return null;
+      }
+    },
     async buscarEmbarqueHoy() {
       try {
         const hoyISO = obtenerFechaActualISO();
@@ -180,23 +212,19 @@ export default {
         const embarquesRef = collection(db, 'embarques');
         const q = query(embarquesRef, orderBy('fecha', 'desc'), limit(100));
         const snapshot = await getDocs(q);
-        const embarqueHoy = snapshot.docs.find((docSnap) => {
-          const data = docSnap.data();
-          let fechaEmbarque = null;
-          if (data.fecha && typeof data.fecha.toDate === 'function') {
-            fechaEmbarque = data.fecha.toDate();
-          } else if (data.fecha instanceof Date) {
-            fechaEmbarque = data.fecha;
-          } else if (typeof data.fecha === 'string') {
-            const parsed = new Date(data.fecha);
-            fechaEmbarque = Number.isNaN(parsed.getTime()) ? null : parsed;
-          }
-          if (!fechaEmbarque) return false;
-          return normalizarFechaISO(fechaEmbarque) === hoyISO;
-        });
+        const embarqueHoy = snapshot.docs.find((docSnap) => this.fechaLocalISO(docSnap.data().fecha) === hoyISO);
         if (embarqueHoy) {
           this.embarqueHoyId = embarqueHoy.id;
           this.embarqueHoyEstado = 'existe';
+          return;
+        }
+        // No hay embarque con fecha de hoy: abrir el más reciente, que es el
+        // que se está trabajando (los embarques se crean un día y se embarcan al siguiente).
+        const ultimo = snapshot.docs[0];
+        if (ultimo) {
+          this.embarqueHoyId = ultimo.id;
+          this.fechaUltimoEmbarque = this.fechaLocalISO(ultimo.data().fecha) || '';
+          this.embarqueHoyEstado = 'ultimo';
         } else {
           this.embarqueHoyEstado = 'no-existe';
         }
@@ -204,6 +232,41 @@ export default {
         // Sin internet (o error de lectura): el botón lleva a la lista, que sí trabaja offline.
         console.warn('[MenuRapido] No se pudo buscar el embarque de hoy:', error);
         this.embarqueHoyEstado = 'sin-conexion';
+      }
+    },
+    async buscarPedidoLimpioHoy() {
+      try {
+        const hoyISO = obtenerFechaActualISO();
+        const db = getFirestore();
+        const pedidosRef = collection(db, 'pedidos');
+        const q = query(pedidosRef, orderBy('createdAt', 'desc'), limit(50));
+        const snapshot = await getDocs(q);
+        const pedidoHoy = snapshot.docs.find((docSnap) => {
+          const data = docSnap.data();
+          return data.tipo === 'limpio' && this.fechaLocalISO(data.fecha) === hoyISO;
+        });
+        if (pedidoHoy) {
+          this.pedidoLimpioHoyId = pedidoHoy.id;
+          this.pedidoLimpioHoyEstado = 'existe';
+        } else {
+          this.pedidoLimpioHoyEstado = 'no-existe';
+        }
+      } catch (error) {
+        // Sin internet: el botón abre el formulario en blanco para hoy.
+        console.warn('[MenuRapido] No se pudo buscar el pedido limpio de hoy:', error);
+        this.pedidoLimpioHoyEstado = 'sin-conexion';
+      }
+    },
+    irPedidoLimpioHoy() {
+      const hoyISO = obtenerFechaActualISO();
+      if (this.pedidoLimpioHoyId) {
+        // Abrir el pedido ya creado, en modo edición (como lo abre PedidosMenu).
+        this.$router.push({
+          path: '/procesos/pedidos/limpio',
+          query: { edit: 'true', id: this.pedidoLimpioHoyId, fecha: hoyISO }
+        });
+      } else {
+        this.$router.push('/procesos/pedidos/limpio');
       }
     },
     irEmbarqueHoy() {
