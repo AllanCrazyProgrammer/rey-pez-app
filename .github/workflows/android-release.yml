@@ -1,0 +1,97 @@
+# Compila la APK firmada de la app completa y la publica en GitHub Releases.
+#
+# Secrets del repositorio (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64       Keystore de distribución en base64 (ver docs/ANDROID_FIRMA.md).
+#   ANDROID_KEYSTORE_PASSWORD     Contraseña del keystore.
+#   ANDROID_KEY_ALIAS             Alias de la llave (reypez).
+#   ANDROID_KEY_PASSWORD          Contraseña de la llave.
+#
+# Se dispara a mano (Actions → APK Android → Run workflow) o al crear una etiqueta
+# android-v* (por ejemplo: git tag android-v0.3.20 && git push origin android-v0.3.20).
+# La etiqueta de la release es android-v<versión de package.json>.
+#
+# Ojo: la APK firmada con este keystore NO se instala encima de la APK vieja de
+# Inventarios (firmada con la llave debug de una computadora). Hay que desinstalar
+# Inventarios primero. Las instalaciones que ya se actualizaron solas dentro de la
+# app (del canal de actualizaciones) siguen recibiendo las pantallas nuevas sin
+# reinstalar; solo un cambio nativo exige instalar una APK nueva.
+name: APK Android (Release)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Etiqueta de la release (vacío = android-v<versión>)'
+        required: false
+        default: ''
+  push:
+    tags: ['android-v*']
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Preparar keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Falta el secret ANDROID_KEYSTORE_BASE64. Ver docs/ANDROID_FIRMA.md."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > /tmp/reypez-release.keystore
+          test -s /tmp/reypez-release.keystore
+
+      - name: Compilar APK firmada
+        run: node scripts/build-android.cjs --release
+        env:
+          REYPEZ_KEYSTORE_FILE: /tmp/reypez-release.keystore
+          REYPEZ_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          REYPEZ_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          REYPEZ_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Verificar firma
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose release/android/ReyPez-*.apk
+
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_ENTRADA: ${{ inputs.tag }}
+          TAG_PUSH: ${{ github.ref_name }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${TAG_ENTRADA:-${TAG_PUSH:-android-v$VERSION}}"
+          APK="release/android/ReyPez-$VERSION.apk"
+          test -f "$APK"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --title "ReyPez Android $VERSION (app completa)" \
+              --notes "APK de la app completa de Rey Pez (ya no solo Inventarios).
+
+          Instalación: desinstala primero la APK vieja de Inventarios (estaba firmada con una llave de prueba y Android no deja actualizarla con esta). Después instala este APK.
+
+          Las pantallas nuevas llegan solas dentro de la app cuando se publica la web; una APK nueva solo hace falta cuando cambia algo nativo."
+          fi
+          echo "Release: https://github.com/${{ github.repository }}/releases/tag/$TAG"
