@@ -50,6 +50,14 @@
         </router-link>
       </div>
 
+      <!-- Precios (modal de Precios de Venta que vive en Cuentas) -->
+      <div class="menu-fila">
+        <router-link :to="{ path: '/cuentas-mexico', query: { precios: '1' } }" class="menu-boton menu-boton-solo">
+          <i class="fas fa-tags"></i>
+          <span>Precios</span>
+        </router-link>
+      </div>
+
       <!-- Existencias -->
       <div class="menu-fila">
         <router-link to="/existencias" class="menu-boton menu-boton-solo">
