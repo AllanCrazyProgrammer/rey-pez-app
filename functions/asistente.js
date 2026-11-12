@@ -509,6 +509,218 @@ async function handlePostSalida(req, res) {
 }
 
 /**
+ * POST /entrada
+ * Registra una entrada de limpios con actualización transaccional.
+ * La ruta ya está DESPLEGADA en vivo (2026-11-11, verificada con dryRun)
+ * pero su código nunca llegó a GitHub: este parche la repone en el repo
+ * para que el próximo `firebase deploy --only functions` no la borre.
+ * Espejo de handlePostSalida / handlePostCrudosEntrada: misma validación,
+ * mismo obtenerOCrearDia (sacadas), mismo log en asistenteLog e
+ * idempotencia en asistenteIdem (7 días). La fila guardada es igual que
+ * la de la UI: {tipo, proveedor, medida, precio, kilos, cajas,
+ * cuartoFrio, _asistenteId}, con cajas = kilos / 20 y cuarto 's/c'
+ * por defecto. Ojo, como en /salida: un dryRun de un día que aún no
+ * existe crea el documento vacío del día dentro de la transacción.
+ */
+async function handlePostEntrada(req, res) {
+  const {
+    fecha,
+    proveedor,
+    medida,
+    kilos: kilosParam,
+    precio,
+    cuarto,
+    tipo: tipoParam,
+    dryRun = false,
+    idempotencyKey
+  } = req.body;
+
+  // Validación de parámetros
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO',
+      'El campo "fecha" es requerido y debe estar en formato YYYY-MM-DD');
+  }
+  if (!proveedor || typeof proveedor !== 'string') {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO',
+      'El campo "proveedor" es requerido');
+  }
+  if (!medida || typeof medida !== 'string') {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO',
+      'El campo "medida" es requerido');
+  }
+
+  const kilos = kilosParam !== undefined ? Number(kilosParam) : null;
+
+  if (kilos === null || isNaN(kilos) || kilos <= 0) {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO',
+      'El campo "kilos" es requerido y debe ser mayor a 0');
+  }
+
+  const precioNorm = precio !== undefined && precio !== null ? Number(precio) : null;
+  if (precioNorm !== null && (isNaN(precioNorm) || precioNorm < 0)) {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO',
+      'El campo "precio" debe ser un número no negativo');
+  }
+
+  const tipoNorm = tipoParam === undefined || tipoParam === null
+    ? 'proveedor'
+    : String(tipoParam).trim();
+  if (tipoNorm !== 'proveedor' && tipoNorm !== 'maquila') {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO',
+      'El campo "tipo" debe ser "proveedor" o "maquila"');
+  }
+
+  const cuartoNorm = normalizeCuarto(cuarto);
+  const cajas = Number((kilos / 20).toFixed(2));
+
+  // Verificar idempotencia
+  if (idempotencyKey) {
+    const idemRef = db.collection('asistenteIdem').doc(idempotencyKey);
+    const idemSnap = await idemRef.get();
+    if (idemSnap.exists) {
+      const resultado = idemSnap.data();
+      return res.status(200).json({
+        success: true,
+        idempotent: true,
+        message: 'Operación ya procesada anteriormente',
+        data: resultado.data
+      });
+    }
+  }
+
+  try {
+    const resultado = await db.runTransaction(async (transaction) => {
+      // Obtener o crear el documento del día
+      const { sacadaRef, sacadaSnap } = await obtenerOCrearDia(transaction, fecha);
+      const diaData = sacadaSnap.exists ? sacadaSnap.data() : {
+        entradas: [],
+        salidas: [],
+        totalEntradas: 0,
+        totalSalidas: 0,
+        version: 1
+      };
+
+      // Construir la nueva entrada (igual que la UI)
+      const asistenteId = generarAsistenteId();
+      const nuevaEntrada = {
+        tipo: tipoNorm,
+        proveedor,
+        medida,
+        precio: precioNorm,
+        kilos,
+        cajas,
+        cuartoFrio: cuartoNorm,
+        _asistenteId: asistenteId
+      };
+
+      const entradasActualizadas = [...(diaData.entradas || []), nuevaEntrada];
+      const totalEntradasActualizado = entradasActualizadas.reduce(
+        (sum, e) => sum + (Number(e.kilos) || 0), 0
+      );
+
+      const actualizacion = {
+        entradas: entradasActualizadas,
+        totalEntradas: totalEntradasActualizado,
+        version: admin.firestore.FieldValue.increment(1),
+        actualizadoEn: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      const dataParaRespuesta = {
+        fecha,
+        entrada: nuevaEntrada,
+        totalEntradas: totalEntradasActualizado
+      };
+
+      if (dryRun) {
+        return {
+          dryRun: true,
+          message: 'Simulación exitosa (sin escribir a Firestore)',
+          ...dataParaRespuesta
+        };
+      }
+
+      // Escribir la actualización
+      if (sacadaSnap.exists) {
+        transaction.update(sacadaRef, actualizacion);
+      } else {
+        transaction.set(sacadaRef, {
+          fecha: admin.firestore.Timestamp.fromDate(medianocheMexico(fecha)),
+          salidas: diaData.salidas || [],
+          totalSalidas: diaData.totalSalidas || 0,
+          ...actualizacion,
+          version: 1
+        });
+      }
+
+      // Escribir log de auditoría
+      const logRef = db.collection('asistenteLog').doc();
+      transaction.set(logRef, {
+        tipo: 'entrada',
+        fecha,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        request: {
+          tipo: tipoNorm,
+          proveedor,
+          medida,
+          kilos,
+          cajas,
+          precio: precioNorm,
+          cuarto: cuartoNorm
+        },
+        before: {
+          totalEntradas: diaData.totalEntradas || 0,
+          numEntradas: (diaData.entradas || []).length
+        },
+        after: {
+          totalEntradas: totalEntradasActualizado,
+          numEntradas: entradasActualizadas.length
+        },
+        sacadaId: sacadaRef.id,
+        asistenteId: asistenteId,
+        row: nuevaEntrada,
+        idempotencyKey: idempotencyKey || null
+      });
+
+      // Guardar idempotencia
+      if (idempotencyKey) {
+        const idemRef = db.collection('asistenteIdem').doc(idempotencyKey);
+        transaction.set(idemRef, {
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          data: dataParaRespuesta,
+          expiresAt: admin.firestore.Timestamp.fromDate(
+            new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          )
+        });
+      }
+
+      return dataParaRespuesta;
+    });
+
+    return res.status(200).json({
+      success: true,
+      ...resultado
+    });
+
+  } catch (error) {
+    if (error.code === 'DIA_DUPLICADO') {
+      return errorResponse(res, 409, 'DIA_DUPLICADO',
+        'Ya existe un registro de limpios para esta fecha');
+    }
+    if (error.code === 'DIA_ELIMINADO') {
+      return errorResponse(res, 410, 'DIA_ELIMINADO',
+        'El día fue eliminado desde otro equipo');
+    }
+    if (error.code) {
+      return errorResponse(res, error.status || 500, error.code, error.message, error.details);
+    }
+
+    console.error('Error en POST /entrada:', error);
+    return errorResponse(res, 500, 'ERROR_INTERNO',
+      'Error inesperado al procesar la entrada: ' + error.message);
+  }
+}
+
+/**
  * GET /existencias
  * Devuelve las existencias actuales agrupadas por proveedor+medida+precio+cuarto.
  */
@@ -3084,6 +3296,10 @@ exports.asistente = onRequest(
     if (path === '/salida' && method === 'POST') {
       return handlePostSalida(req, res);
     }
+
+    if (path === '/entrada' && method === 'POST') {
+      return handlePostEntrada(req, res);
+    }
     
     if (path === '/existencias' && method === 'GET') {
       return handleGetExistencias(req, res);
@@ -3295,7 +3511,7 @@ exports.asistente = onRequest(
     }
     
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, GET /pedidos/limpio/refri-anterior, POST /pedidos/limpio/etiquetas, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /pedidos/crudo/barcos, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer, GET /embarques, POST /embarques, POST /embarques/cliente, POST /embarques/crudos, POST /embarques/linea, GET /cuentas, POST /cuentas/correcciones, POST /cuentas/correcciones/deshacer, POST /cuentas/observaciones, POST /cuentas/observaciones/deshacer, GET /precios/nota-venta, GET /precios/historial, GET /precios/historial-crudos, GET /rendimientos, GET /costos, POST /rendimientos/guardar, POST /rendimientos/deshacer, GET /taras, POST /taras/movimiento'
+      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, GET /pedidos/limpio/refri-anterior, POST /pedidos/limpio/etiquetas, POST /salida, POST /entrada, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /pedidos/crudo/barcos, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer, GET /embarques, POST /embarques, POST /embarques/cliente, POST /embarques/crudos, POST /embarques/linea, GET /cuentas, POST /cuentas/correcciones, POST /cuentas/correcciones/deshacer, POST /cuentas/observaciones, POST /cuentas/observaciones/deshacer, GET /precios/nota-venta, GET /precios/historial, GET /precios/historial-crudos, GET /rendimientos, GET /costos, POST /rendimientos/guardar, POST /rendimientos/deshacer, GET /taras, POST /taras/movimiento'
     });
   }
 );
