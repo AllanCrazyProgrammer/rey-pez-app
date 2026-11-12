@@ -3396,6 +3396,100 @@ h1 {
   }
 }
 
+/* Celular: dos medidas por fila y la tabla en lista compacta, para que la
+   columna de kilos no se corte. Cada lote ocupa dos líneas
+   (medida + precio / cuarto + kilos) y nada queda fuera de la tarjeta.
+   Solo screen, para no tocar la impresión. */
+@media screen and (max-width: 768px) {
+  .existencias-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .medida-card {
+    min-width: 0;
+    padding: 10px 8px;
+  }
+
+  .medida-card h2 {
+    font-size: 17px;
+  }
+
+  .precio-facturacion {
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+
+  .precio-facturacion input {
+    width: 84px;
+  }
+
+  .medida-table thead {
+    display: none;
+  }
+
+  .medida-table,
+  .medida-table tbody {
+    display: block;
+  }
+
+  .medida-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(0, 255, 102, 0.08);
+  }
+
+  .medida-table th,
+  .medida-table td {
+    padding: 2px 4px;
+    border-bottom: 0;
+  }
+
+  .medida-table td {
+    font-size: 12px;
+  }
+
+  /* Primera celda (medida o proveedor): ocupa poco más de media línea. */
+  .medida-table td:first-child {
+    flex: 1 1 52%;
+    min-width: 0;
+  }
+
+  .medida-table .precio-cell,
+  .medida-table .cuarto-cell {
+    flex: 0 0 auto;
+  }
+
+  .medida-table .kilos-cell {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  /* La fecha del lote baja a su propia línea, debajo de la medida. */
+  .medida-table .fecha-entrada {
+    display: block;
+    margin: 1px 0 0;
+    font-size: 10px;
+  }
+
+  /* Filas de total: etiqueta a la izquierda, kilos a la derecha. */
+  .medida-table tr.total-row td:empty,
+  .medida-table tr.subtotal-row td:empty {
+    display: none;
+  }
+
+  /* En la vista por cuarto no cabe la fecha en la tarjeta angosta. */
+  .medida-table td.fecha-entrada {
+    display: none;
+  }
+
+  .total-medida {
+    font-size: 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .existencias-page *,
   .existencias-page *::before,
