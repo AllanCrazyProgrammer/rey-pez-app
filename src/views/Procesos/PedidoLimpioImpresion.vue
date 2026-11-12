@@ -87,7 +87,7 @@
             {{ generandoPreviewPdf ? 'Actualizando...' : 'Aplicar escala' }}
           </button>
           <button type="button" class="btn-download-preview" :disabled="generandoPreviewPdf" @click="generarPDF">
-            <i class="fas fa-download"></i> {{ puedeGuardarEnTelefono ? 'Guardar PDF' : (esAppNativa ? 'Compartir PDF' : 'Descargar PDF') }}
+            <i class="fas fa-download"></i> {{ puedeGuardarEnTelefono && puedeAbrirPdf ? 'Guardar y abrir PDF' : (puedeGuardarEnTelefono ? 'Guardar PDF' : (esAppNativa ? 'Compartir PDF' : 'Descargar PDF')) }}
           </button>
         </div>
 
@@ -659,6 +659,7 @@ import { crearPreviewPedidoLimpio } from '@/utils/pdf/pedidoLimpio'
 import { renderizarPaginasPdf } from '@/utils/pdf/previewPdf'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
+import { FileOpener } from '@capacitor-community/file-opener'
 import moment from 'moment'
 import KilosRefrigeradosModal from '@/components/Existencias/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/Medidas/ListaMedidasPedidoModal.vue'
@@ -817,6 +818,11 @@ export default {
     // Con la APK anterior el botón comparte el archivo, como hasta ahora.
     puedeGuardarEnTelefono() {
       return this.esAppNativa && Capacitor.isPluginAvailable('Filesystem');
+    },
+    // Abrir el PDF en el visor del teléfono solo existe con la APK 0.3.22+
+    // (plugin FileOpener).
+    puedeAbrirPdf() {
+      return this.esAppNativa && Capacitor.isPluginAvailable('FileOpener');
     },
     totalesResumen() {
       return resumirTotalesPedidoLimpio({
@@ -1826,11 +1832,26 @@ export default {
               lector.onerror = reject;
               lector.readAsDataURL(blob);
             });
-            await Filesystem.writeFile({
+            const guardado = await Filesystem.writeFile({
               path: nombre,
               data: base64,
               directory: Directory.Documents
             });
+            // Abrirlo en cuanto se descarga, con el visor de PDF del teléfono
+            // (requiere la APK 0.3.22+, que trae el plugin FileOpener).
+            if (this.puedeAbrirPdf) {
+              try {
+                let uri = guardado && guardado.uri ? guardado.uri : null;
+                if (!uri) {
+                  const ubicacion = await Filesystem.getUri({ directory: Directory.Documents, path: nombre });
+                  uri = ubicacion.uri;
+                }
+                await FileOpener.open({ filePath: uri, contentType: 'application/pdf', openWithDefault: true });
+                return;
+              } catch (error) {
+                console.warn('No se pudo abrir el PDF, quedó guardado:', error);
+              }
+            }
             alert('PDF guardado en Documentos/' + nombre + '. Ábrelo desde Archivos para imprimirlo o compartirlo.');
             return;
           } catch (error) {

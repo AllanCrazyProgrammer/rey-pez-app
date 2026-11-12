@@ -1,6 +1,6 @@
 {
   "name": "rey-pez",
-  "version": "0.3.21",
+  "version": "0.3.22",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -41,6 +41,7 @@
     "test:reglas": "firebase emulators:exec --config seguridad/firebase.emulador.json --project demo-reypez --only firestore,database,storage \"node --test scripts/test-reglas-propuesta.cjs\""
   },
   "dependencies": {
+    "@capacitor-community/file-opener": "^6.0.1",
     "@capacitor/android": "6.2.3",
     "@capacitor/app": "6.0.3",
     "@capacitor/core": "^6.2.3",
