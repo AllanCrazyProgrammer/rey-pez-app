@@ -1,6 +1,7 @@
 import Vue from 'vue';
 import Router from 'vue-router';
 const Home = () => import('./views/Home.vue');
+const MenuRapido = () => import('./views/MenuRapido.vue');
 const NoteMenu = () => import('./views/NoteMenu.vue');
 const SaleNote = () => import('@/views/SaleNote.vue');
 const AddClient = () => import('@/components/Clientes/AddClient.vue');
@@ -89,6 +90,12 @@ const routes = [
     name: 'home',
     component: Home,
     meta: { public: true },
+  },
+  {
+    // Menú rápido: solo es inicio en la APK de Android (el guard lo redirige ahí).
+    path: '/menu-rapido',
+    name: 'MenuRapido',
+    component: MenuRapido
   },
   {
     path: '/sale-note/:noteId?',
@@ -553,6 +560,20 @@ router.beforeEach((to, from, next) => {
     if (process.env.NODE_ENV === 'development') {
       next();
       return;
+    }
+
+    // APK Android: después de iniciar sesión, el inicio es el menú rápido.
+    // En web y escritorio el inicio sigue siendo el home de siempre.
+    if (to.path === '/' && process.env.VUE_APP_TARGET === 'android') {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null');
+        if (user && user.username) {
+          next('/menu-rapido');
+          return;
+        }
+      } catch (e) {
+        // Si no se puede leer la sesión, se sigue al home público.
+      }
     }
 
     // Home es de acceso libre para que la calculadora pueda usarse sin
