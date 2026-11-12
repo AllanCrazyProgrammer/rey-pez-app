@@ -33,6 +33,12 @@ export default {
       montado: false
     }
   },
+  mounted() {
+    // El menú rápido de la APK enlaza aquí con ?precios=1 para abrir el modal directo.
+    if (this.$route && this.$route.query && this.$route.query.precios) {
+      this.abrir()
+    }
+  },
   methods: {
     abrir() {
       if (this.montado && this.$refs.modal) {
