@@ -91,15 +91,20 @@
       </div>
 
       <div class="existencias-grid" v-if="!filtroCuarto">
-        <div v-for="(datos, medidaKey, medidaIdx) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito' }" :style="estiloAcento(medidaIdx)">
+        <div v-for="(datos, medidaKey, medidaIdx) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito', 'medida-expandida': medidaExpandida === medidaKey }" :style="estiloAcento(medidaIdx)">
           <!-- Para maquilas (Ozuna y Joselito) -->
           <template v-if="medidaKey === 'Ozuna' || medidaKey === 'Joselito'">
-            <h2>
+            <h2 @click="alternarMedida(medidaKey)">
               {{ medidaKey }} (Maquila)
               <span v-if="tienePrecio && datos.precioPromedio" class="precio-promedio">
                 - Promedio: ${{ datos.precioPromedio.toFixed(2) }}
               </span>
+              <span class="expandir-icono">{{ medidaExpandida === medidaKey ? '▾' : '▸' }}</span>
             </h2>
+            <div class="resumen-medida" @click="alternarMedida(medidaKey)">
+              <span>Total: <strong>{{ formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0)) }} kg</strong> · {{ Object.values(datos.items).filter(item => item.kilos > 0).length }} lotes</span>
+              <span class="resumen-hint">{{ medidaExpandida === medidaKey ? 'Toca para ocultar' : 'Toca para ver los lotes' }}</span>
+            </div>
             <table class="medida-table">
               <thead>
                 <tr>
@@ -114,7 +119,7 @@
                   <td>
                     <button type="button" class="medida-alerta-button" @click="abrirAlertaLote(item, medidaKey)" :aria-label="'Configurar mínimo del lote ' + item.medida + ' del ' + (item.fechaEntrada ? formatearFecha(item.fechaEntrada) : 'sin fecha')">{{ item.medida }}</button>
                     <span class="fecha-entrada" v-if="item.fechaEntrada">
-                      ({{ formatearFecha(item.fechaEntrada) }})
+                      ({{ formatearFechaCorta(item.fechaEntrada) }})
                     </span>
                   </td>
                   <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
@@ -134,7 +139,7 @@
           
           <!-- Para medidas normales con proveedores -->
           <template v-else>
-            <h2 class="medida-header">
+            <h2 class="medida-header" @click="alternarMedida(medidaKey)">
               <span class="medida-title">
                 {{ medidaKey }}
                 <div v-if="medidaKey === '51/60' && promedioCombinado516141" class="promedio-combinado">
@@ -157,12 +162,17 @@
                     @keyup.enter="$event.target.blur()"
                   />
                 </label>
+                <span class="expandir-icono">{{ medidaExpandida === medidaKey ? '▾' : '▸' }}</span>
               </span>
-              <label class="agrupar-toggle">
+              <label class="agrupar-toggle" @click.stop>
                 <input type="checkbox" v-model="agruparMedidasIguales" />
                 <span>Agrupar iguales</span>
               </label>
             </h2>
+            <div class="resumen-medida" @click="alternarMedida(medidaKey)">
+              <span>Total: <strong>{{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</strong> · {{ Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.filter(item => item.kilos > 0).length, 0) }} lotes</span>
+              <span class="resumen-hint">{{ medidaExpandida === medidaKey ? 'Toca para ocultar' : 'Toca para ver los lotes' }}</span>
+            </div>
             
             <!-- Mostrar cada proveedor por separado -->
             <div v-for="(proveedorData, proveedor) in datos.proveedores" :key="proveedor" class="proveedor-section">
@@ -186,7 +196,7 @@
                     <td>
                       <button type="button" class="medida-alerta-button" @click="abrirAlertaLote(medida, proveedor)" :aria-label="'Configurar mínimo del lote ' + medida.medida + ' del ' + (medida.fechaEntrada ? formatearFecha(medida.fechaEntrada) : 'sin fecha')">{{ medida.medida }}</button>
                       <span class="fecha-entrada" v-if="medida.fechaEntrada">
-                        ({{ formatearFecha(medida.fechaEntrada) }})
+                        ({{ formatearFechaCorta(medida.fechaEntrada) }})
                       </span>
                     </td>
                     <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
@@ -225,8 +235,12 @@
       </div>
 
       <div class="existencias-grid" v-else>
-        <div v-for="(items, cuartoKey, cuartoIdx) in filteredExistenciasPorCuarto" :key="cuartoKey" class="medida-card" :style="estiloAcento(cuartoIdx)">
-          <h2>{{ cuartoKey }}</h2>
+        <div v-for="(items, cuartoKey, cuartoIdx) in filteredExistenciasPorCuarto" :key="cuartoKey" class="medida-card" :class="{ 'medida-expandida': medidaExpandida === cuartoKey }" :style="estiloAcento(cuartoIdx)">
+          <h2 @click="alternarMedida(cuartoKey)">{{ cuartoKey }}<span class="expandir-icono">{{ medidaExpandida === cuartoKey ? '▾' : '▸' }}</span></h2>
+          <div class="resumen-medida" @click="alternarMedida(cuartoKey)">
+            <span>Total: <strong>{{ formatNumber(items.reduce((sum, item) => sum + item.kilos, 0)) }} kg</strong> · {{ items.filter(item => item.kilos > 0).length }} lotes</span>
+            <span class="resumen-hint">{{ medidaExpandida === cuartoKey ? 'Toca para ocultar' : 'Toca para ver los lotes' }}</span>
+          </div>
           <table class="medida-table">
             <thead>
               <tr>
@@ -243,7 +257,7 @@
                 <td><button type="button" class="medida-alerta-button" @click="abrirAlertaLote(item, item.proveedor)" :aria-label="'Configurar mínimo del lote ' + item.medida + ' del ' + (item.fechaEntrada ? formatearFecha(item.fechaEntrada) : 'sin fecha')">{{ item.medida }}</button></td>
                 <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
                 <td class="kilos-cell">{{ formatNumber(item.kilos) }}</td>
-                <td class="fecha-entrada">{{ item.fechaEntrada ? formatearFecha(item.fechaEntrada) : '' }}</td>
+                <td class="fecha-entrada">{{ item.fechaEntrada ? formatearFechaCorta(item.fechaEntrada) : '' }}</td>
               </tr>
               <tr class="total-row">
                 <td :colspan="tienePrecio ? 3 : 2"><strong>Total {{ cuartoKey }}</strong></td>
@@ -342,7 +356,7 @@ import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
 import { collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import moment from 'moment';
-import { formatearFecha, formatNumber } from '@/utils/formatters';
+import { formatearFecha, formatearFechaCorta, formatNumber } from '@/utils/formatters';
 import FondoMatrix from '@/components/layout/FondoMatrix.vue';
 import AlertasExistenciasLimpios from '@/components/Existencias/AlertasExistenciasLimpios.vue';
 
@@ -368,6 +382,12 @@ export default {
     const tienePrecio = ref(false);
     const filtroCuarto = ref(false);
     const agruparMedidasIguales = ref(false);
+    // En celular cada tarjeta es un resumen; al tocarla se expande y muestra
+    // sus lotes. null = ninguna expandida.
+    const medidaExpandida = ref(null);
+    const alternarMedida = (key) => {
+      medidaExpandida.value = medidaExpandida.value === key ? null : key;
+    };
 
     // Precio de facturación por medida: editable, se guarda en Firestore y
     // permanece hasta que se vuelva a cambiar (se comparte entre dispositivos).
@@ -2142,6 +2162,9 @@ export default {
       tienePrecio,
       formatNumber,
       formatearFecha,
+      formatearFechaCorta,
+      medidaExpandida,
+      alternarMedida,
       imprimirReporte,
       salidasDiaSiguiente,
       fechaDiaSiguiente,
@@ -3396,10 +3419,17 @@ h1 {
   }
 }
 
-/* Celular: dos medidas por fila y la tabla en lista compacta, para que la
-   columna de kilos no se corte. Cada lote ocupa dos líneas
-   (medida + precio / cuarto + kilos) y nada queda fuera de la tarjeta.
+/* Celular: dos medidas por fila como resumen; al tocar una tarjeta se
+   expande a todo lo ancho y muestra sus lotes en tabla completa.
    Solo screen, para no tocar la impresión. */
+.resumen-medida {
+  display: none;
+}
+
+.expandir-icono {
+  display: none;
+}
+
 @media screen and (max-width: 768px) {
   .existencias-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3413,6 +3443,14 @@ h1 {
 
   .medida-card h2 {
     font-size: 17px;
+    cursor: pointer;
+  }
+
+  .expandir-icono {
+    display: inline;
+    margin-left: 6px;
+    color: var(--acento);
+    font-size: 15px;
   }
 
   .precio-facturacion {
@@ -3424,65 +3462,53 @@ h1 {
     width: 84px;
   }
 
-  .medida-table thead {
+  /* Resumen: total de kilos, número de lotes y pista para tocar. */
+  .resumen-medida {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px dashed var(--verde-dim);
+    border-radius: 6px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+
+  .resumen-medida strong {
+    color: var(--verde);
+  }
+
+  .resumen-medida .resumen-hint {
+    color: rgba(168, 255, 203, 0.65);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* Sin expandir, la tarjeta solo muestra el resumen. */
+  .medida-card:not(.medida-expandida) .proveedor-section,
+  .medida-card:not(.medida-expandida) .total-medida,
+  .medida-card:not(.medida-expandida) > .medida-table,
+  .medida-card:not(.medida-expandida) .total-maquila-valor {
     display: none;
   }
 
-  .medida-table,
-  .medida-table tbody {
-    display: block;
+  /* Expandida, la tarjeta ocupa toda la fila. */
+  .medida-card.medida-expandida {
+    grid-column: 1 / -1;
   }
 
-  .medida-table tr {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    padding: 6px 0;
-    border-bottom: 1px solid rgba(0, 255, 102, 0.08);
-  }
-
-  .medida-table th,
-  .medida-table td {
-    padding: 2px 4px;
-    border-bottom: 0;
-  }
-
-  .medida-table td {
+  /* En la tarjeta expandida la tabla cabe entera: celdas más compactas
+     y fecha corta. */
+  .medida-card.medida-expandida .medida-table th,
+  .medida-card.medida-expandida .medida-table td {
+    padding: 6px 4px;
     font-size: 12px;
   }
 
-  /* Primera celda (medida o proveedor): ocupa poco más de media línea. */
-  .medida-table td:first-child {
-    flex: 1 1 52%;
-    min-width: 0;
-  }
-
-  .medida-table .precio-cell,
-  .medida-table .cuarto-cell {
-    flex: 0 0 auto;
-  }
-
-  .medida-table .kilos-cell {
-    flex: 0 0 auto;
-    margin-left: auto;
-  }
-
-  /* La fecha del lote baja a su propia línea, debajo de la medida. */
-  .medida-table .fecha-entrada {
-    display: block;
-    margin: 1px 0 0;
+  .medida-card.medida-expandida .fecha-entrada {
     font-size: 10px;
-  }
-
-  /* Filas de total: etiqueta a la izquierda, kilos a la derecha. */
-  .medida-table tr.total-row td:empty,
-  .medida-table tr.subtotal-row td:empty {
-    display: none;
-  }
-
-  /* En la vista por cuarto no cabe la fecha en la tarjeta angosta. */
-  .medida-table td.fecha-entrada {
-    display: none;
   }
 
   .total-medida {
