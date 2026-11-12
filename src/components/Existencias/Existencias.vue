@@ -90,7 +90,7 @@
         <p>Sin existencias disponibles. Las salidas registradas pueden haber consumido todo el inventario.</p>
       </div>
 
-      <div class="existencias-grid" v-if="!filtroCuarto">
+      <div class="existencias-grid medidas-grid" v-if="!filtroCuarto">
         <div v-for="(datos, medidaKey, medidaIdx) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito', 'medida-expandida': medidaExpandida === medidaKey }" :style="estiloAcento(medidaIdx)">
           <!-- Para maquilas (Ozuna y Joselito) -->
           <template v-if="medidaKey === 'Ozuna' || medidaKey === 'Joselito'">
@@ -109,8 +109,8 @@
               <thead>
                 <tr>
                   <th>Medida</th>
-                  <th v-if="tienePrecio">Precio</th>
-                  <th v-if="tieneCuarto(datos.items)">Cuarto</th>
+                  <th v-if="tienePrecio" class="precio-cell">Precio</th>
+                  <th v-if="tieneCuarto(datos.items)" class="cuarto-cell">Cuarto</th>
                   <th class="kilos-cell">Kilos</th>
                 </tr>
               </thead>
@@ -129,6 +129,7 @@
                 <tr class="total-row">
                   <td><strong>Total {{ medidaKey }}</strong></td>
                   <td v-if="tienePrecio"></td>
+                  <td v-if="tieneCuarto(datos.items)"></td>
                   <td class="kilos-cell">
                     <strong>{{ formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
                   </td>
@@ -162,8 +163,8 @@
                     @keyup.enter="$event.target.blur()"
                   />
                 </label>
-                <span class="expandir-icono">{{ medidaExpandida === medidaKey ? '▾' : '▸' }}</span>
               </span>
+              <span class="expandir-icono">{{ medidaExpandida === medidaKey ? '▾' : '▸' }}</span>
               <label class="agrupar-toggle" @click.stop>
                 <input type="checkbox" v-model="agruparMedidasIguales" />
                 <span>Agrupar iguales</span>
@@ -186,8 +187,8 @@
                 <thead>
                   <tr>
                     <th>Medida</th>
-                    <th v-if="tienePrecio">Precio</th>
-                    <th v-if="tieneCuarto(proveedorData.items)">Cuarto</th>
+                    <th v-if="tienePrecio" class="precio-cell">Precio</th>
+                    <th v-if="tieneCuarto(proveedorData.items)" class="cuarto-cell">Cuarto</th>
                     <th class="kilos-cell">Kilos</th>
                   </tr>
                 </thead>
@@ -206,6 +207,7 @@
                   <tr class="subtotal-row">
                     <td><strong>Total {{ proveedor }}</strong></td>
                     <td v-if="tienePrecio"></td>
+                    <td v-if="tieneCuarto(proveedorData.items)"></td>
                     <td class="kilos-cell">
                       <strong>{{ formatNumber(proveedorData.items.reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
                     </td>
@@ -234,7 +236,7 @@
         </div>
       </div>
 
-      <div class="existencias-grid" v-else>
+      <div class="existencias-grid cuartos-grid" v-else>
         <div v-for="(items, cuartoKey, cuartoIdx) in filteredExistenciasPorCuarto" :key="cuartoKey" class="medida-card" :class="{ 'medida-expandida': medidaExpandida === cuartoKey }" :style="estiloAcento(cuartoIdx)">
           <h2 @click="alternarMedida(cuartoKey)">{{ cuartoKey }}<span class="expandir-icono">{{ medidaExpandida === cuartoKey ? '▾' : '▸' }}</span></h2>
           <div class="resumen-medida" @click="alternarMedida(cuartoKey)">
@@ -246,7 +248,7 @@
               <tr>
                 <th>Proveedor</th>
                 <th>Medida</th>
-                <th v-if="tienePrecio">Precio</th>
+                <th v-if="tienePrecio" class="precio-cell">Precio</th>
                 <th class="kilos-cell">Kilos</th>
                 <th>Fecha</th>
               </tr>
@@ -3453,6 +3455,14 @@ h1 {
     font-size: 15px;
   }
 
+  .medida-header .expandir-icono {
+    margin-left: auto;
+  }
+
+  .medida-header .agrupar-toggle {
+    margin-left: 8px;
+  }
+
   .precio-facturacion {
     flex-wrap: wrap;
     font-size: 12px;
@@ -3465,15 +3475,20 @@ h1 {
   /* Resumen: total de kilos, número de lotes y pista para tocar. */
   .resumen-medida {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 4px 8px;
     margin-top: 10px;
     padding: 8px 10px;
     border: 1px dashed var(--verde-dim);
     border-radius: 6px;
     font-size: 12.5px;
     cursor: pointer;
+  }
+
+  .resumen-medida > span:first-child {
+    white-space: nowrap;
   }
 
   .resumen-medida strong {
@@ -3499,16 +3514,42 @@ h1 {
     grid-column: 1 / -1;
   }
 
-  /* En la tarjeta expandida la tabla cabe entera: celdas más compactas
-     y fecha corta. */
+  /* En la tarjeta expandida de medidas la tabla cabe entera: layout fijo
+     con anchos por columna (medida 34 / precio 20 / cuarto 22 / kilos 24),
+     celdas compactas y fecha en su propia línea. Así los kilos ya no se
+     cortan ni se recorre la tabla. */
+  .medidas-grid .medida-card.medida-expandida .medida-table {
+    table-layout: fixed;
+  }
+
+  .medidas-grid .medida-card.medida-expandida .medida-table th:first-child,
+  .medidas-grid .medida-card.medida-expandida .medida-table td:first-child {
+    width: 34%;
+  }
+
+  .medidas-grid .medida-card.medida-expandida .medida-table .precio-cell {
+    width: 20%;
+  }
+
+  .medidas-grid .medida-card.medida-expandida .medida-table .cuarto-cell {
+    width: 22%;
+  }
+
+  .medidas-grid .medida-card.medida-expandida .medida-table .kilos-cell {
+    width: 24%;
+  }
+
+  .medidas-grid .medida-card.medida-expandida .medida-table .fecha-entrada {
+    display: block;
+    margin: 1px 0 0;
+    font-size: 10px;
+  }
+
+  /* Celdas compactas en cualquier tarjeta expandida. */
   .medida-card.medida-expandida .medida-table th,
   .medida-card.medida-expandida .medida-table td {
     padding: 6px 4px;
     font-size: 12px;
-  }
-
-  .medida-card.medida-expandida .fecha-entrada {
-    font-size: 10px;
   }
 
   .total-medida {
