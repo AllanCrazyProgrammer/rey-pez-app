@@ -45,6 +45,15 @@
         @ver-pedido-dia="mostrarModalPedidoDia = true"
       />
 
+      <!-- Barra de progreso: kilos pesados en el embarque frente al pedido
+           del día (limpios + crudos), de 0 a 100 %. -->
+      <progreso-embarque
+        :pesado="resumenEmbarqueTotal"
+        :pedido-limpio="pedidoReferenciaPorCliente"
+        :pedido-crudo="pedidoReferenciaCrudosPorCliente"
+        :cargando="pedidoReferenciaCargando"
+      />
+
       <ColaboracionEmbarque v-if="embarqueId && embarqueId !== 'nuevo'" :editores="colaboradoresVisibles" :user-id="authStore.userId || ''"
         :pendientes="hasPendingChanges" :subiendo="subiendoEnVivo" :online="redDisponible"
         :error="errorSincronizacion" :presencia="estadoPresencia" />
@@ -278,6 +287,7 @@ import AuthErrorNotification from '@/components/layout/AuthErrorNotification.vue
 import authDiagnostic from '@/utils/authDiagnostic.js'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
+import ProgresoEmbarque from './components/ProgresoEmbarque.vue'
 import pdfGenerationMixin from './mixins/pdfGenerationMixin';
 import calculosMixin from './mixins/calculosMixin';
 import { embarqueUndoMixin } from './mixins/embarqueUndoMixin';
@@ -353,6 +363,7 @@ export default {
     ColaboracionEmbarque,
     Sidebar,
     HeaderEmbarque,
+    ProgresoEmbarque,
         ClienteProductos,
     // Registrar los componentes modales
     NuevoClienteModal,
