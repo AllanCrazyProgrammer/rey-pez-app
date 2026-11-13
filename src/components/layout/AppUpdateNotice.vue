@@ -1,8 +1,8 @@
 <template>
   <aside v-if="visible" class="app-update" :class="{ 'app-update--movil': movil }" role="status">
     <template v-if="estado.lista">
-      <span>Hay una versión nueva de ReyPez lista para usar.</span>
-      <button type="button" :disabled="busy" @click="actualizar">{{ busy ? 'Guardando y actualizando…' : 'Actualizar' }}</button>
+      <span>Hay una versión nueva de ReyPez lista. Se aplicará sola al cerrar la app o al volver a abrirla.</span>
+      <button type="button" :disabled="busy" @click="actualizar">{{ busy ? 'Guardando y actualizando…' : 'Actualizar ahora' }}</button>
     </template>
     <template v-else>
       <span>Hay una versión nueva de ReyPez que necesita volver a instalar la app (versión {{ estado.requiereInstalador }} o más nueva).</span>

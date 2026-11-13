@@ -109,6 +109,7 @@ export default {
   beforeDestroy() {
     document.removeEventListener('wheel', this._onNumberWheel);
     if (this._removeDesktopClose) this._removeDesktopClose();
+    if (this._autoAplicador) this._autoAplicador.detener();
   },
   mounted() {
     // En la APK, cargar la fuente de actualizaciones de Android para el aviso (el arranque del
@@ -116,7 +117,19 @@ export default {
     // de Capacitor en la web ni en escritorio.
     if (this.esNativo) {
       import('./mobile/arranqueActualizacion')
-        .then(m => { this.fuenteAndroid = m.fuenteActualizacionAndroid; })
+        .then(m => {
+          this.fuenteAndroid = m.fuenteActualizacionAndroid;
+          // Que la APK se actualice sola: aplica la versión ya descargada al
+          // arrancar o al mandar la app a segundo plano (nunca con la app en uso).
+          return import('./mobile/autoAplicarActualizacion');
+        })
+        .then(m => {
+          this._autoAplicador = m.crearAutoAplicador({
+            fuente: this.fuenteAndroid,
+            antesDeAplicar: () => this.guardarAntesDeActualizarWeb(),
+          });
+          this._autoAplicador.iniciar();
+        })
         .catch(error => console.warn('No se pudo cargar el actualizador de Android:', error));
     }
     // La descarga/sincronización de embarques no debe competir con la carga de la

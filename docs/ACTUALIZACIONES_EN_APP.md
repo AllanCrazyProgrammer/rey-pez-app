@@ -12,13 +12,19 @@ debug): hay que desinstalar Inventarios primero. Ver `docs/ANDROID_FIRMA.md`.
 
 1. Con internet, la app revisa si hay versión nueva (al abrir, cada 30 minutos, en Android
    también al volver a la app y **al recuperar internet**, igual que escritorio).
-2. Si la hay, la descarga en segundo plano y muestra **"Hay una versión nueva de ReyPez lista para
-   usar · Actualizar"**.
-3. Al pulsar **Actualizar**:
+2. Si la hay, la descarga en segundo plano y muestra **"Hay una versión nueva de ReyPez lista…
+   Actualizar ahora"**.
+3. **Android se actualiza sola desde la versión que trae el auto-aplicador
+   (`src/mobile/autoAplicarActualizacion.js`):** la versión descargada se aplica al abrir la
+   app (en los primeros segundos, antes de trabajar) o al mandar la app a segundo plano
+   (al volver ya trae la versión nueva). Con la app abierta y en uso no se recarga para no
+   interrumpir; el aviso sigue ahí por si se quiere aplicar en ese momento con el botón.
+   En escritorio, si no se pulsa, la versión nueva entra la próxima vez que se abra la app.
+   Al pulsar **Actualizar ahora**:
    - En escritorio, primero se guarda igual que al cerrar la ventana y después se recarga.
-   - En Android, se recarga.
-   Si no se pulsa, la versión nueva entra la próxima vez que se abra la app (escritorio) o al pulsar
-   el aviso después (Android).
+   - En Android, se guarda lo abierto y se recarga.
+   La primera vez que llega el auto-aplicador a un teléfono, esa versión todavía hay que
+   aplicarla con el botón (el código viejo no sabe aplicarla sola); desde ahí, sola.
 4. Sin internet, se sigue usando la última versión descargada.
 
 Si una versión descargada no arranca, la app la descarta sola y regresa a la anterior:
