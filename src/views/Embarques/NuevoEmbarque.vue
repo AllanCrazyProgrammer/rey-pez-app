@@ -32,7 +32,7 @@
         @volver="volverAEmbarquesMenu" 
         @toggle-bloqueo="toggleBloqueo" 
         @update:fecha="embarque.fecha = $event"
-        @update:cargaCon="embarque.cargaCon = $event" 
+        @update:cargaCon="cambiarCargaCon" 
         @generar-taras="generarPDF('taras')"
         @generar-resumen="mostrarEscalaResumen = true"
         @verificar-fecha="verificarFechaExistente"
@@ -304,6 +304,7 @@ import { embarqueClientesMixin } from './mixins/embarqueClientesMixin';
 import { embarqueSonidosMixin } from './mixins/embarqueSonidosMixin';
 import ClienteProductos from './components/ClienteProductos.vue';
 import { resumenEmbarque, formatearKilos as formatearKilosResumen } from '@/utils/embarqueTotales';
+import { responsableCargaParaFecha } from '@/utils/cargaEmbarque';
 import { v4 as uuidv4 } from 'uuid';
 
 // Importar constantes y utilidades
@@ -716,6 +717,13 @@ export default {
       }
     },
 
+    // Cambio manual de quién carga (select del header): queda como Allan lo
+    // deja; al cambiar la fecha solo se vuelve a aplicar la regla si el valor
+    // actual sigue siendo el de la regla (o está vacío).
+    cambiarCargaCon(valor) {
+      this.embarque.cargaCon = valor;
+    },
+
     async verificarFechaExistente(nuevaFecha) {
       if (this.embarqueBloqueado) {
         alert('El embarque está bloqueado. No se puede cambiar la fecha.');
@@ -727,7 +735,14 @@ export default {
         if (this.embarqueId) {
           localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
         }
+        const fechaAnterior = this.embarque.fecha;
+        const cargaAnterior = this.embarque.cargaCon;
         this.embarque.fecha = nuevaFecha;
+        // Al cambiar de día, quién carga sigue la regla, salvo que Allan lo
+        // haya cambiado a mano a otro distinto del de ese día.
+        if (!cargaAnterior || cargaAnterior === responsableCargaParaFecha(fechaAnterior)) {
+          this.embarque.cargaCon = responsableCargaParaFecha(fechaISO);
+        }
         this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(fechaISO);
         if (this.modoEdicion && this.embarqueId) {
           this.guardarCambiosEnTiempoReal();

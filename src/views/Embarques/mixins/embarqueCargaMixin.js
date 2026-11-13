@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
+import { responsableCargaParaFecha } from '@/utils/cargaEmbarque';
 import { crearNuevoProducto } from '@/constants/embarque';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 import { esEcoDeRevisionLocal } from '@/utils/embarqueRevision';
@@ -355,7 +356,10 @@ export const embarqueCargaMixin = {
 
         this.embarque = {
           fecha: fechaEmbarque,
-          cargaCon: '',
+          // Quién carga, automático por día de la semana (regla de Allan):
+          // lun, jue, sáb Caminante; mar, mié, vie Porro; domingo sin asignar.
+          // El select del header lo puede cambiar a mano.
+          cargaCon: responsableCargaParaFecha(fechaEmbarque),
           camionNumero: 1,
           productos: [],
           crudos: []
@@ -433,7 +437,7 @@ export const embarqueCargaMixin = {
         console.error("Error al resetear el embarque:", error);
         this.embarque = {
           fecha: fechaActual,
-          cargaCon: '',
+          cargaCon: responsableCargaParaFecha(fechaActual),
           camionNumero: 1,
           productos: [],
         };

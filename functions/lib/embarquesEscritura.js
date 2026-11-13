@@ -97,6 +97,21 @@ function normalizarNombre(nombre) {
     .trim();
 }
 
+// Quién carga según el día de la semana (regla de Allan, 2026-11-13).
+// Lun, jue, sáb → Caminante; mar, mié, vie → Porro; domingo sin regla → ''.
+// Misma regla que src/utils/cargaEmbarque.js (app): si una cambia, cambiar las dos.
+function responsableCargaParaFecha(fechaISO) {
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(fechaISO || '').trim());
+  if (!partes) return '';
+  const ano = Number(partes[1]);
+  const mes = Number(partes[2]);
+  const dia = Number(partes[3]);
+  const fecha = new Date(ano, mes - 1, dia);
+  if (fecha.getFullYear() !== ano || fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) return '';
+  const porDia = { 0: '', 1: 'Caminante', 2: 'Porro', 3: 'Porro', 4: 'Caminante', 5: 'Porro', 6: 'Caminante' };
+  return porDia[fecha.getDay()] || '';
+}
+
 function validarIdempotencyKey(body) {
   const key = body && body.idempotencyKey;
   if (!key || typeof key !== 'string' || !key.trim() || key.includes('/')) {
@@ -420,6 +435,9 @@ function crearHandlersEmbarquesEscritura({ db, admin: adminDep, errorResponse, g
       return errorResponse(res, 400, 'CARGA_CON_INVALIDA', 'cargaCon debe ser texto');
     }
     const cargaConLimpia = typeof cargaCon === 'string' ? cargaCon.trim() : '';
+    // Sin cargaCon, el default es el de la regla por día de la semana.
+    // Si Allan lo manda explícito, ese manda.
+    const cargaConFinal = cargaConLimpia || responsableCargaParaFecha(fecha);
 
     try {
       const idemRef = db.collection('asistenteIdem').doc(idempotencyKey);
@@ -450,10 +468,10 @@ function crearHandlersEmbarquesEscritura({ db, admin: adminDep, errorResponse, g
       });
       const doc = {
         fecha,
-        cargaCon: cargaConLimpia,
+        cargaCon: cargaConFinal,
         camionNumero: camion,
         productosEliminados: {},
-        borrador: !cargaConLimpia,
+        borrador: !cargaConFinal,
         clientesJuntarMedidas: { ...mapasBase },
         clientesReglaOtilio: { ...mapasBase, 3: true },
         clientesIncluirPrecios: { ...mapasBase },
@@ -472,7 +490,7 @@ function crearHandlersEmbarquesEscritura({ db, admin: adminDep, errorResponse, g
         embarqueId,
         fecha,
         camionNumero: camion,
-        cargaCon: cargaConLimpia,
+        cargaCon: cargaConFinal,
         clientes: CLIENTES_PREDEFINIDOS.map((c) => c.nombre),
         rev: 1,
         nota: 'El número REC (REC_001, REC_002...) es un índice de la lista en la app, no se guarda en el documento: el embarque se identifica por su id.',
@@ -507,8 +525,8 @@ function crearHandlersEmbarquesEscritura({ db, admin: adminDep, errorResponse, g
           embarqueId,
           fecha,
           camionNumero: camion,
-          cargaCon: cargaConLimpia,
-          request: { fecha, camionNumero: camion, cargaCon: cargaConLimpia },
+          cargaCon: cargaConFinal,
+          request: { fecha, camionNumero: camion, cargaCon: cargaConFinal },
         });
         transaction.set(idemRef, {
           operation,
