@@ -897,17 +897,11 @@ export default {
     // filas del refri tal como vienen del embarque), así funciona aunque el
     // pedido no tenga líneas. Solo corre en un pedido existente y una sola vez
     // por cada embarque anterior (marcador refriAnteriorAplicado en el doc).
+    // Si el marcador viene de un embarque que ya no es el del día anterior al
+    // pedido, se limpia sin tocar los kilos del mapa (esos ya se corrigieron
+    // por fuera o el acomodo los recalcula).
     async aplicarRefriAnteriorAutomaticamente() {
-      if (!this.refriAnterior?.fecha || !Array.isArray(this.refriAnterior.filas) || !this.refriAnterior.filas.length) return
       if (!this.editando || !this.pedidoId) return
-      const kilosPorMedida = {}
-      this.refriAnterior.filas.forEach((fila) => {
-        const medida = (fila.medida || 'Sin medida').toString().trim()
-        const kilos = Number(fila.kilos) || 0
-        if (!(kilos > 0)) return
-        kilosPorMedida[medida] = Math.round(((kilosPorMedida[medida] || 0) + kilos) * 10) / 10
-      })
-      if (!Object.keys(kilosPorMedida).length) return
       // Leer el marcador si aún no lo tenemos en memoria.
       if (!this.refriAnteriorAplicado) {
         try {
@@ -918,6 +912,24 @@ export default {
           return
         }
       }
+      if (this.refriAnteriorAplicado && this.refriAnteriorAplicado.fecha !== this.refriAnterior?.fecha) {
+        try {
+          await updateDoc(doc(db, 'pedidos', this.pedidoId), { refriAnteriorAplicado: null })
+        } catch (error) {
+          console.error('Error al limpiar refriAnteriorAplicado:', error)
+          return
+        }
+        this.refriAnteriorAplicado = null
+      }
+      if (!this.refriAnterior?.fecha || !Array.isArray(this.refriAnterior.filas) || !this.refriAnterior.filas.length) return
+      const kilosPorMedida = {}
+      this.refriAnterior.filas.forEach((fila) => {
+        const medida = (fila.medida || 'Sin medida').toString().trim()
+        const kilos = Number(fila.kilos) || 0
+        if (!(kilos > 0)) return
+        kilosPorMedida[medida] = Math.round(((kilosPorMedida[medida] || 0) + kilos) * 10) / 10
+      })
+      if (!Object.keys(kilosPorMedida).length) return
       if (this.refriAnteriorAplicado && this.refriAnteriorAplicado.fecha === this.refriAnterior.fecha) return
       const nuevosKilos = { ...this.kilosRefrigerados }
       Object.entries(kilosPorMedida).forEach(([medida, kilos]) => {
@@ -1147,26 +1159,30 @@ export default {
       const fechaPedido = normalizarFechaValor(this.fecha)
       if (!fechaPedido) return { fecha: null, embarques: [] }
 
+      // El refri anterior solo vale si viene del embarque del día anterior al
+      // pedido (regla de Allan 2026-11-14). Antes se tomaba el embarque más
+      // reciente anterior a la fecha: si el pedido se abría antes de que
+      // existiera el embarque de ayer, se colaba el refri de un embarque más
+      // viejo (el pedido del 14/11 agarró el refri del 12/11 porque el
+      // embarque del 13/11 aún no existía) y nada lo quitaba después.
+      const [anio, mes, dia] = fechaPedido.split('-').map(Number)
+      const fechaDiaAnterior = new Date(Date.UTC(anio, mes - 1, dia - 1))
+        .toISOString().slice(0, 10)
+
       const snapshot = await getDocs(collection(db, 'embarques'))
-      const embarquesAnteriores = snapshot.docs
+      const embarquesDiaAnterior = snapshot.docs
         .map((documento) => ({ id: documento.id, ...documento.data() }))
         .map((embarque) => ({
           embarque,
           fecha: normalizarFechaValor(embarque.fecha)
         }))
-        .filter(({ embarque, fecha }) => fecha && fecha < fechaPedido && embarque.borrador !== true)
+        .filter(({ embarque, fecha }) => fecha === fechaDiaAnterior && embarque.borrador !== true)
 
-      if (!embarquesAnteriores.length) return { fecha: null, embarques: [] }
-
-      const fechaAnterior = embarquesAnteriores.reduce((ultima, item) => (
-        !ultima || item.fecha > ultima ? item.fecha : ultima
-      ), null)
+      if (!embarquesDiaAnterior.length) return { fecha: null, embarques: [] }
 
       return {
-        fecha: fechaAnterior,
-        embarques: embarquesAnteriores
-          .filter((item) => item.fecha === fechaAnterior)
-          .map((item) => item.embarque)
+        fecha: fechaDiaAnterior,
+        embarques: embarquesDiaAnterior.map((item) => item.embarque)
       }
     },
     async acomodarKilosRefrigeradosAutomaticamente() {

@@ -1,8 +1,9 @@
 // Refri del embarque anterior (solo lectura).
 // Replica la lógica de src/utils/kilosRefrigerados.js del app (desglosarRefriEmbarques
-// y sumarKilosRefriPorMedida): del embarque más reciente anterior a la fecha pedida
+// y sumarKilosRefriPorMedida): del embarque del día anterior a la fecha pedida
 // (sin borrador), toma los productos de los clientes llamados "refri" y suma sus
 // kilos netos por medida. La página de pedidos lo suma al refrigerado normal del día.
+// Solo el embarque del día anterior vale (regla de Allan 2026-11-14).
 //
 // GET /pedidos/limpio/refri-anterior?fecha=YYYY-MM-DD
 // Respuesta: { success, fecha (del embarque anterior), fechaPedido, kilosPorMedida,
@@ -100,25 +101,27 @@ function crearHandlersRefriAnterior({ db, errorResponse }) {
         ? req.query.fecha : '';
       if (!fechaPedido) fallo(400, 'FECHA_REQUERIDA', 'Debe proporcionar fecha en formato YYYY-MM-DD');
 
-      // Embarque más reciente anterior a la fecha (sin borrador), igual que
-      // obtenerEmbarquesDelDiaAnterior en PedidoLimpioImpresion.vue.
+      // Embarque del día anterior al pedido (sin borrador), igual que
+      // obtenerEmbarquesDelDiaAnterior en PedidoLimpioImpresion.vue. El refri
+      // anterior solo vale si viene de ese embarque (regla de Allan
+      // 2026-11-14): antes se tomaba el embarque más reciente anterior a la
+      // fecha, así que un pedido abierto antes de que existiera el embarque
+      // de ayer se quedaba con el refri de un embarque más viejo.
+      const [anio, mes, dia] = fechaPedido.split('-').map(Number);
+      const fechaDiaAnterior = new Date(Date.UTC(anio, mes - 1, dia - 1)).toISOString().slice(0, 10);
       const snap = await db.collection('embarques').get();
-      const anteriores = snap.docs
+      const embarques = snap.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
         .map((embarque) => ({ embarque, fecha: typeof embarque.fecha === 'string' ? embarque.fecha : '' }))
-        .filter(({ embarque, fecha }) => fecha && fecha < fechaPedido && embarque.borrador !== true);
-      if (!anteriores.length) {
+        .filter(({ embarque, fecha }) => fecha === fechaDiaAnterior && embarque.borrador !== true)
+        .map((item) => item.embarque);
+      if (!embarques.length) {
         return res.json({
           success: true, fecha: null, fechaPedido,
           kilosPorMedida: {}, filas: [], totalKilos: 0, embarques: 0
         });
       }
-      const fechaAnterior = anteriores.reduce((ultima, item) => (
-        !ultima || item.fecha > ultima ? item.fecha : ultima
-      ), null);
-      const embarques = anteriores
-        .filter((item) => item.fecha === fechaAnterior)
-        .map((item) => item.embarque);
+      const fechaAnterior = fechaDiaAnterior;
 
       const medidasPedido = await medidasDelPedido(fechaPedido);
       const filas = [];
