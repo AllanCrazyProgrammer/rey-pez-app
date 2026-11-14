@@ -947,7 +947,32 @@ button:disabled {
     .productos-container { padding: 16px 12px; }
     .botones-agregar { padding: 0 12px 14px; }
 }
-.menu-cliente-toggle, .medidas-movil { display: none; }
+.menu-cliente-toggle { display: none; }
+/* Medidas del pedido: visibles también en escritorio (antes solo en móvil).
+   Mismo orden por prioridad/completado que en móvil (pendiente → falta reportar → hecho)
+   y al tocar una medida se filtra para mostrar solo esa, igual que en móvil. */
+.medidas-movil { display: block; min-width: 0; margin: 10px 18px 0; padding: 12px; border: 1px solid rgba(148,163,184,.18); border-radius: 12px; background: #101b2d; color: #e2e8f0; }
+.medidas-movil-titulo { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.medidas-movil-titulo span { color: #94a3b8; font-weight: 400; }
+.medidas-movil-lista { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px; }
+.medida-movil-chip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 44px; max-width: 220px; padding: 7px 12px; border: 1px solid #334155; border-radius: 10px; background: #172338; color: #e2e8f0; text-align: left; font-size: 14px; cursor: pointer; }
+.medida-movil-chip span { overflow-wrap: anywhere; }
+.medida-movil-chip small { color: #94a3b8; font-size: 11px; }
+.medida-movil-chip[aria-pressed="true"] { background: #23334c; box-shadow: inset 0 0 0 1px #e2e8f0; color: #fff; }
+.medida-movil-chip.medida-pendiente { border: 2px solid #fb7185; }
+.medida-movil-chip.medida-cubierta { border: 2px solid #4ade80; }
+.medida-pendiente .medida-estado { color: #fda4af; }
+.medida-cubierta .medida-estado { color: #86efac; }
+.medida-movil-chip.medida-falta-reportar { border: 2px solid #facc15; }
+.medida-falta-reportar .medida-estado { color: #fde047; }
+.medida-movil-chip .medida-tipo { display: inline-block; padding: 2px 6px; margin: 4px 0; border-radius: 5px; font-weight: 700; }
+.medida-tipo.tipo-sin-agua { color: #e9d5ff; background: #581c87; }
+.medida-tipo.tipo-con-agua { color: #bae6fd; background: #075985; }
+.medida-tipo.tipo-crudo { color: #fde68a; background: #78350f; }
+.medida-tipo.tipo-otro { color: #e2e8f0; background: #334155; }
+.medidas-movil p { margin: 0; font-size: 12px; color: #94a3b8; }
+.menu-cliente-toggle:focus-visible, .medida-movil-chip:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+.productos-container > .fuera-medida-movil { display: none; }
 @media (max-width: 768px) {
     .cliente-grupo .cliente-header { position: relative; top: auto; gap: 10px; padding: 12px; }
     .cliente-info { width: 100%; }
@@ -956,27 +981,7 @@ button:disabled {
     .cliente-totales span { padding: 5px 8px; }
     .menu-cliente-toggle { display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; gap: 7px; min-height: 44px; padding: 8px 12px; border: 1px solid rgba(148,163,184,.22); border-radius: 10px; color: #dbeafe; background: rgba(148,163,184,.08); font-size: 13px; }
     .cliente-grupo:not(.menu-cliente-abierto) .cliente-header-controls { display: none; }
-    .medidas-movil { display: block; min-width: 0; margin: 10px 0; padding: 12px; border: 1px solid rgba(148,163,184,.18); border-radius: 12px; background: #101b2d; color: #e2e8f0; }
-    .medidas-movil-titulo { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
-    .medidas-movil-titulo span { color: #94a3b8; font-weight: 400; }
-    .medidas-movil-lista { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; }
-    .medida-movil-chip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 44px; max-width: 220px; padding: 7px 12px; border: 1px solid #334155; border-radius: 10px; background: #172338; color: #e2e8f0; text-align: left; font-size: 14px; }
-    .medida-movil-chip span { overflow-wrap: anywhere; }
-    .medida-movil-chip small { color: #94a3b8; font-size: 11px; }
-    .medida-movil-chip[aria-pressed="true"] { background: #23334c; box-shadow: inset 0 0 0 1px #e2e8f0; color: #fff; }
-    .medida-movil-chip.medida-pendiente { border: 2px solid #fb7185; }
-    .medida-movil-chip.medida-cubierta { border: 2px solid #4ade80; }
-    .medida-pendiente .medida-estado { color: #fda4af; }
-    .medida-cubierta .medida-estado { color: #86efac; }
-    .medida-movil-chip.medida-falta-reportar { border: 2px solid #facc15; }
-    .medida-falta-reportar .medida-estado { color: #fde047; }
-    .medida-movil-chip .medida-tipo { display: inline-block; padding: 2px 6px; margin: 4px 0; border-radius: 5px; font-weight: 700; }
-    .medida-tipo.tipo-sin-agua { color: #e9d5ff; background: #581c87; }
-    .medida-tipo.tipo-con-agua { color: #bae6fd; background: #075985; }
-    .medida-tipo.tipo-crudo { color: #fde68a; background: #78350f; }
-    .medida-tipo.tipo-otro { color: #e2e8f0; background: #334155; }
-    .medidas-movil p { margin: 0; font-size: 12px; color: #94a3b8; }
-    .menu-cliente-toggle:focus-visible, .medida-movil-chip:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
-    .productos-container > .fuera-medida-movil { display: none; }
+    .medidas-movil { margin: 10px 0; }
+    .medidas-movil-lista { flex-wrap: nowrap; overflow-x: auto; padding: 2px 2px 8px; }
 }
 </style>
