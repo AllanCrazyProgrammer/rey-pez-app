@@ -153,7 +153,7 @@
                 @activar-incluir-precios-catarro="activarIncluirPreciosCatarro" />
 
             <!-- Lista de crudos -->
-            <CrudoItem :class="{ 'fuera-medida-movil': medidaMovilSeleccionada && medidaMovilSeleccionada.crudoId !== crudo.id }"
+            <CrudoItem :class="{ 'fuera-medida-movil': medidaMovilSeleccionada && !medidaMovilSeleccionada.esGrupoCrudos && medidaMovilSeleccionada.crudoId !== crudo.id }"
                 :item-movil-activo="medidaMovilSeleccionada && medidaMovilSeleccionada.crudoId === crudo.id ? medidaMovilSeleccionada.itemId : null" :editores-colaboracion="editoresColaboracion" v-for="(crudo, index) in crudos" :key="crudo.id" :crudo="crudo"
                 :embarque-bloqueado="embarqueBloqueado" :cliente-id="clienteId" :crudo-index="index"
                 :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque" :nombre-cliente="nombreCliente"
@@ -321,14 +321,20 @@ export default {
                 tipo: p.tipo === 'otro' ? (p.tipoPersonalizado || 'Otro') : (p.tipo || 'Limpio'),
             }));
             const referenciasCrudo = this.pedidoReferenciaCrudosPorCliente[this.clienteId] || {};
-            const crudos = this.crudos.flatMap(g => {
+            const estadosCrudo = this.crudos.flatMap(g => {
                 const totales = tarasCrudoPorTalla(g.items);
-                return (g.items || []).filter(i => i.id).map(i => ({
-                clave: 'crudo:' + g.id + ':' + i.id, crudoId: g.id, itemId: i.id,
-                medida: i.talla || 'Crudo nuevo', tipo: 'Crudo', categoria: 'crudo',
-                ...estadoPedido(referenciasCrudo[i.talla] || i.pedidoReferencia, { totalTaras: totales[String(i.talla || i.medida || '').trim()] || 0, totalKilos: 0 }),
-            }));
+                return (g.items || []).filter(i => i.id).map(i =>
+                    estadoPedido(referenciasCrudo[i.talla] || i.pedidoReferencia, { totalTaras: totales[String(i.talla || i.medida || '').trim()] || 0, totalKilos: 0 })
+                );
             });
+            // Los crudos van en un solo chip "Crudos", no uno por talla.
+            const crudos = estadosCrudo.length > 0 ? [{
+                clave: 'crudos', esGrupoCrudos: true,
+                medida: 'Crudos', tipo: 'Crudo', categoria: 'crudo',
+                tieneReferencia: estadosCrudo.some(e => e.tieneReferencia),
+                cubierto: estadosCrudo.every(e => e.cubierto),
+                pedidoCubierto: estadosCrudo.every(e => e.cubierto),
+            }] : [];
             return ordenarMedidasMovil([...productos, ...crudos]);
         },
         medidaMovilSeleccionada() {
