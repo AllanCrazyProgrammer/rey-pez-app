@@ -25,8 +25,16 @@ export function totalTarasReportadas(producto) {
 export function estadoMedidaProducto(producto, individuales, agrupados, referencia = producto.pedidoReferencia) {
   const pedido = estadoPedido(referencia, agrupados);
   if (individuales.totalTaras > 0) {
-    const cubierto = individuales.totalTaras === totalTarasReportadas(producto);
-    return { ...pedido, pedidoCubierto: pedido.cubierto, cubierto, etiqueta: cubierto ? 'Reportado' : 'Falta reportar' };
+    const reportado = individuales.totalTaras === totalTarasReportadas(producto);
+    if (reportado) {
+      // Todo lo pesado hasta ahora ya está reportado.
+      if (pedido.cubierto) {
+        return { ...pedido, pedidoCubierto: true, cubierto: true, etiqueta: 'Reportado' };
+      }
+      // Pedido aún incompleto: sigue pendiente, pero lo pesado ya está reportado.
+      return { ...pedido, pedidoCubierto: false, cubierto: false, etiqueta: 'Pendiente · Reportado' };
+    }
+    return { ...pedido, pedidoCubierto: pedido.cubierto, cubierto: false, etiqueta: 'Falta reportar' };
   }
   return { ...pedido, etiqueta: pedido.cubierto ? 'Completo' : pedido.tieneReferencia ? 'Pendiente' : 'Sin referencia' };
 }

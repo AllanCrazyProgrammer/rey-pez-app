@@ -1,12 +1,14 @@
 // Chips de 'Medidas del pedido' (editor móvil de embarques).
 // Grupos: 'pendiente' (rojo) → 'falta-reportar' (amarillo: kilos/taras del pedido
-// completos pero faltan taras por reportar) → 'hecho' (verde).
+// completos pero faltan taras por reportar, o pedido incompleto con lo pesado
+// hasta ahora ya reportado) → 'hecho' (verde).
 // 'Falta reportar' con el pedido aún incompleto sigue siendo pendiente.
 export const ORDEN_GRUPOS_MEDIDA = ['pendiente', 'falta-reportar', 'hecho'];
 
 export function grupoMedidaMovil(opcion) {
   if (opcion && opcion.cubierto) return 'hecho';
   if (opcion && opcion.etiqueta === 'Falta reportar' && opcion.pedidoCubierto) return 'falta-reportar';
+  if (opcion && opcion.etiqueta === 'Pendiente · Reportado') return 'falta-reportar';
   return 'pendiente';
 }
 
