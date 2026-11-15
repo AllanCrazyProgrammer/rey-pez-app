@@ -247,7 +247,9 @@
                     </div>
                 </div>
                 <div v-for="(tara, taraIndex) in producto.taras" :key="producto.pesadasIds[taraIndex]" class="input-group">
-                    <input v-model.number="producto.taras[taraIndex]" v-campo-colaborativo="presenciaCampo('taras', producto.pesadasIds[taraIndex])" type="tel" class="form-control tara-input"
+                    <!-- type="number" + inputmode="decimal": el teclado numérico trae
+                         la tecla de menos, así un valor negativo resta del total. -->
+                    <input v-model.number="producto.taras[taraIndex]" v-campo-colaborativo="presenciaCampo('taras', producto.pesadasIds[taraIndex])" type="number" inputmode="decimal" class="form-control tara-input"
                         ref="taraInputs" :aria-invalid="totalesPesadas.invalidos.taras.includes(taraIndex)"
                         placeholder="Tara" :size="String(producto.taras[taraIndex] || '').length || 1"
                         @focus="$event.target.select()"
@@ -265,7 +267,7 @@
                 </div>
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="producto.tarasExtraIds[taraExtraIndex]"
                     class="input-group">
-                    <input v-model.number="producto.tarasExtra[taraExtraIndex]" v-campo-colaborativo="presenciaCampo('tarasExtra', producto.tarasExtraIds[taraExtraIndex])" type="tel"
+                    <input v-model.number="producto.tarasExtra[taraExtraIndex]" v-campo-colaborativo="presenciaCampo('tarasExtra', producto.tarasExtraIds[taraExtraIndex])" type="number" inputmode="decimal"
                         class="form-control tara-input" placeholder="Tara Extra"
                         ref="taraExtraInputs" :aria-invalid="totalesPesadas.invalidos.tarasExtra.includes(taraExtraIndex)"
                         :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
@@ -284,7 +286,7 @@
             <div class="columna">
                 <h5>Kilos</h5>
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="producto.pesadasIds[kiloIndex]" class="input-group">
-                    <input v-model.number="producto.kilos[kiloIndex]" v-campo-colaborativo="presenciaCampo('kilos', producto.pesadasIds[kiloIndex])" type="tel" class="form-control kilo-input"
+                    <input v-model.number="producto.kilos[kiloIndex]" v-campo-colaborativo="presenciaCampo('kilos', producto.pesadasIds[kiloIndex])" type="number" inputmode="decimal" class="form-control kilo-input"
                         ref="kiloInputs" :aria-invalid="totalesPesadas.invalidos.kilos.includes(kiloIndex)"
                         placeholder="Kilos" :size="String(producto.kilos[kiloIndex] || '').length || 1"
                         @focus="$event.target.select()"
