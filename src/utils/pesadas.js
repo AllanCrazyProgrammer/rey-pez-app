@@ -1,17 +1,23 @@
 // Money is calculated with integer tenths/hundredths, never rounded per cell.
-export function decimalPesada(value, allowEmpty = true) {
+// Los kilos admiten negativos (allowNegative): un valor negativo resta del total.
+// Los precios no: siempre deben ser positivos o cero.
+export function decimalPesada(value, allowEmpty = true, allowNegative = false) {
   const text = String(value == null ? '' : value).trim().replace(',', '.');
   if (!text && allowEmpty) return null;
-  if (!/^(?:\d+(?:\.\d)?|\.\d)$/.test(text)) {
-    throw new Error('Usa un número positivo o cero, con máximo un decimal.');
+  const pattern = allowNegative ? /^-?(?:\d+(?:\.\d)?|\.\d)$/ : /^(?:\d+(?:\.\d)?|\.\d)$/;
+  if (!pattern.test(text)) {
+    throw new Error(allowNegative
+      ? 'Usa un número con máximo un decimal.'
+      : 'Usa un número positivo o cero, con máximo un decimal.');
   }
-  const [wholeText, fraction = '0'] = text.split('.');
+  const negativo = text.startsWith('-');
+  const [wholeText, fraction = '0'] = text.replace('-', '').split('.');
   const whole = wholeText || '0';
   const tenths = Number(whole) * 10 + Number(fraction);
   if (!Number.isSafeInteger(tenths) || tenths > 10000000) {
     throw new Error('El valor máximo es 1000000.');
   }
-  return tenths / 10;
+  return (negativo ? -1 : 1) * (tenths / 10);
 }
 
 export const formatoPesada = value => new Intl.NumberFormat('es-MX', {

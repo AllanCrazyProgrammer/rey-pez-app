@@ -92,7 +92,7 @@ export default {
     totales() { return Object.fromEntries(this.resumen.personas.map(row => [row.id, row])); },
     erroresLista() { return Object.values(this.errores); },
     pagosNegativos() { return this.resumen.personas.some(row => row.pago < 0); },
-    filasSinNombre() { return this.personas.some(row => !row.nombre.trim() && this.columnas.some(col => this.datos.pesos?.[row.id]?.[col.id] > 0)); },
+    filasSinNombre() { return this.personas.some(row => !row.nombre.trim() && this.columnas.some(col => { const v = this.datos.pesos?.[row.id]?.[col.id]; return v != null && v !== 0; })); },
     puedeImprimir() { return !this.datosGuardados.eliminado && this.resumen.banos > 0 && !this.pagosNegativos && !this.filasSinNombre && !this.erroresLista.length; },
     estadoTexto() {
       if (this.errorCarga || this.estado.error) return 'Error de sincronización';
@@ -212,7 +212,7 @@ export default {
     editar({ path, value, tipo }) {
       this.$set(this.borradores, path, value);
       try {
-        const parsed = tipo === 'texto' ? value.trim() : decimalPesada(value, tipo === 'kilos');
+        const parsed = tipo === 'texto' ? value.trim() : decimalPesada(value, tipo === 'kilos', tipo === 'kilos');
         this.$delete(this.errores, path);
         this.guardarCampos({ [path]: parsed });
       } catch (error) { this.$set(this.errores, path, error.message); }
