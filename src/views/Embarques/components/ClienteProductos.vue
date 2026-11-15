@@ -122,7 +122,7 @@
                 <button type="button" class="medida-movil-chip" :aria-pressed="!medidaMovilSeleccionada ? 'true' : 'false'"
                     @click="medidaMovilActiva = null">Todas</button>
                 <button v-for="opcion in opcionesMedidasMovil" :key="opcion.clave" type="button" class="medida-movil-chip"
-                    :class="{ hecho: 'medida-cubierta', 'falta-reportar': 'medida-falta-reportar', pendiente: 'medida-pendiente' }[opcion.grupo]"
+                    :class="{ hecho: 'medida-cubierta', 'falta-reportar': 'medida-falta-reportar', incompleto: 'medida-incompleto', pendiente: 'medida-pendiente' }[opcion.grupo]"
                     :aria-pressed="medidaMovilActiva === opcion.clave ? 'true' : 'false'" @click="medidaMovilActiva = opcion.clave">
                     <span>{{ opcion.medida }}</span>
                     <small class="medida-tipo" :class="'tipo-' + opcion.categoria">{{ opcion.tipo }}</small>
@@ -955,7 +955,7 @@ button:disabled {
 }
 .menu-cliente-toggle { display: none; }
 /* Medidas del pedido: visibles también en escritorio (antes solo en móvil).
-   Mismo orden por prioridad/completado que en móvil (pendiente → falta reportar → hecho)
+   Mismo orden por prioridad/completado que en móvil (pendiente → incompleto → falta reportar → hecho)
    y al tocar una medida se filtra para mostrar solo esa, igual que en móvil. */
 .medidas-movil { display: block; min-width: 0; margin: 10px 18px 0; padding: 12px; border: 1px solid rgba(148,163,184,.18); border-radius: 12px; background: #101b2d; color: #e2e8f0; }
 .medidas-movil-titulo { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
@@ -971,6 +971,8 @@ button:disabled {
 .medida-cubierta .medida-estado { color: #86efac; }
 .medida-movil-chip.medida-falta-reportar { border: 2px solid #facc15; }
 .medida-falta-reportar .medida-estado { color: #fde047; }
+.medida-movil-chip.medida-incompleto { border: 2px solid #fb923c; }
+.medida-incompleto .medida-estado { color: #fdba74; }
 .medida-movil-chip .medida-tipo { display: inline-block; padding: 2px 6px; margin: 4px 0; border-radius: 5px; font-weight: 700; }
 .medida-tipo.tipo-sin-agua { color: #e9d5ff; background: #581c87; }
 .medida-tipo.tipo-con-agua { color: #bae6fd; background: #075985; }
