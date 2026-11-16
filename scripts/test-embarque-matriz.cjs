@@ -206,6 +206,7 @@ function partirHost(valor) {
     if (id === '@/constants/clientesConfig') return compilar('src/constants/clientesConfig.js', () => { throw new Error('clientesConfig'); });
     if (id === '@/utils/embarqueFusion') return loadSource('src/utils/embarqueFusion.js');
     if (id === '@/utils/embarqueParche') return loadSource('src/utils/embarqueParche.js');
+    if (id === '@/utils/cargaEmbarque') return loadSource('src/utils/cargaEmbarque.js');
     throw new Error('Carga: ' + id);
   }, {
     navigator: { onLine: true },
