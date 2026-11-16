@@ -73,6 +73,15 @@
         :inventario-listo="inventarioListo"
         @continuar-impresion="imprimirReporte"
       />
+      <MovimientosMedida
+        v-if="movimientosAbiertos"
+        :titulo="movimientosAbiertos.titulo"
+        :medida-base="movimientosAbiertos.medidaBase"
+        :variante="movimientosAbiertos.variante"
+        :proveedor-maquila="movimientosAbiertos.proveedorMaquila"
+        :sacadas="sacadasHistorial"
+        @cerrar="cerrarMovimientos"
+      />
 
       <div class="filters">
         <label class="input-wrap">
@@ -102,7 +111,7 @@
               <span class="expandir-icono">{{ medidaExpandida === medidaKey ? '▾' : '▸' }}</span>
             </h2>
             <div class="resumen-medida" @click="alternarMedida(medidaKey)">
-              <span>Total: <strong>{{ formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0)) }} kg</strong> · {{ Object.values(datos.items).filter(item => item.kilos > 0).length }} lotes</span>
+              <span>Total: <button type="button" class="kilos-movimientos" @click.stop="abrirMovimientos(medidaKey, null, true)" :aria-label="'Ver entradas y salidas de ' + medidaKey"><strong>{{ formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0)) }} kg</strong></button> · {{ Object.values(datos.items).filter(item => item.kilos > 0).length }} lotes</span>
               <span class="resumen-hint">{{ medidaExpandida === medidaKey ? 'Toca para ocultar' : 'Toca para ver los lotes' }}</span>
             </div>
             <table class="medida-table">
@@ -124,14 +133,14 @@
                   </td>
                   <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
                     <td v-if="tieneCuarto(datos.items)" class="cuarto-cell">{{ item.cuartoFrio || '-' }}</td>
-                  <td class="kilos-cell">{{ formatNumber(item.kilos) }}</td>
+                  <td class="kilos-cell"><button type="button" class="kilos-movimientos" @click="abrirMovimientos(medidaKey, item.medida, true)" :aria-label="'Ver entradas y salidas de ' + item.medida">{{ formatNumber(item.kilos) }}</button></td>
                 </tr>
                 <tr class="total-row">
                   <td><strong>Total {{ medidaKey }}</strong></td>
                   <td v-if="tienePrecio"></td>
                   <td v-if="tieneCuarto(datos.items)"></td>
                   <td class="kilos-cell">
-                    <strong>{{ formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
+                    <button type="button" class="kilos-movimientos" @click="abrirMovimientos(medidaKey, null, true)" :aria-label="'Ver entradas y salidas de ' + medidaKey"><strong>{{ formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0)) }}</strong></button>
                   </td>
                 </tr>
               </tbody>
@@ -171,7 +180,7 @@
               </label>
             </h2>
             <div class="resumen-medida" @click="alternarMedida(medidaKey)">
-              <span>Total: <strong>{{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</strong> · {{ Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.filter(item => item.kilos > 0).length, 0) }} lotes</span>
+              <span>Total: <button type="button" class="kilos-movimientos" @click.stop="abrirMovimientos(medidaKey)" :aria-label="'Ver entradas y salidas de ' + medidaKey"><strong>{{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</strong></button> · {{ Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.filter(item => item.kilos > 0).length, 0) }} lotes</span>
               <span class="resumen-hint">{{ medidaExpandida === medidaKey ? 'Toca para ocultar' : 'Toca para ver los lotes' }}</span>
             </div>
             
@@ -202,7 +211,7 @@
                     </td>
                     <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
                     <td v-if="tieneCuarto(proveedorData.items)" class="cuarto-cell">{{ medida.cuartoFrio || '-' }}</td>
-                    <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
+                    <td class="kilos-cell"><button type="button" class="kilos-movimientos" @click="abrirMovimientos(medidaKey, medida.medida)" :aria-label="'Ver entradas y salidas de ' + medida.medida">{{ formatNumber(medida.kilos) }}</button></td>
                   </tr>
                   <tr class="subtotal-row">
                     <td><strong>Total {{ proveedor }}</strong></td>
@@ -219,7 +228,7 @@
             <!-- Total general de la medida -->
             <div class="total-medida">
               <div class="total-medida-kilos">
-                <strong>Total {{ medidaKey }}: {{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</strong>
+                <strong>Total {{ medidaKey }}: <button type="button" class="kilos-movimientos" @click="abrirMovimientos(medidaKey)" :aria-label="'Ver entradas y salidas de ' + medidaKey">{{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</button></strong>
               </div>
               <div v-if="tienePrecio && Object.values(datos.proveedores).some(prov => prov.items.some(item => item.precio))" class="total-medida-valor">
                 <strong>Valor Total: ${{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => 
@@ -361,13 +370,15 @@ import moment from 'moment';
 import { formatearFecha, formatearFechaCorta, formatNumber } from '@/utils/formatters';
 import FondoMatrix from '@/components/layout/FondoMatrix.vue';
 import AlertasExistenciasLimpios from '@/components/Existencias/AlertasExistenciasLimpios.vue';
+import MovimientosMedida from '@/components/Existencias/MovimientosMedida.vue';
 
 export default {
   name: 'Existencias',
   props: { soloInventario: { type: Boolean, default: false } },
   components: {
     FondoMatrix,
-    AlertasExistenciasLimpios
+    AlertasExistenciasLimpios,
+    MovimientosMedida
   },
   setup() {
     const existencias = ref({});
@@ -389,6 +400,24 @@ export default {
     const medidaExpandida = ref(null);
     const alternarMedida = (key) => {
       medidaExpandida.value = medidaExpandida.value === key ? null : key;
+    };
+
+    // Historial crudo de sacadas (entradas y salidas por día) para la vista de
+    // movimientos por medida: se guarda al cargar existencias, sin otra lectura.
+    const sacadasHistorial = ref([]);
+    // null = modal de movimientos cerrado; si no, { titulo, medidaBase,
+    // variante, proveedorMaquila } de la medida a mostrar.
+    const movimientosAbiertos = ref(null);
+    const abrirMovimientos = (medidaKey, variante = null, esMaquila = false) => {
+      movimientosAbiertos.value = {
+        titulo: variante || medidaKey,
+        medidaBase: esMaquila ? '' : medidaKey,
+        variante: variante || '',
+        proveedorMaquila: esMaquila ? medidaKey : ''
+      };
+    };
+    const cerrarMovimientos = () => {
+      movimientosAbiertos.value = null;
     };
 
     // Precio de facturación por medida: editable, se guarda en Firestore y
@@ -587,6 +616,7 @@ export default {
 
       if (version === versionCarga) {
         existencias.value = newExistencias;
+        sacadasHistorial.value = sacadasOrdenadas;
         tienePrecio.value = hayPrecios;
       }
     };
@@ -2167,6 +2197,10 @@ export default {
       formatearFechaCorta,
       medidaExpandida,
       alternarMedida,
+      sacadasHistorial,
+      movimientosAbiertos,
+      abrirMovimientos,
+      cerrarMovimientos,
       imprimirReporte,
       salidasDiaSiguiente,
       fechaDiaSiguiente,
@@ -2189,6 +2223,10 @@ export default {
 .medida-alerta-button span { font-size: 12px; margin-left: 5px; }
 .medida-alerta-button:hover { background: rgba(0, 255, 102, .12); }
 .medida-alerta-button:focus-visible { outline: 2px solid #00e5ff; outline-offset: 3px; }
+/* Kilos que abren los movimientos (entradas y salidas) de la medida. */
+.kilos-movimientos { background: transparent; border: 0; border-bottom: 1px dashed currentColor; border-radius: 3px; color: inherit; font: inherit; text-align: inherit; padding: 2px; min-height: 30px; cursor: pointer; }
+.kilos-movimientos:hover { background: rgba(0, 255, 102, .12); }
+.kilos-movimientos:focus-visible { outline: 2px solid #00e5ff; outline-offset: 3px; }
 .error-inventario { color: #ffbdac; }
 .print-button:disabled { opacity: .5; cursor: wait; }
 
