@@ -1,5 +1,6 @@
 import { collection, doc, FieldPath, runTransaction, serverTimestamp } from 'firebase/firestore';
-import { equivalentes, integrarCamposEnBase, leerCampo, MENSAJE_CONFLICTO_EMBARQUE, planearEscritura } from '@/utils/embarqueRevision';
+import { CAMPOS_EDITOR, equivalentes, integrarCamposEnBase, leerCampo, MENSAJE_CONFLICTO_EMBARQUE, planearEscritura } from '@/utils/embarqueRevision';
+import { fusionarDocEditor } from '@/utils/embarqueFusion';
 
 function crearErrorConflicto({ code, mensaje, camposEnConflicto, revRemota, camposPendientes }) {
   const error = new Error(mensaje || MENSAJE_CONFLICTO_EMBARQUE);
@@ -174,6 +175,105 @@ async function escribirUnaVez(db, embarqueId, opciones) {
 
   if (conflicto) throw crearErrorConflicto(conflicto);
   return resultado;
+}
+
+const CODIGOS_CONTENCION = new Set(['aborted', 'failed-precondition', 'already-exists']);
+
+/** Otro editor confirmó entre nuestra lectura y nuestra escritura. */
+export function esContencionFirestore(error) {
+  return Boolean(error && CODIGOS_CONTENCION.has(error.code));
+}
+
+const pausa = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Subida del editor con fusión DENTRO de la transacción.
+ *
+ * Lee el documento, combina de tres vías (base, local, servidor) y escribe el
+ * resultado en la misma transacción. Si otro editor confirma entre la lectura
+ * y la escritura, se vuelve a leer y a combinar de inmediato con el estado
+ * local más reciente: no se sale a esperar otro ciclo ni se abandona.
+ *
+ * @param {Function} opciones.capturar Devuelve `{ base, local, revBase,
+ *   respaldar }` con el estado vigente; se llama en cada intento. Si lanza,
+ *   la subida se cancela.
+ * @returns {Promise<{escrito:boolean, creado?:boolean, rev:number,
+ *   documento:Object, fusion:Object, captura:Object, remotoIgualABase:boolean}>}
+ */
+export async function escribirEdicionFusionada(db, embarqueId, opciones = {}) {
+  const { capturar, meta = {}, intentos = 8 } = opciones;
+  const embarqueRef = doc(db, 'embarques', embarqueId);
+  for (let intento = 0; ; intento += 1) {
+    const captura = capturar();
+    let salida = null;
+    try {
+      await runTransaction(db, async (transaction) => {
+        salida = null;
+        const snapshot = await transaction.get(embarqueRef);
+        if (!snapshot.exists()) {
+          if ((Number(captura.revBase) || 0) > 0) {
+            const error = new Error('El embarque fue eliminado en otro equipo. La copia local se conserva; no se volverá a crear automáticamente.');
+            error.code = 'embarque-eliminado';
+            throw error;
+          }
+          transaction.set(embarqueRef, { ...captura.local, ...meta, rev: 1 });
+          salida = {
+            creado: true, escrito: true, rev: 1, remotoIgualABase: true,
+            documento: { ...captura.local, rev: 1 },
+            fusion: { campos: captura.local, cambios: captura.local, omitidas: 0, conflictos: [] },
+            captura,
+          };
+          return;
+        }
+
+        const remoto = snapshot.data();
+        const revRemota = Number(remoto.rev) || 0;
+        const fusion = fusionarDocEditor({ base: captura.base, local: captura.local, remoto });
+        // Nadie más tocó los campos del editor: lo que hay en pantalla ya es
+        // exactamente lo que queda en el servidor.
+        const remotoIgualABase = Boolean(captura.base) &&
+          CAMPOS_EDITOR.every(clave => equivalentes(leerCampo(captura.base, clave), leerCampo(remoto, clave)));
+
+        // Respaldo solo cuando de verdad se descartó algo local (la misma
+        // celda editada por dos personas). Antes se escribía un respaldo
+        // completo en cada cruce de guardados, hubiera o no pérdida.
+        const respaldado = Boolean(fusion.omitidas && captura.respaldar);
+        if (respaldado) {
+          transaction.set(doc(collection(db, 'respaldos_emergencia')), {
+            embarqueOriginalId: embarqueId,
+            datosOriginales: captura.completo || captura.local,
+            fechaRespaldo: serverTimestamp(),
+            razonRespaldo: 'cambios_locales_antes_de_combinar',
+            camposEnConflicto: fusion.conflictos.slice(0, 50),
+            tipoRespaldo: 'emergencia',
+            version: '1.0',
+          });
+        }
+
+        if (!Object.keys(fusion.cambios).length) {
+          salida = { escrito: false, rev: revRemota, documento: remoto, fusion, captura, remotoIgualABase, respaldado };
+          return;
+        }
+
+        // JSON: sin `undefined` (Firestore los rechaza).
+        const cambios = JSON.parse(JSON.stringify(fusion.cambios));
+        transaction.update(embarqueRef, { ...cambios, ...meta, rev: revRemota + 1 });
+        salida = {
+          escrito: true, rev: revRemota + 1, remotoIgualABase, respaldado,
+          documento: { ...remoto, ...cambios, rev: revRemota + 1 },
+          fusion, captura,
+        };
+      }, { maxAttempts: 1 });
+      salida.choques = intento;
+      return salida;
+    } catch (error) {
+      if (!esContencionFirestore(error) || intento + 1 >= intentos) throw error;
+      // Un choque significa que otro editor SÍ confirmó: no hay bucle que
+      // romper, así que se reintenta enseguida. Solo si los choques se
+      // acumulan se espera un poco, de forma desigual, para repartir turnos.
+      if (intento >= 2) await pausa(Math.floor(Math.random() * 60 * (intento - 1)));
+    }
+  }
 }
 
 const colas = new Map();

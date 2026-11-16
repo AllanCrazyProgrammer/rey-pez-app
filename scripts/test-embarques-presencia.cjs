@@ -108,7 +108,7 @@ test('la captura continua no aplaza la subida, y el backoff explícito sí reemp
   const programar=embarqueSyncMixin.methods.programarSubidaEnVivo.bind(vm);
   for(let i=0;i<50;i++)programar();
   assert.equal(timers.size,1); assert.equal(id,1);
-  assert.ok(timers.get(1).ms>=500 && timers.get(1).ms<650);
+  assert.ok(timers.get(1).ms>=400 && timers.get(1).ms<500);
   timers.get(1).fn();timers.delete(1);assert.equal(subidas,1);
   programar();programar(5000);programar();
   assert.equal(timers.size,1);assert.equal(timers.get(vm._timerSubidaEnVivo).ms,5000);

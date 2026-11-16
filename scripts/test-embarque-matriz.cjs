@@ -75,6 +75,7 @@ function partirHost(valor) {
   const escritura = compilar('src/services/embarqueEscritura.js', (id) => {
     if (id === 'firebase/firestore') return firestore;
     if (id === '@/utils/embarqueRevision') return revision;
+    if (id === '@/utils/embarqueFusion') return loadSource('src/utils/embarqueFusion.js');
     throw new Error(id);
   });
   const puenteOffline = {
@@ -93,6 +94,7 @@ function partirHost(valor) {
     if (id === '@/utils/dateUtils') return { normalizarFechaISO: (v) => v, normalizarFechaValor: (v) => v, obtenerFechaActualISO: () => '2026-10-12' };
     if (id === '@/constants/embarque') return { crearNuevoProducto: () => ({}) };
     if (id === '@/utils/embarqueContenido') return { embarqueTieneContenidoOperativoEstado: () => true };
+    if (id === '@/services/embarqueEscritura') return escritura;
     throw new Error('Mixin: ' + id);
   }, { navigator: { onLine: true } });
 
@@ -202,6 +204,8 @@ function partirHost(valor) {
     if (id === '@/utils/embarqueContenido') return contenido;
     if (id === '@/utils/embarqueRevision') return revision;
     if (id === '@/constants/clientesConfig') return compilar('src/constants/clientesConfig.js', () => { throw new Error('clientesConfig'); });
+    if (id === '@/utils/embarqueFusion') return loadSource('src/utils/embarqueFusion.js');
+    if (id === '@/utils/embarqueParche') return loadSource('src/utils/embarqueParche.js');
     throw new Error('Carga: ' + id);
   }, {
     navigator: { onLine: true },
@@ -227,6 +231,7 @@ function partirHost(valor) {
     if (id === '@/utils/embarqueOfflineSnapshot') return snapshotMod;
     if (id === '@/utils/embarqueRevision') return revision;
     if (id === '@/stores/auth') return { useAuthStore: () => ({ isAuthenticated: true, userId: 'editor', user: { username: 'Editor' } }) };
+    if (id === '@/utils/embarqueFusion') return loadSource('src/utils/embarqueFusion.js');
     throw new Error('Sync: ' + id);
   }, { navigator: { onLine: true }, window: { dispatchEvent() {}, addEventListener() {} } });
 
@@ -251,6 +256,9 @@ function partirHost(valor) {
     Object.assign(ctx, mixin.embarqueSyncMixin.methods);
     Object.assign(ctx, embarqueUndoMixin.methods);
     if (opciones.aplicarReal) Object.assign(ctx, carga.embarqueCargaMixin.methods);
+    // Esta matriz prueba la escritura, no la escucha en vivo (eso lo cubre
+    // test-embarques-colaboracion-motor.cjs): sin listener que quede abierto.
+    ctx.suscribirEmbarque = () => {};
     ctx.prepararDatosEmbarque = () => datos;
     ctx.programarSubidaEnVivo = () => {};
     if (!opciones.aplicarReal) {

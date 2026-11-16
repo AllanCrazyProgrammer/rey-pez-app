@@ -14,6 +14,13 @@ export const embarqueUndoMixin = {
     informarConflictoEdicion(mensaje) {
       this.mensajeHistorial = mensaje;
     },
+    // Dos personas cambiaron el mismo campo: quedó el valor ya confirmado.
+    avisarCamposEnConflicto(cantidad) {
+      if (!cantidad) return;
+      this.informarConflictoEdicion(cantidad === 1
+        ? 'Hubo un conflicto de edición: otra persona cambió 1 campo que también editaste y se conservó su valor.'
+        : 'Hubo un conflicto de edición: otra persona cambió ' + cantidad + ' campos que también editaste y se conservaron sus valores.');
+    },
     estadoHistorial(embarque = this.embarque) {
       return identificarEstado({ ...embarque, clienteCrudos: this.clienteCrudos || {} }, this.$set);
     },

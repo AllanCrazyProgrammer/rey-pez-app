@@ -22,10 +22,22 @@ const ui = new Set(['showSuggestions', 'isEditing', 'isNew', 'nombreCliente']);
 export function identificarProducto(p, set = poner) {
   for (const lista of LISTAS_PRODUCTO) {
     const largo = Math.max(...lista.campos.map(k => (p[k] || []).length));
+    const legado = i => `legacy:${p.id}:${lista.ids}:${i}`;
     if (!Array.isArray(p[lista.ids])) {
-      set(p, lista.ids, Array.from({ length: largo }, (_, i) => `legacy:${p.id}:${lista.ids}:${i}`));
+      set(p, lista.ids, Array.from({ length: largo }, (_, i) => legado(i)));
     } else if (p[lista.ids].length !== largo || new Set(p[lista.ids]).size !== largo) {
-      throw new Error('Las identidades de las pesadas no coinciden con sus filas. Recarga antes de guardar.');
+      // Un documento escrito por una versión vieja (o a medias) puede traer
+      // filas sin identidad. Antes esto lanzaba un error y el editor dejaba de
+      // recibir y de subir cambios; ahora se repara de forma determinista:
+      // todos los lectores asignan la misma identidad a la misma posición.
+      const vistos = new Set();
+      const reparadas = Array.from({ length: largo }, (_, i) => {
+        const actual = p[lista.ids][i];
+        const id = actual !== undefined && actual !== null && !vistos.has(actual) ? actual : legado(i);
+        vistos.add(id);
+        return id;
+      });
+      set(p, lista.ids, reparadas);
     }
   }
   return p;
@@ -164,6 +176,6 @@ export function fusionarEdicion(base, local, remoto) {
   });
   estado.productos.forEach(p => { if (estado.productosEliminados[p.id]) estado.productosEliminados[p.id] = null; });
   // Un cambio ya presente en remoto es un eco, no un conflicto.
-  const omitidas = ops.filter(op => !resultado.aplicadas.includes(op) && !iguales(leerRuta(c, op.ruta), op.despues)).length;
-  return { estado, omitidas };
+  const rechazadas = ops.filter(op => !resultado.aplicadas.includes(op) && !iguales(leerRuta(c, op.ruta), op.despues));
+  return { estado, omitidas: rechazadas.length, aplicadas: resultado.aplicadas, rechazadas };
 }

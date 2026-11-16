@@ -14,6 +14,15 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const qaService = read('src/services/EmbarquesOfflineService.js');
 const qaSnapshot = read('src/utils/embarqueOfflineSnapshot.js').replace(/import .*;\n/, 'const normalizarFechaISO = value => String(value).slice(0, 10);\n');
 const qaRevision = read('src/utils/embarqueRevision.js');
+// La cola fusiona pendientes con el mismo motor que el editor.
+const qaContenido = read('src/utils/embarqueContenido.js');
+const qaColaboracion = read('src/utils/embarqueColaboracion.js')
+  .replace(/import \{ v4 as uuid \} from 'uuid';/, 'const uuid = () => crypto.randomUUID();');
+const qaFusion = read('src/utils/embarqueFusion.js')
+  .replace("from './embarqueColaboracion'", "from './colaboracion.js'")
+  .replace("from './embarqueRevision'", "from './revision.js'")
+  .replace("from './embarqueContenido'", "from './contenido.js'")
+  .replace(/import \{ normalizarFechaISO \} from '.\/dateUtils';/, 'const normalizarFechaISO = value => (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10);');
 const qaSync = read('src/services/EmbarquesSync.js')
   .replace(/import Vue .*;\n/, 'const Vue = { observable: value => value };\n')
   .replace(/import \{ ([^}]+) \} from 'firebase\/firestore';/, 'const { $1 } = window.cloud;')
@@ -21,10 +30,11 @@ const qaSync = read('src/services/EmbarquesSync.js')
   .replace("'./EmbarquesOfflineService'", "'./service.js'")
   .replace("'@/utils/embarqueOfflineSnapshot'", "'./snapshot.js'")
   .replace("from '@/utils/embarqueRevision'", "from './revision.js'")
+  .replace("from '@/utils/embarqueFusion'", "from './fusion.js'")
   .replace(/import \{ useAuthStore \}.*;/, "const useAuthStore = () => ({isAuthenticated:true,userId:'qa',user:{username:'qa'}});");
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
-  const sources = { '/qa/service.js': qaService, '/qa/snapshot.js': qaSnapshot, '/qa/sync.js': qaSync, '/qa/revision.js': qaRevision, '/qa/blank': '<html></html>' };
+  const sources = { '/qa/service.js': qaService, '/qa/snapshot.js': qaSnapshot, '/qa/sync.js': qaSync, '/qa/revision.js': qaRevision, '/qa/fusion.js': qaFusion, '/qa/colaboracion.js': qaColaboracion, '/qa/contenido.js': qaContenido, '/qa/blank': '<html></html>' };
   const candidate = path.join(root, 'dist', url);
   const file = fs.existsSync(candidate) && fs.statSync(candidate).isFile() ? candidate : path.join(root, 'dist/index.html');
   res.setHeader('Content-Type', url.endsWith('.js') ? 'application/javascript' : url.endsWith('.css') ? 'text/css' : url.endsWith('.webmanifest') ? 'application/manifest+json' : url.endsWith('.png') ? 'image/png' : 'text/html');

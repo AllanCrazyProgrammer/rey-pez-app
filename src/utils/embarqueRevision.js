@@ -97,6 +97,19 @@ export function esEcoDeRevisionLocal({ revRemota, revBase, inicializando = false
 }
 
 /**
+ * El editor ignora un snapshot cuya revisión ya adoptó: su propio eco, uno
+ * repetido o uno atrasado (el canal de escucha puede entregar la revisión N
+ * después de que la subida de esta pantalla confirmó la N+1). Aplicar uno
+ * atrasado haría retroceder lo recién capturado. Un documento sin `rev`
+ * (escrito por una versión vieja) siempre se aplica.
+ */
+export function esSnapshotYaAdoptado({ revRemota, revBase, inicializando = false } = {}) {
+  const remota = Number(revRemota) || 0;
+  const base = Number(revBase) || 0;
+  return !inicializando && remota !== 0 && remota <= base;
+}
+
+/**
  * `kilosCrudos.<medida>`: todo lo que va después del primer punto es el
  * nombre de la medida, aunque tenga puntos (`7.5`). No se parte en segmentos.
  */

@@ -4,6 +4,7 @@ import { db } from '@/firebase';
 import offline from './EmbarquesOfflineService';
 import { snapshotEmbarque } from '@/utils/embarqueOfflineSnapshot';
 import { quitarCamposAjenosAlEditor, planearEscritura, seleccionarCampos, CAMPOS_EDITOR } from '@/utils/embarqueRevision';
+import { fusionarDocEditor } from '@/utils/embarqueFusion';
 import { useAuthStore } from '@/stores/auth';
 
 export const estadoOffline = Vue.observable({
@@ -103,8 +104,14 @@ class EmbarquesSync {
             const remote = await transaction.get(reference);
             const remoteData = remote.exists() ? remote.data() : null;
             const baseRev = Number(record.baseRev ?? record.docData?.rev) || 0;
-            if ((remoteData && (Number(remoteData.rev) || 0) !== baseRev) ||
-                (!remoteData && baseRev > 0)) {
+            // Pendientes del editor con su base guardada: se fusionan de tres
+            // vías igual que en el editor abierto, aunque el servidor haya
+            // avanzado. Antes cualquier cambio ajeno los dejaba marcados como
+            // "conflicto" y no subían hasta reabrir el embarque en este equipo.
+            const puedeFusionar = Boolean(remoteData && !record.deleted && record.docData &&
+              record.baseCamposEditor && !(record.camposPendientesRendimientos || []).length);
+            if (!puedeFusionar && ((remoteData && (Number(remoteData.rev) || 0) !== baseRev) ||
+                (!remoteData && baseRev > 0))) {
               const error = new Error('Este embarque cambió en otro equipo. Ábrelo para revisar y combinar los cambios.');
               error.code = 'offline-conflict';
               throw error;
@@ -133,6 +140,42 @@ class EmbarquesSync {
               });
               confirmed.baseRev = baseRev + 1;
               confirmed.baseCamposEditor = seleccionarCampos(record.docData, CAMPOS_EDITOR);
+              confirmed.pendingEditor = false;
+              return;
+            }
+            if (puedeFusionar) {
+              const revRemota = Number(remoteData.rev) || 0;
+              const fusion = fusionarDocEditor({
+                base: record.baseCamposEditor,
+                local: seleccionarCampos(record.docData, CAMPOS_EDITOR),
+                remoto: remoteData,
+              });
+              if (!Object.keys(fusion.cambios).length) {
+                confirmed = snapshotEmbarque(record.id, remoteData);
+                confirmed.baseRev = revRemota;
+                confirmed.baseCamposEditor = seleccionarCampos(remoteData, CAMPOS_EDITOR);
+                confirmed.pendingEditor = false;
+                return;
+              }
+              const cambios = JSON.parse(JSON.stringify(fusion.cambios));
+              transaction.update(reference, {
+                ...cambios,
+                rev: revRemota + 1,
+                ultimaEdicion: { userId: auth.userId, username: auth.user.username, timestamp: serverTimestamp() }
+              });
+              if (fusion.omitidas) {
+                // Nadie está viendo la pantalla para leer el aviso: lo local que
+                // perdió contra un valor ya confirmado queda respaldado.
+                transaction.set(doc(collection(db, 'respaldos_emergencia')), {
+                  embarqueOriginalId: record.id, datosOriginales: record.docData, fechaRespaldo: serverTimestamp(),
+                  razonRespaldo: 'cambios_locales_antes_de_combinar', camposEnConflicto: fusion.conflictos.slice(0, 50),
+                  tipoRespaldo: 'emergencia', version: '1.0'
+                });
+              }
+              const combinado = { ...remoteData, ...cambios, rev: revRemota + 1 };
+              confirmed = snapshotEmbarque(record.id, { ...combinado, ultimaEdicion: { userId: auth.userId, username: auth.user.username } });
+              confirmed.baseRev = revRemota + 1;
+              confirmed.baseCamposEditor = seleccionarCampos(combinado, CAMPOS_EDITOR);
               confirmed.pendingEditor = false;
               return;
             }

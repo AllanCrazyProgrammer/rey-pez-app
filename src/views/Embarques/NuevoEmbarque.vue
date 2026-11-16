@@ -1371,7 +1371,8 @@ export default {
           campos: { embarqueBloqueado: this.embarqueBloqueado },
         });
         if (!resultado.fusiono && !resultado.omitida) {
-          this._revBase = resultado.rev;
+          // Nunca hacia atrás: una subida en vivo pudo adoptar ya una revisión mayor.
+          this._revBase = Math.max(Number(this._revBase) || 0, resultado.rev);
         }
         if (this._baseCamposEditor) {
           this._baseCamposEditor = {

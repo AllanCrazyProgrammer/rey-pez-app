@@ -86,6 +86,8 @@ function partirHost(valor) {
   const { escribirCamposEmbarque, escribirCamposEmbarquesAtomico } = compilar('src/services/embarqueEscritura.js', (id) => {
     if (id === 'firebase/firestore') return firestore;
     if (id === '@/utils/embarqueRevision') return revision;
+    // Motor de fusión del editor (no se ejercita aquí; solo debe resolverse).
+    if (id === '@/utils/embarqueFusion') return require('./helpers/embarques-source.cjs').loadSource('src/utils/embarqueFusion.js');
     throw new Error('Dependencia inesperada: ' + id);
   });
 

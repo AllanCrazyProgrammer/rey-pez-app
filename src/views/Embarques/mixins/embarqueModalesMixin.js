@@ -23,6 +23,32 @@ export const embarqueModalesMixin = {
   },
 
   methods: {
+    /**
+     * El renglón que abrió el cuadro debe seguir siendo el que está en el
+     * embarque. Los cambios de otras personas se aplican en sitio (el objeto
+     * conserva su identidad), pero si alguien lo ELIMINÓ mientras el cuadro
+     * estaba abierto, guardar sobre el objeto huérfano perdería el dato sin
+     * aviso. Devuelve false (y avisa) si ya no existe.
+     */
+    reengancharSeleccionModal(propiedad) {
+      const item = this[propiedad];
+      if (!item) return false;
+      const productos = (this.embarque && this.embarque.productos) || [];
+      const grupos = Object.values(this.clienteCrudos || {}).reduce((lista, g) => lista.concat(g || []), []);
+      const items = grupos.reduce((lista, g) => lista.concat((g && g.items) || []), []);
+      const candidatos = [...productos, ...grupos, ...items];
+      let vigente = candidatos.includes(item) ? item : null;
+      if (!vigente && item.id !== undefined && item.id !== null) {
+        vigente = candidatos.find(candidato => candidato && candidato.id === item.id) || null;
+      }
+      if (!vigente) {
+        alert('Ese renglón ya no está en el embarque: otra persona lo eliminó mientras tenías el cuadro abierto. No se guardó el cambio.');
+        return false;
+      }
+      this[propiedad] = vigente;
+      return true;
+    },
+
     // Modal NombreAlternativo
     abrirModalNombreAlternativo(producto) {
       this.productoSeleccionado = producto;
@@ -40,11 +66,11 @@ export const embarqueModalesMixin = {
     },
 
     async guardarNombreAlternativo(nuevoNombre) {
-      const productoActual = this.productoSeleccionado;
-      if (!productoActual) {
+      if (!this.productoSeleccionado || !this.reengancharSeleccionModal('productoSeleccionado')) {
         this.cerrarModalNombreAlternativo();
         return;
       }
+      const productoActual = this.productoSeleccionado;
 
       const clienteId = productoActual.clienteId;
 
@@ -86,7 +112,7 @@ export const embarqueModalesMixin = {
     },
 
     async guardarPrecio(precio) {
-      if (!this.itemSeleccionado) {
+      if (!this.itemSeleccionado || !this.reengancharSeleccionModal('itemSeleccionado')) {
         this.cerrarModalPrecio();
         return;
       }
@@ -160,7 +186,7 @@ export const embarqueModalesMixin = {
     },
 
     async guardarHilos(hilos) {
-      if (!this.itemSeleccionado) {
+      if (!this.itemSeleccionado || !this.reengancharSeleccionModal('itemSeleccionado')) {
         this.cerrarModalHilos();
         return;
       }
@@ -203,7 +229,7 @@ export const embarqueModalesMixin = {
     },
 
     async guardarNota(nota) {
-      if (!this.itemSeleccionado) {
+      if (!this.itemSeleccionado || !this.reengancharSeleccionModal('itemSeleccionado')) {
         this.cerrarModalNota();
         return;
       }
@@ -246,7 +272,7 @@ export const embarqueModalesMixin = {
     },
 
     async guardarAlt(alt) {
-      if (!this.itemSeleccionado) {
+      if (!this.itemSeleccionado || !this.reengancharSeleccionModal('itemSeleccionado')) {
         this.cerrarModalAlt();
         return;
       }

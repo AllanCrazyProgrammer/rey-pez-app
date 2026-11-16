@@ -1,4 +1,4 @@
-import { getFirestore, collection, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { getFirestore, serverTimestamp } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO } from '@/utils/dateUtils';
@@ -9,9 +9,9 @@ import {
   CAMPOS_EDITOR,
   conservarCamposAjenos,
   fotoCampos,
-  planearEscritura,
   seleccionarCampos,
 } from '@/utils/embarqueRevision';
+import { escribirEdicionFusionada, esContencionFirestore } from '@/services/embarqueEscritura';
 
 export const embarqueSyncMixin = {
   data() {
@@ -106,19 +106,17 @@ export const embarqueSyncMixin = {
       this.isSyncing = true;
 
       try {
-        // Misma vía transaccional que el guardado en vivo: verifica la
-        // revisión y fusiona si alguien más guardó primero. La versión
-        // anterior escribía el documento completo A CIEGAS (updateDoc sin
-        // transacción): al salir de la página con cambios pendientes
-        // rezagados, pisaba el trabajo de los demás editores.
+        // Misma vía transaccional que el guardado en vivo: lee, fusiona con
+        // lo que haya guardado otra persona y escribe. Nunca a ciegas.
         await this.subirCambiosEnVivo();
 
         if (!this.hasPendingChanges) {
           this.mostrarMensaje('Cambios subidos exitosamente a la nube.');
+        } else if (this.errorSincronizacion) {
+          // La copia local conserva pendingSync y el reintento ya quedó agendado.
+          this.mostrarError('No se pudieron subir los cambios: ' + this.errorSincronizacion + ' Se reintentará automáticamente.');
         } else {
-          // Hubo conflicto: ya se fusionó lo remoto y la resubida quedó
-          // agendada; el espejo offline conserva pendingSync como respaldo.
-          this.mostrarMensaje('Se fusionaron cambios de otra persona; subiendo la versión combinada...');
+          this.mostrarMensaje('Se están subiendo los cambios más recientes...');
         }
       } catch (error) {
         console.error("Error al sincronizar con la nube:", error);
@@ -251,9 +249,9 @@ export const embarqueSyncMixin = {
 
     programarSubidaEnVivo(retrasoMs) {
       if (this._editorCerrado) return;
-      // La escritura continua no reinicia el reloj. Agrupar las teclas
-      // durante 500–650 ms; la red y los conflictos pueden demorar el envío.
-      const retraso = retrasoMs || (500 + Math.floor(Math.random() * 150));
+      // La escritura continua no reinicia el reloj: las teclas se agrupan
+      // durante 400–500 ms y salen juntas en una sola escritura.
+      const retraso = retrasoMs || (400 + Math.floor(Math.random() * 100));
       if (this._timerSubidaEnVivo) {
         if (!retrasoMs) return;
         clearTimeout(this._timerSubidaEnVivo);
@@ -265,12 +263,14 @@ export const embarqueSyncMixin = {
     },
 
     /**
-     * Sube los cambios locales a Firestore con control de revisiones para
-     * edición colaborativa: la escritura solo procede si nadie más guardó
-     * desde la última revisión que aplicamos (campo `rev`). Si otra persona
-     * guardó primero, NO se pisa su trabajo: se fusiona el documento remoto
-     * al estado local (aplicarDocRemoto protege lo que se está editando) y
-     * se reintenta la subida con el estado fusionado.
+     * Sube los cambios locales a Firestore.
+     *
+     * La fusión ocurre DENTRO de la transacción (escribirEdicionFusionada):
+     * se lee el documento, se combinan de tres vías la base, lo local y lo
+     * que haya guardado otra persona, y se escribe el resultado ahí mismo.
+     * Antes, un cruce de guardados salía de la transacción sin escribir,
+     * esperaba otro ciclo y volvía a chocar; con tres personas capturando un
+     * cambio tardaba 10–30 s en llegar a las demás pantallas.
      */
     async subirCambiosEnVivo() {
       if (!this.embarqueId || !this.hasPendingChanges || !navigator.onLine) {
@@ -283,167 +283,131 @@ export const embarqueSyncMixin = {
       this._subiendoEnVivo = true;
       this.subiendoEnVivo = true;
       this.errorSincronizacion = '';
+      const idCapturado = this.embarqueId;
+      let reintentarEn = 0;
+      let reintentar = true;
 
       try {
         const db = getFirestore();
-        const idCapturado = this.embarqueId;
-        const revCapturada = Number(this._revBase) || 0;
-        const embarqueRef = doc(db, 'embarques', idCapturado);
-        // Generación vigente al capturar el payload: si el usuario sigue
-        // tecleando mientras la transacción viaja a Firestore, la generación
-        // avanza y el estado NO puede declararse sincronizado al confirmar
-        // (esas teclas no van en este payload).
-        const genCapturada = Number(this._dirtyGen) || 0;
-        // Copia CONGELADA del estado a subir. prepararDatosEmbarque copia los
-        // productos de forma superficial y sus arrays (kilos/taras) quedaban
-        // compartidos con el estado vivo: las teclas escritas durante la
-        // transacción se colaban a medias en la escritura y en la base.
-        const docData = JSON.parse(JSON.stringify(this.prepararDatosEmbarque()));
-        // El editor no reescribe kilos, ganancias, costos ni fletes: si lo
-        // hiciera con la copia que tenía al abrir, desharía Rendimientos.
-        const payloadEditor = seleccionarCampos(docData, CAMPOS_EDITOR);
-        const baseEditor = this._baseCamposEditor
-          ? JSON.parse(JSON.stringify(this._baseCamposEditor))
-          : null;
-        const ultimaEdicion = {
-          userId: this.authStore.userId,
-          username: this.authStore.user?.username || 'Usuario desconocido',
-          timestamp: serverTimestamp()
+        const meta = {
+          ultimaEdicion: {
+            userId: this.authStore.userId,
+            username: this.authStore.user?.username || 'Usuario desconocido',
+            timestamp: serverTimestamp(),
+          },
         };
-
-        const respaldoConflicto = doc(collection(db, 'respaldos_emergencia'));
-        let dataConflicto = null;
-        let revEscrita = null;
-        let ajenosServidor = null;
-
-        let planAplicado = null;
-        let remotoLeido = null;
-
-        await runTransaction(db, async (transaction) => {
-          dataConflicto = null;
-          ajenosServidor = null;
-          const snapshot = await transaction.get(embarqueRef);
-
-          if (!snapshot.exists()) {
-            if (revCapturada > 0) {
-              throw new Error('El embarque fue eliminado en otro equipo. La copia local se conserva; no se volverá a crear automáticamente.');
+        const resultado = await escribirEdicionFusionada(db, idCapturado, {
+          meta,
+          // Se captura en cada intento: un reintento por contención manda lo
+          // que hay en pantalla en ese momento, no una foto vieja.
+          capturar: () => {
+            if (this._editorCerrado || this.embarqueId !== idCapturado) {
+              const cancelada = new Error('Subida cancelada: el editor cambió de embarque.');
+              cancelada.code = 'subida-cancelada';
+              throw cancelada;
             }
-            revEscrita = revCapturada + 1;
-            transaction.set(embarqueRef, { ...payloadEditor, ultimaEdicion, rev: revEscrita });
-            return;
-          }
-
-          const remoto = snapshot.data();
-          const plan = planearEscritura({
-            remoto,
-            baseRev: revCapturada,
-            baseCampos: baseEditor,
-            campos: payloadEditor,
-          });
-          planAplicado = plan;
-          remotoLeido = remoto;
-
-          if (plan.accion === 'omitir') {
-            revEscrita = plan.rev;
-            ajenosServidor = seleccionarCampos(remoto, CAMPOS_AJENOS_AL_EDITOR);
-            return;
-          }
-
-          if (plan.accion === 'conflicto' || plan.accion === 'parcial') {
-            // Otro editor tocó clientes, productos o la carga. No se pisa:
-            // se respalda y se fusiona al salir de la transacción.
-            dataConflicto = remoto;
-            transaction.set(respaldoConflicto, {
-              embarqueOriginalId: idCapturado, datosOriginales: docData,
-              fechaRespaldo: serverTimestamp(), razonRespaldo: 'cambios_locales_antes_de_combinar',
-              tipoRespaldo: 'emergencia', version: '1.0'
-            });
-            return;
-          }
-
-          revEscrita = plan.rev;
-          ajenosServidor = seleccionarCampos(remoto, CAMPOS_AJENOS_AL_EDITOR);
-          // Solo los campos que el plan dejó escribir. El resto del formulario
-          // puede estar viejo: otro editor ya lo cambió y esta pantalla no lo tocó.
-          transaction.update(embarqueRef, { ...plan.campos, ultimaEdicion, rev: revEscrita });
+            // Copia CONGELADA: prepararDatosEmbarque comparte los arreglos de
+            // kilos/taras con el estado vivo.
+            const completo = JSON.parse(JSON.stringify(this.prepararDatosEmbarque()));
+            return {
+              gen: Number(this._dirtyGen) || 0,
+              completo,
+              // El editor no reescribe kilos, ganancias, costos ni fletes.
+              local: seleccionarCampos(completo, CAMPOS_EDITOR),
+              base: this._baseCamposEditor ? JSON.parse(JSON.stringify(this._baseCamposEditor)) : null,
+              revBase: Number(this._revBase) || 0,
+              // Un respaldo por conflicto real, como mucho uno cada 20 s: dos
+              // personas peleando la misma celda no deben llenar la colección.
+              respaldar: !this._ultimoRespaldoConflicto || Date.now() - this._ultimoRespaldoConflicto >= 20000,
+            };
+          },
         });
 
         if (this._editorCerrado || this.embarqueId !== idCapturado) return;
-
-        if (dataConflicto) {
-          this._reintentosSubidaEnVivo = (this._reintentosSubidaEnVivo || 0) + 1;
-          if (this._reintentosSubidaEnVivo > 4) {
-            // NUNCA abandonar cambios pendientes: si el otro editor está
-            // tecleando sin parar, esperar más largo y volver a intentar.
-            // (Antes se esperaba "al próximo cambio local", que podía no
-            // llegar nunca — un borrado quedaba sin subir para siempre.)
-            console.warn('[subirCambiosEnVivo] Muchos conflictos seguidos; reintentando con espera más larga.');
-            this._reintentosSubidaEnVivo = 0;
-            this.programarSubidaEnVivo(6000 + Math.floor(Math.random() * 3000));
-            return;
-          }
-          console.log('[subirCambiosEnVivo] Conflicto de revisión: fusionando cambios remotos antes de subir.');
-          // hasPendingChanges se queda en true durante la fusión: cualquier
-          // snapshot que llegue en medio se difiere en vez de aplicarse encima.
-          this._snapshotRemotoDiferido = null;
-          await this.aplicarDocRemoto(this.embarqueId, dataConflicto);
-          await this.guardarSnapshotOffline({ pendingSync: true });
-          this.programarSubidaEnVivo();
-          return;
-        }
-
-        const distintos = (planAplicado && planAplicado.camposRemotosDistintos) || [];
-        if (distintos.length && remotoLeido) {
-          const fusionado = {
-            ...remotoLeido,
-            ...(planAplicado.campos || {}),
-            rev: revEscrita != null ? revEscrita : (Number(remotoLeido.rev) || 0),
-          };
-          delete fusionado.ultimaEdicion;
-          if ((Number(this._dirtyGen) || 0) === genCapturada) this.hasPendingChanges = false;
-          this._snapshotRemotoDiferido = null;
-          await this.aplicarDocRemoto(idCapturado, fusionado);
-          this._reintentosSubidaEnVivo = 0;
-          console.log('[subirCambiosEnVivo] Campos ajenos del otro editor incorporados (rev', (fusionado.rev) + ').');
-          return;
-        }
-
-        this._revBase = revEscrita;
-        this.capturarBaseEditor(payloadEditor);
-        if (ajenosServidor) this.aplicarCamposAjenos(ajenosServidor);
-        this._reintentosSubidaEnVivo = 0;
-        // Cualquier snapshot diferido es anterior a la revisión recién
-        // escrita (la transacción habría detectado conflicto si no): ya es
-        // obsoleto en ambos casos de abajo.
-        this._snapshotRemotoDiferido = null;
-        if ((Number(this._dirtyGen) || 0) === genCapturada) {
-          this.hasPendingChanges = false;
-          await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced', docData });
-        } else {
-          // El usuario tecleó mientras la transacción viajaba: esos cambios
-          // NO van en la revisión escrita y siguen pendientes de subir.
-          await this.guardarSnapshotOffline({ pendingSync: true });
-          this.programarSubidaEnVivo();
-        }
-        console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', revEscrita + ').');
+        await this.adoptarSubida(idCapturado, resultado);
+        this._fallosSubida = 0;
       } catch (error) {
+        if (error && error.code === 'subida-cancelada') return;
+        if (esContencionFirestore(error)) {
+          // Varias personas guardando a la vez agotaron los reintentos
+          // inmediatos. No es un error que mostrar: los cambios siguen en
+          // este equipo y se vuelve a intentar enseguida.
+          console.warn('[subirCambiosEnVivo] Mucha concurrencia; se reintenta enseguida.');
+          reintentarEn = 150 + Math.floor(Math.random() * 350);
+          return;
+        }
         this.errorSincronizacion = error.message || 'No se pudo sincronizar';
         console.error('[subirCambiosEnVivo] Error al subir cambios:', error);
-        // NUNCA quedarse atorado con cambios pendientes: si seguimos en
-        // línea, reintentar con espera. (Quedarse esperando "el próximo
-        // cambio local" dejaba la sesión difiriendo todos los snapshots
-        // remotos indefinidamente: dejaba de ver al otro editor.)
-        if (navigator.onLine && this.hasPendingChanges) {
-          this.programarSubidaEnVivo(5000 + Math.floor(Math.random() * 3000));
+        if (error && error.code === 'embarque-eliminado') {
+          // No se recrea solo: la copia local se conserva para recuperarla.
+          reintentar = false;
+        } else {
+          // NUNCA quedarse atorado con cambios pendientes: reintentar con
+          // espera creciente (1, 2, 4… hasta 15 s).
+          this._fallosSubida = (this._fallosSubida || 0) + 1;
+          reintentarEn = Math.min(15000, 1000 * Math.pow(2, this._fallosSubida - 1)) + Math.floor(Math.random() * 500);
         }
       } finally {
+        const vigente = !this._editorCerrado && this.embarqueId === idCapturado;
+        // Lo que llegó mientras la subida viajaba se aplica ahora, sobre la
+        // base correcta. Antes se descartaba y esta pantalla se quedaba con
+        // datos viejos hasta que alguien volviera a guardar.
+        const diferido = this._snapshotRemotoDiferido;
+        this._snapshotRemotoDiferido = null;
+        if (vigente && diferido) {
+          const revDiferida = Number(diferido.rev) || 0;
+          if (revDiferida === 0 || revDiferida > (Number(this._revBase) || 0)) {
+            try {
+              await this.aplicarDocRemoto(idCapturado, diferido);
+            } catch (error) {
+              console.error('[subirCambiosEnVivo] No se pudo aplicar el snapshot diferido:', error);
+            }
+          }
+        }
         this._subiendoEnVivo = false;
         this.subiendoEnVivo = false;
-        if (this._resubirAlTerminar) {
-          this._resubirAlTerminar = false;
-          this.programarSubidaEnVivo();
+        this._resubirAlTerminar = false;
+        if (vigente && reintentar && this.hasPendingChanges && navigator.onLine) {
+          this.programarSubidaEnVivo(reintentarEn || undefined);
         }
       }
+    },
+
+    /**
+     * Adopta el resultado de una subida confirmada: nueva revisión, nueva
+     * base y, si alguien más había guardado, sus cambios en pantalla.
+     */
+    async adoptarSubida(id, resultado) {
+      const { captura, documento, fusion } = resultado;
+      const huboTeclasEnVuelo = (Number(this._dirtyGen) || 0) !== captura.gen;
+      if (fusion.omitidas) {
+        if (resultado.respaldado) this._ultimoRespaldoConflicto = Date.now();
+        this.avisarCamposEnConflicto(fusion.omitidas);
+      }
+
+      if (resultado.remotoIgualABase) {
+        // Nadie más escribió: lo que hay en pantalla ya es lo del servidor
+        // (más las teclas escritas mientras la subida viajaba).
+        this._revBase = resultado.rev;
+        this.capturarBaseEditor(documento);
+        this.aplicarCamposAjenos(seleccionarCampos(documento, CAMPOS_AJENOS_AL_EDITOR));
+        if (huboTeclasEnVuelo) {
+          await this.guardarSnapshotOffline({ pendingSync: true });
+        } else {
+          this.hasPendingChanges = false;
+          await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced', docData: captura.completo });
+        }
+      } else {
+        // Había cambios de otra persona. La base de esta fusión es lo que se
+        // mandó (captura.local): lo tecleado durante el viaje se conserva
+        // encima, y no se revierte a lo que se envió.
+        await this.aplicarDocRemoto(id, documento, { baseFusion: captura.local, habiaPendientes: huboTeclasEnVuelo });
+      }
+      // Un embarque recién creado en esta ventana aún no escucha al servidor.
+      if (!this.unsubscribe && typeof this.suscribirEmbarque === 'function' && navigator.onLine) {
+        this.suscribirEmbarque(id);
+      }
+      console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', resultado.rev + ').');
     },
 
     async guardarEmbarque() {

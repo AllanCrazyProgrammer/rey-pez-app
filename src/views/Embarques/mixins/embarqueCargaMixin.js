@@ -1,4 +1,6 @@
-import { estadoDesdeDoc, fusionarEdicion, identificarEstado } from '@/utils/embarqueColaboracion';
+import { copiar, estadoDesdeDoc, iguales } from '@/utils/embarqueColaboracion';
+import { fusionarDocEditor, MAPAS_POR_CLIENTE, UI_PRODUCTO } from '@/utils/embarqueFusion';
+import { parcharCrudos, parcharListaPorId } from '@/utils/embarqueParche';
 import { v4 as uuidv4 } from 'uuid';
 import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
@@ -6,7 +8,7 @@ import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { responsableCargaParaFecha } from '@/utils/cargaEmbarque';
 import { crearNuevoProducto } from '@/constants/embarque';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
-import { esEcoDeRevisionLocal } from '@/utils/embarqueRevision';
+import { CAMPOS_EDITOR, esSnapshotYaAdoptado, seleccionarCampos } from '@/utils/embarqueRevision';
 import { esClienteCatarro } from '@/constants/clientesConfig';
 
 export const esUUIDValido = (id) => {
@@ -59,6 +61,18 @@ export const embarqueCargaMixin = {
         return;
       }
 
+      this.suscribirEmbarque(id);
+    },
+
+    /**
+     * Escucha en vivo el documento del embarque. Lo llama cargarEmbarque al
+     * abrir, y también la primera subida confirmada de un embarque recién
+     * creado: la ventana que crea el embarque no pasa por cargarEmbarque(id)
+     * (abre con 'nuevo'), así que antes nunca quedaba suscrita y no veía lo
+     * que los demás guardaban hasta recargar la página.
+     */
+    suscribirEmbarque(id) {
+      if (this.unsubscribe) return;
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
 
@@ -71,13 +85,13 @@ export const embarqueCargaMixin = {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data();
 
-          // Eco de nuestra propia escritura (o snapshot repetido): si el
-          // documento trae exactamente la revisión en la que ya está basado
-          // el estado local, no hay nada nuevo que aplicar. Sin este corte,
-          // re-aplicar el eco dispara watchers y provoca un bucle de
-          // subidas/aplicaciones sin cambios reales.
+          // Eco de nuestra propia escritura, snapshot repetido o ATRASADO: el
+          // canal de escucha es independiente del de escritura y puede
+          // entregar una revisión anterior a la que esta pantalla ya adoptó
+          // al confirmar su subida. Aplicarla haría retroceder lo recién
+          // capturado. (Un documento sin `rev` — versión vieja — siempre se aplica.)
           const revRemota = Number(data.rev) || 0;
-          if (esEcoDeRevisionLocal({
+          if (esSnapshotYaAdoptado({
             revRemota,
             revBase: this._revBase,
             inicializando: this._inicializandoEmbarque,
@@ -85,23 +99,26 @@ export const embarqueCargaMixin = {
             return;
           }
 
-          if (this.hasPendingChanges) {
-            // Hay cambios locales sin subir: aplicar lo remoto ahora pisaría
-            // lo que se está capturando. Se difiere; la subida transaccional
-            // (subirCambiosEnVivo) detecta la revisión nueva y fusiona.
+          if (this._subiendoEnVivo) {
+            // Hay una subida viajando: lo que llegue se aplica cuando termine
+            // (subirCambiosEnVivo), ya con la base correcta. Solo se guarda
+            // el más reciente.
             this._snapshotRemotoDiferido = data;
-            // Garantía de salida: si por cualquier razón no hay una subida
-            // agendada ni en curso, agendar una — la deferral no puede
-            // quedarse esperando para siempre.
-            if (!this._subiendoEnVivo && !this._timerSubidaEnVivo &&
-                typeof this.programarSubidaEnVivo === 'function') {
-              this.programarSubidaEnVivo();
-            }
             return;
           }
 
+          // Sin subida en vuelo se aplica de inmediato, AUNQUE haya cambios
+          // locales sin subir: la fusión de tres vías conserva lo que se está
+          // capturando aquí. Antes se posponía mientras hubiera pendientes y
+          // quien tecleaba sin parar no veía a los demás.
           this._snapshotRemotoDiferido = null;
           await this.aplicarDocRemoto(id, data);
+          // Garantía de salida: si quedaron cambios locales por subir y no
+          // hay subida agendada ni en curso, agendar una.
+          if (this.hasPendingChanges && !this._subiendoEnVivo && !this._timerSubidaEnVivo &&
+              typeof this.programarSubidaEnVivo === 'function') {
+            this.programarSubidaEnVivo();
+          }
         } else {
           this.cargarEmbarqueOffline(id).then((cargadoOffline) => {
             if (cargadoOffline) {
@@ -138,14 +155,26 @@ export const embarqueCargaMixin = {
     },
 
     /**
-     * Aplica un documento remoto del embarque al estado local, fusionando con
-     * protecciones para lo que se está editando (campos con foco, productos
-     * nuevos sin sincronizar, productos eliminados localmente). También lo usa
-     * la subida transaccional cuando detecta un conflicto de revisión.
+     * Aplica un documento del servidor al estado local.
+     *
+     * Con base conocida hace fusión de tres vías (fusionarDocEditor): lo que
+     * esta pantalla cambió y aún no sube se conserva encima de lo remoto. El
+     * resultado se aplica EN SITIO (parcharListaPorId): los productos, filas
+     * y crudos conservan su identidad, así que un modal abierto o un campo
+     * con foco siguen apuntando al objeto vivo.
+     *
+     * @param {Object} [opciones]
+     * @param {Object} [opciones.baseFusion] Ancestro de la fusión. Por defecto
+     *   la base del editor; al confirmar una subida es lo que se envió.
+     * @param {boolean} [opciones.habiaPendientes] Si había ediciones locales
+     *   sin subir antes de aplicar (por defecto, `hasPendingChanges`).
      */
-    async aplicarDocRemoto(id, data) {
+    async aplicarDocRemoto(id, data, opciones = {}) {
           data.clientes = Array.isArray(data.clientes) ? data.clientes : [];
           this._aplicandoRemoto = true;
+          const conBase = Boolean(this._baseCamposEditor && this.embarqueId === id);
+          const fechaAnterior = this.embarque ? this.embarque.fecha : null;
+          let omitidas = 0;
 
           try {
             if (!this._baseCamposEditor && !this.tieneContenidoOperativo(data)) {
@@ -167,76 +196,50 @@ export const embarqueCargaMixin = {
               }
             }
 
-            this.embarqueBloqueado = data.embarqueBloqueado || false;
-
-            if (data.clientesPersonalizados && Array.isArray(data.clientesPersonalizados)) {
-              this.clientesPersonalizados = data.clientesPersonalizados;
-              localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
-            }
-
-            if (data.clientesJuntarMedidas) {
-              this.clientesJuntarMedidas = data.clientesJuntarMedidas;
+            let fusion;
+            if (conBase) {
+              // Capturar ediciones síncronas antes de silenciar los watchers.
+              this.registrarEdicionHistorial(this.embarque);
+              const local = JSON.parse(JSON.stringify(seleccionarCampos(this.prepararDatosEmbarque(), CAMPOS_EDITOR)));
+              fusion = fusionarDocEditor({ base: opciones.baseFusion || this._baseCamposEditor, local, remoto: data });
+              omitidas = fusion.omitidas;
             } else {
-              this.clientesJuntarMedidas = {};
-              data.clientes.forEach(cliente => {
-                this.$set(this.clientesJuntarMedidas, cliente.id, false);
-              });
+              // Primera carga (o cambio de embarque): lo remoto tal cual.
+              fusion = fusionarDocEditor({ base: data, local: seleccionarCampos(data, CAMPOS_EDITOR), remoto: data });
             }
-
-            if (data.clientesReglaOtilio) {
-              this.clientesReglaOtilio = data.clientesReglaOtilio;
-            } else {
-              this.clientesReglaOtilio = {};
-              data.clientes.forEach(cliente => {
-                const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
-                this.$set(this.clientesReglaOtilio, cliente.id, esOtilio);
-              });
-            }
-
-            if (data.clientesIncluirPrecios) {
-              this.clientesIncluirPrecios = data.clientesIncluirPrecios;
-            } else {
-              this.clientesIncluirPrecios = {};
-              data.clientes.forEach(cliente => {
-                this.$set(this.clientesIncluirPrecios, cliente.id, false);
-              });
-            }
-
-            if (data.clientesCuentaEnPdf) {
-              this.clientesCuentaEnPdf = data.clientesCuentaEnPdf;
-            } else {
-              this.clientesCuentaEnPdf = {};
-              data.clientes.forEach(cliente => {
-                this.$set(this.clientesCuentaEnPdf, cliente.id, false);
-              });
-            }
-
-            if (data.clientesSumarKgCatarro) {
-              this.clientesSumarKgCatarro = data.clientesSumarKgCatarro;
-            } else {
-              this.clientesSumarKgCatarro = {};
-              data.clientes.forEach(cliente => {
-                this.$set(this.clientesSumarKgCatarro, cliente.id, esClienteCatarro(cliente));
-              });
-            }
-
-            let fecha;
-            if (data.fecha && typeof data.fecha.toDate === 'function') {
-              fecha = data.fecha.toDate();
-            } else if (data.fecha instanceof Date) {
-              fecha = data.fecha;
-            } else if (typeof data.fecha === 'string') {
-              fecha = data.fecha;
-            } else {
+            const campos = fusion.campos;
+            const estado = estadoDesdeDoc(campos);
+            if (!estado.fecha) {
               console.warn('Formato de fecha no reconocido, usando la fecha actual');
-              fecha = new Date();
+              estado.fecha = normalizarFechaISO(new Date());
             }
+            const clientes = campos.clientes || [];
 
-            const fechaNormalizada = normalizarFechaISO(fecha);
+            this.embarqueBloqueado = Boolean(campos.embarqueBloqueado);
+
+            // Casillas por cliente: lo fusionado; si el documento nunca las
+            // guardó, los valores por defecto de siempre.
+            const porDefecto = {
+              clientesJuntarMedidas: () => false,
+              clientesReglaOtilio: cliente => Boolean(cliente.nombre && cliente.nombre.toLowerCase().includes('otilio')),
+              clientesIncluirPrecios: () => false,
+              clientesCuentaEnPdf: () => false,
+              clientesSumarKgCatarro: cliente => esClienteCatarro(cliente),
+            };
+            MAPAS_POR_CLIENTE.forEach(mapa => {
+              const valor = campos[mapa];
+              if (valor && typeof valor === 'object') {
+                if (!iguales(this[mapa], valor)) this[mapa] = copiar(valor);
+                return;
+              }
+              if (conBase && this[mapa] && Object.keys(this[mapa]).length) return;
+              const inicial = {};
+              clientes.forEach(cliente => { inicial[cliente.id] = porDefecto[mapa](cliente); });
+              this[mapa] = inicial;
+            });
 
             const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
-
-            const personalizadosServidor = (data.clientes || [])
+            const personalizadosServidor = clientes
               .filter(cliente => !clientesPredefinidosMap.has(cliente.id.toString()))
               .map(cliente => ({
                 id: cliente.id,
@@ -245,32 +248,41 @@ export const embarqueCargaMixin = {
                 personalizado: true,
                 key: `personalizado_${cliente.id}`
               }));
-
             const mapaPorId = new Map();
-            (this.clientesPersonalizados || []).forEach(c => {
+            (Array.isArray(campos.clientesPersonalizados) ? campos.clientesPersonalizados : (this.clientesPersonalizados || [])).forEach(c => {
               mapaPorId.set(String(c.id), { ...c });
             });
             personalizadosServidor.forEach(c => {
               mapaPorId.set(String(c.id), { ...c });
             });
-            this.clientesPersonalizados = Array.from(mapaPorId.values());
-
-            const remoto = estadoDesdeDoc({ ...data, fecha: fechaNormalizada });
-            let combinado = { estado: remoto, omitidas: 0 };
-            if (this._baseCamposEditor && this.embarqueId === id) {
-              // Capturar ediciones síncronas antes de silenciar los watchers.
-              this.registrarEdicionHistorial(this.embarque);
-              const local = identificarEstado({ ...this.embarque, clienteCrudos: this.clienteCrudos,
-                productosEliminados: this._productosEliminadosDoc || {} }, this.$set);
-              combinado = fusionarEdicion(estadoDesdeDoc(this._baseCamposEditor), local, remoto);
+            const personalizados = Array.from(mapaPorId.values());
+            if (!iguales(this.clientesPersonalizados, personalizados)) {
+              this.clientesPersonalizados = personalizados;
+              localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
             }
-            const { clienteCrudos, productosEliminados, ...edicion } = combinado.estado;
+
+            const productosEliminados = campos.productosEliminados || {};
             this._productosEliminadosDoc = productosEliminados;
             this.productosEliminadosLocalmente = new Set(Object.keys(productosEliminados).filter(k => productosEliminados[k]));
             this.productosNuevosPendientes = new Map();
-            this.embarque = { ...edicion, kilosCrudos: data.kilosCrudos || {} };
-            this.clienteCrudos = clienteCrudos;
-            if (combinado.omitidas) this.informarConflictoEdicion('Se conservaron cambios de otra persona en ' + combinado.omitidas + ' operaciones en conflicto.');
+
+            const kilosCrudos = data.kilosCrudos || {};
+            if (conBase && this.embarque && Array.isArray(this.embarque.productos)) {
+              const ayuda = { set: this.$set, del: this.$delete };
+              if (this.embarque.fecha !== estado.fecha) this.$set(this.embarque, 'fecha', estado.fecha);
+              if (this.embarque.cargaCon !== estado.cargaCon) this.$set(this.embarque, 'cargaCon', estado.cargaCon);
+              if (this.embarque.camionNumero !== estado.camionNumero) this.$set(this.embarque, 'camionNumero', estado.camionNumero);
+              if (!iguales(this.embarque.kilosCrudos, kilosCrudos)) this.$set(this.embarque, 'kilosCrudos', copiar(kilosCrudos));
+              // El estado de pantalla de cada renglón (en edición, nuevo) es de este editor.
+              parcharListaPorId(this.embarque, 'productos', estado.productos, ayuda, { conservar: UI_PRODUCTO });
+              parcharCrudos(this.clienteCrudos, estado.clienteCrudos, ayuda);
+            } else {
+              this.embarque = {
+                fecha: estado.fecha, cargaCon: estado.cargaCon, camionNumero: estado.camionNumero,
+                productos: estado.productos, kilosCrudos,
+              };
+              this.clienteCrudos = estado.clienteCrudos;
+            }
 
             this.costosPorMedida = { ...(data.costosPorMedida || {}) };
             this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };
@@ -283,6 +295,12 @@ export const embarqueCargaMixin = {
             this._revBase = Number(data.rev) || 0;
             if (typeof this.capturarBaseEditor === 'function') {
               this.capturarBaseEditor(data);
+            }
+            if (conBase) {
+              // Sigue habiendo pendientes solo si ya los había y el servidor
+              // aún no los tiene. Abrir o recibir nunca "ensucia" el embarque.
+              const habia = opciones.habiaPendientes !== undefined ? opciones.habiaPendientes : this.hasPendingChanges;
+              this.hasPendingChanges = Boolean(habia && Object.keys(fusion.cambios).length);
             }
 
           } finally {
@@ -297,13 +315,13 @@ export const embarqueCargaMixin = {
             });
           }
 
-          // El watcher de embarque.fecha está silenciado por _aplicandoRemoto
-          // durante aplicarDocRemoto, así que la carga inicial en created()
-          // corrió con embarque.fecha=null (sin cargar nada) y el cambio a
-          // la fecha real no dispara el watcher. Cargar aquí con la fecha
-          // recién aplicada asegura que las referencias del pedido lleguen
-          // para embarques guardados.
-          if (typeof this.cargarPedidoReferenciaDelDia === 'function' && this.embarque?.fecha) {
+          if (omitidas) this.avisarCamposEnConflicto(omitidas);
+
+          // El watcher de embarque.fecha está silenciado por _aplicandoRemoto,
+          // así que las referencias del pedido se cargan aquí; solo en la
+          // primera carga o cuando la fecha cambió (no en cada guardado).
+          if (typeof this.cargarPedidoReferenciaDelDia === 'function' && this.embarque?.fecha &&
+              (!conBase || this.embarque.fecha !== fechaAnterior)) {
             this.cargarPedidoReferenciaDelDia(this.embarque.fecha);
           }
 

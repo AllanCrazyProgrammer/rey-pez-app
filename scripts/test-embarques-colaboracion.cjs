@@ -13,7 +13,9 @@ const { embarqueUndoMixin } = loadSource('src/views/Embarques/mixins/embarqueUnd
 const { crearNuevoProducto } = loadSource('src/constants/embarque.js');
 const opciones = vueOptions('src/views/Embarques/NuevoEmbarque.vue', ['watch']);
 const metodos = vueOptions('src/views/Embarques/NuevoEmbarque.vue', ['methods'], {}).methods;
-global.navigator = { onLine: true };
+// Node 21+ expone `navigator` como getter sin setter: la asignación directa se
+// ignora en silencio y `navigator.onLine` queda undefined (la subida se omite).
+Object.defineProperty(globalThis, 'navigator', { value: { onLine: true }, configurable: true, writable: true });
 global.localStorage = { setItem() {}, getItem() { return null; } };
 global.alert = message => { throw new Error(message); };
 
