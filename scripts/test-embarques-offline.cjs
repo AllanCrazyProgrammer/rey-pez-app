@@ -178,14 +178,21 @@ const server = http.createServer((req, res) => {
     console.log('PASS offline direct URL, edit historical shipment, reload with durable changes');
     await page.goto(base + '/nuevo-embarque');
     await page.locator('#cargaCon').waitFor();
-    assert.equal(await page.locator('#cargaCon').inputValue(), '');
-    await page.locator('#cargaCon').selectOption('Porro');
-    await page.waitForFunction(() => new Promise(resolve => {
+    // Un embarque nuevo trae el responsable de carga que dicta el día de la
+    // semana (src/utils/cargaEmbarque.js; domingo queda vacío). Se cambia al
+    // otro responsable para comprobar que la edición a mano también se guarda.
+    const hoy = new Date();
+    const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    const porDefecto = require('./helpers/embarques-source.cjs').loadSource('src/utils/cargaEmbarque.js').responsableCargaParaFecha(hoyISO);
+    assert.equal(await page.locator('#cargaCon').inputValue(), porDefecto);
+    const elegido = porDefecto === 'Porro' ? 'Caminante' : 'Porro';
+    await page.locator('#cargaCon').selectOption(elegido);
+    await page.waitForFunction(responsable => new Promise(resolve => {
       const open = indexedDB.open('ReyPezOfflineDB'); open.onsuccess = () => {
         const db = open.result; const req = db.transaction('embarques').objectStore('embarques').getAll();
-        req.onsuccess = () => { resolve(req.result.some(r => r.id !== 'qa-history' && r.pendingSync && r.cargaCon === 'Porro')); db.close(); };
+        req.onsuccess = () => { resolve(req.result.some(r => r.id !== 'qa-history' && r.pendingSync && r.cargaCon === responsable)); db.close(); };
       };
-    }));
+    }), elegido);
     console.log('PASS create a distinct new shipment without internet');
     await page.goto(base + '/embarques');
     await page.locator('.lista-embarques').waitFor();
