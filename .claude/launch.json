@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rey-pez-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "start"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "rey-pez-qa",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VUE_APP_LOGIN_LOCAL=transicion",
+        "npx",
+        "vue-cli-service",
+        "serve",
+        "--port",
+        "8091"
+      ],
+      "port": 8091
+    }
+  ]
+}

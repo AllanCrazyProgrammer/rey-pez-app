@@ -1,8 +1,9 @@
 # Rey Pez — Notas para Claude
 
 App de gestión (Vue 2.7 + Vue CLI 5 / webpack 5) con Firebase (Firestore + Realtime DB).
-Se despliega en Heroku como sitio estático (buildpack nginx: `Procfile` + `static.json`).
-El push a `master` dispara el despliegue.
+Se publica en Firebase Hosting: el push a `master` dispara la GitHub Action
+`.github/workflows/firebase-hosting.yml` (también `npm run deploy:web` a mano).
+Ya no se usa Heroku (`Procfile` y `static.json` son restos de entonces).
 
 ## Comandos
 
