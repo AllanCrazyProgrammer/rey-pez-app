@@ -46,7 +46,8 @@ function escalaAutoAjuste(encabezados, filas, barcos = [], taras, kilos) {
   const p = parametrosTabla(1, encabezados.length - 1)
   // Reserva dos líneas para encabezados y una por fila; el ancho reserva palabras completas.
   const altoTabla = (filas.length + (encabezados.length > 5 ? 5 : 4)) * p.fontSize * 1.2 + (filas.length + 3) * 2 * p.padding
-  const altoDisponible = HOJA.alto - 80 - 34 * 1.2 - 20 - 8 - Math.ceil(barcos.length / 2) * 19
+  // 22 * 1.2 + 12 es la línea "Total de taras" que va arriba de la tabla.
+  const altoDisponible = HOJA.alto - 80 - 34 * 1.2 - 20 - 22 * 1.2 - 12 - 8 - Math.ceil(barcos.length / 2) * 19
   return Math.max(ESCALA_MIN, Math.floor(Math.min(escalaMaximaQueCabe(encabezados, filas, taras, kilos), altoDisponible / altoTabla, 1) * 100) / 100)
 }
 function anchosTabla(encabezados, filas, escala, taras, kilos) {
@@ -71,14 +72,17 @@ function construirDocumentoPedidoCrudos({ titulo, encabezados, filas, taras = []
       return { columns: [{ text: String(celda.texto), width: '*', alignment: 'center' }, { canvas, width: lado, margin: [0, p.fontSize / 2 - lado / 2, 0, 0] }], columnGap: p.gap }
     })])
   })
-  ;[['Total', taras], ['Kilos', kilos]].forEach(([etiqueta, valores]) => body.push([
-    { text: etiqueta, fillColor: '#f8f9fa' }, ...valores.map(valor => ({ text: String(valor), alignment: 'center', italics: etiqueta === 'Total', fillColor: '#f8f9fa' }))
+  // La fila de totales lleva el mismo azul de la vista previa (#34495e, texto
+  // blanco) y la de kilos el mismo verde (#e8f5e9, texto #1b5e20).
+  ;[['Total', taras, '#34495e', '#ffffff'], ['Kilos', kilos, '#e8f5e9', '#1b5e20']].forEach(([etiqueta, valores, fondo, color]) => body.push([
+    { text: etiqueta, fillColor: fondo, color }, ...valores.map(valor => ({ text: String(valor), alignment: 'center', italics: etiqueta === 'Total', fillColor: fondo, color }))
   ]))
+  const totalTaras = taras.reduce((suma, valor) => suma + (Number(valor) || 0), 0)
   return {
     pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [40, 40, 40, 40],
     defaultStyle: { font: 'Roboto', bold: true, fontSize: p.fontSize },
     styles: { header: { fontSize: 34, bold: true, margin: [0, 0, 0, 20], alignment: 'center' } },
-    content: [{ text: titulo, style: 'header' }, {
+    content: [{ text: titulo, style: 'header' }, { text: `Total de taras: ${totalTaras}`, fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 12] }, {
       table: { headerRows: 1, widths: anchosTabla(encabezados, filas, escala, taras, kilos), body },
       layout: {
         hLineWidth: i => i >= body.length - 1 ? 2 : 1, vLineWidth: () => 1,

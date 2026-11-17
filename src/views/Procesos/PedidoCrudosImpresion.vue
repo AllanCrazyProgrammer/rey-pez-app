@@ -20,6 +20,7 @@
       <div ref="hojaContenedor" class="hoja-contenedor" :style="{ height: (595.28 * factorHoja) + 'px' }">
         <div class="hoja-impresion" :style="{ transform: 'scale(' + factorHoja + ')' }">
           <div class="hoja-titulo">{{ datosImpresion.titulo }}</div>
+          <div class="hoja-total-taras">Total de taras: {{ totalTarasImpresion }}</div>
           <table class="hoja-tabla" :style="{ fontSize: parametrosImpresion.fontSize + 'px', '--padding-tabla': parametrosImpresion.padding + 'px' }">
             <colgroup><col v-for="(ancho, i) in anchosImpresion" :key="i" :style="{ width: ancho + 'px' }"></colgroup>
             <thead><tr><th v-for="(texto, i) in datosImpresion.encabezados" :key="i">{{ texto }}</th></tr></thead>
@@ -28,8 +29,8 @@
                 <td :style="{ backgroundColor: fila.fillColor, color: fila.color }">{{ fila.cliente }}</td>
                 <td v-for="(celda, i) in fila.celdas" :key="i"><span v-if="celda.texto" class="hoja-cantidad" :style="{ gap: parametrosImpresion.gap + 'px' }">{{ celda.texto }}<svg :width="parametrosImpresion.casilla" :height="parametrosImpresion.casilla" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="black"/><path v-if="celda.marcada" d="M2 5 L4 8 L8 2" fill="none" stroke="black"/></svg></span></td>
               </tr>
-              <tr class="hoja-total"><td>Total</td><td v-for="(valor, i) in datosImpresion.taras" :key="i"><i>{{ valor }}</i></td></tr>
-              <tr class="hoja-total"><td>Kilos</td><td v-for="(valor, i) in datosImpresion.kilos" :key="i">{{ valor }}</td></tr>
+              <tr class="hoja-total hoja-total-total"><td>Total</td><td v-for="(valor, i) in datosImpresion.taras" :key="i"><i>{{ valor }}</i></td></tr>
+              <tr class="hoja-total hoja-total-kilos"><td>Kilos</td><td v-for="(valor, i) in datosImpresion.kilos" :key="i">{{ valor }}</td></tr>
             </tbody>
           </table>
           <div class="hoja-barcos"><div v-for="barco in datosImpresion.barcos" :key="barco.etiqueta" class="hoja-barco"><span>{{ barco.etiqueta }}</span><span>{{ barco.texto || ' ' }}</span></div></div>
@@ -43,6 +44,7 @@
     </div>
     <div v-if="barcosListos" id="pdfPreview" class="pdf-preview">
       <h3>Pedido de Crudos - {{ fechaVisible }}</h3>
+      <p class="total-taras-preview">Total de taras: {{ totalTarasImpresion }}</p>
       <div class="tabla-scroll">
         <table class="preview-table">
           <thead>
@@ -185,6 +187,9 @@ export default {
     escalaMaxima() {
       const d = this.datosImpresion
       return Math.floor(escalaMaximaQueCabe(d.encabezados, d.filas, d.taras, d.kilos) * 100) / 100
+    },
+    totalTarasImpresion() {
+      return this.datosImpresion.taras.reduce((suma, valor) => suma + (Number(valor) || 0), 0)
     },
     parametrosImpresion() { return parametrosTabla(this.escala, this.columnasConDatos.length) },
     anchosImpresion() {
@@ -447,13 +452,16 @@ export default {
 .hoja-contenedor { position: relative; width: 100%; max-width: 100%; overflow: hidden; margin-top: 16px; }
 .hoja-impresion { position: absolute; top: 0; left: 0; box-sizing: border-box; width: 841.89px; height: 595.28px; padding: 40px; background: white; color: black; transform-origin: top left; font-family: Roboto, sans-serif; font-weight: 500; }
 .hoja-titulo { font-size: 34px; line-height: 1.172; text-align: center; margin-bottom: 20px; }
+.hoja-total-taras { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 12px; }
 .hoja-tabla { width: 761.89px; table-layout: fixed; border-collapse: collapse; line-height: 1.172; }
 .hoja-tabla th, .hoja-tabla td { border: 1px solid black; padding: var(--padding-tabla); vertical-align: top; text-align: center; overflow-wrap: normal; font-weight: inherit; }
 .hoja-tabla td:first-child { text-align: left; }
 .hoja-tabla th { background: #f2f2f2; }
 .hoja-cantidad { display: flex; align-items: center; justify-content: center; }
 .hoja-cantidad svg { flex-shrink: 0; }
-.hoja-total { background: #f8f9fa; border-top: 2px solid black; border-bottom: 2px solid black; }
+.hoja-total { border-top: 2px solid black; border-bottom: 2px solid black; }
+.hoja-total-total { background: #34495e; color: #fff; }
+.hoja-total-kilos { background: #e8f5e9; color: #1b5e20; }
 .hoja-barcos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin-top: 8px; font-size: 11px; font-weight: 400; }
 .hoja-barco { display: flex; align-items: baseline; gap: 6px; }
 .hoja-barco span:first-child { font-size: 9px; white-space: nowrap; }
@@ -528,6 +536,13 @@ export default {
   margin-bottom: 20px;
   font-size: 24px;
   font-weight: bold;
+}
+
+.total-taras-preview {
+  text-align: center;
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0 0 4px;
 }
 
 .tabla-scroll {
