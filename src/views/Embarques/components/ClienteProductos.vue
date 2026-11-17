@@ -140,7 +140,8 @@
         <div v-if="menuMedida" class="menu-medida-fondo" @click="cerrarMenuMedida" @contextmenu.prevent="cerrarMenuMedida">
             <div class="menu-medida" :style="{ left: menuMedida.x + 'px', top: menuMedida.y + 'px' }" @click.stop>
                 <div class="menu-medida-titulo">{{ menuMedida.opcion.medida }} · {{ menuMedida.opcion.tipo }}</div>
-                <button type="button" class="menu-medida-boton" @click="marcarMedidaReportada(menuMedida.opcion)">✓ Marcar como reportado</button>
+                <button v-if="menuMedida.puedeMarcar" type="button" class="menu-medida-boton" @click="marcarMedidaReportada(menuMedida.opcion)">✓ Marcar como reportado</button>
+                <div v-else class="menu-medida-nada">{{ menuMedida.motivo }}</div>
             </div>
         </div>
 
@@ -448,15 +449,26 @@ export default {
         },
 
         // Menú del chip de medida: clic derecho en escritorio, pulsación larga
-        // en móvil. Solo aparece cuando hay taras pesadas sin reportar
-        // (etiqueta 'Falta reportar'); el botón copia las taras pesadas al
-        // reporte, así el chip pasa a verde si el pedido está cubierto.
+        // en móvil. El menú siempre aparece en chips de productos limpios; el
+        // botón solo se puede usar cuando hay taras pesadas sin reportar
+        // (etiqueta 'Falta reportar'): copia las taras pesadas al reporte, así
+        // el chip pasa a verde si el pedido está cubierto. En los demás estados
+        // el menú explica por qué no hay nada que marcar.
         abrirMenuMedida(event, opcion) {
-            if (!opcion.productoId || opcion.etiqueta !== 'Falta reportar') return;
+            if (!opcion.productoId) return;
+            const motivos = {
+                'Reportado': 'Ya está reportado',
+                'Pendiente · Reportado': 'Ya está reportado (pedido incompleto)',
+                'Pendiente': 'Nada pesado todavía',
+                'Sin referencia': 'Sin referencia de pedido',
+                'Completo': 'Ya está completo',
+            };
             const x = event.clientX != null ? event.clientX : 0;
             const y = event.clientY != null ? event.clientY : 0;
             this.menuMedida = {
                 opcion,
+                puedeMarcar: opcion.etiqueta === 'Falta reportar',
+                motivo: motivos[opcion.etiqueta] || 'Nada que reportar',
                 x: Math.max(8, Math.min(x, window.innerWidth - 240)),
                 y: Math.max(8, Math.min(y, window.innerHeight - 110)),
             };
@@ -466,7 +478,7 @@ export default {
         },
         iniciarPulsacionMedida(event, opcion) {
             this.cancelarPulsacionMedida();
-            if (!opcion.productoId || opcion.etiqueta !== 'Falta reportar') return;
+            if (!opcion.productoId) return;
             const touch = event.touches && event.touches[0];
             const x = touch ? touch.clientX : 0;
             const y = touch ? touch.clientY : 0;
@@ -1056,6 +1068,7 @@ button:disabled {
 .menu-medida-boton { display: block; width: 100%; background: #16a34a; color: #fff; border: 0; border-radius: 8px; padding: 10px 12px; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 .menu-medida-boton:hover { background: #22c55e; }
 .menu-medida-boton:focus-visible { outline: 2px solid #a8ffcb; outline-offset: 2px; }
+.menu-medida-nada { color: #94a3b8; font-size: 14px; padding: 6px; }
 .medida-movil-chip.medida-incompleto { border: 2px solid #fb923c; }
 .medida-incompleto .medida-estado { color: #fdba74; }
 .medida-movil-chip .medida-tipo { display: inline-block; padding: 2px 6px; margin: 4px 0; border-radius: 5px; font-weight: 700; }
