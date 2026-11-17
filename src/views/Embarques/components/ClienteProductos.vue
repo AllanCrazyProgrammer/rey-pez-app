@@ -328,12 +328,18 @@ export default {
                 );
             });
             // Los crudos van en un solo chip "Crudos", no uno por talla.
+            const tarasCrudoPesadas = this.crudos.reduce((total, grupo) => {
+                const totales = tarasCrudoPorTalla(grupo.items);
+                return total + Object.values(totales).reduce((suma, taras) => suma + taras, 0);
+            }, 0);
             const crudos = estadosCrudo.length > 0 ? [{
                 clave: 'crudos', esGrupoCrudos: true,
                 medida: 'Crudos', tipo: 'Crudo', categoria: 'crudo',
                 tieneReferencia: estadosCrudo.some(e => e.tieneReferencia),
                 cubierto: estadosCrudo.every(e => e.cubierto),
                 pedidoCubierto: estadosCrudo.every(e => e.cubierto),
+                // En 0, sin nada pesado: el chip va en rojo, como las medidas.
+                sinPesar: tarasCrudoPesadas === 0,
             }] : [];
             return ordenarMedidasMovil([...productos, ...crudos]);
         },
