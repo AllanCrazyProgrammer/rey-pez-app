@@ -123,7 +123,11 @@
                     @click="medidaMovilActiva = null">Todas</button>
                 <button v-for="opcion in opcionesMedidasMovil" :key="opcion.clave" type="button" class="medida-movil-chip"
                     :class="{ hecho: 'medida-cubierta', 'falta-reportar': 'medida-falta-reportar', incompleto: 'medida-incompleto', pendiente: 'medida-pendiente' }[opcion.grupo]"
-                    :aria-pressed="medidaMovilActiva === opcion.clave ? 'true' : 'false'" @click="medidaMovilActiva = opcion.clave">
+                    :aria-pressed="medidaMovilActiva === opcion.clave ? 'true' : 'false'" @click="seleccionarMedidaMovil(opcion)"
+                    @contextmenu.prevent="abrirMenuMedida($event, opcion)"
+                    @touchstart="iniciarPulsacionMedida($event, opcion)"
+                    @touchend="cancelarPulsacionMedida"
+                    @touchmove="cancelarPulsacionMedida">
                     <span>{{ opcion.medida }}</span>
                     <small class="medida-tipo" :class="'tipo-' + opcion.categoria">{{ opcion.tipo }}</small>
                     <small class="medida-estado">{{ opcion.cubierto ? '✓ ' : '' }}{{ opcion.etiqueta || (opcion.cubierto ? 'Completo' : opcion.tieneReferencia ? 'Pendiente' : 'Sin referencia') }}</small>
@@ -131,6 +135,14 @@
             </div>
             <p v-else>Agrega un producto o genera el esqueleto para ver sus medidas aquí.</p>
         </section>
+
+        <!-- Menú del chip: clic derecho (escritorio) o pulsación larga (móvil). -->
+        <div v-if="menuMedida" class="menu-medida-fondo" @click="cerrarMenuMedida" @contextmenu.prevent="cerrarMenuMedida">
+            <div class="menu-medida" :style="{ left: menuMedida.x + 'px', top: menuMedida.y + 'px' }" @click.stop>
+                <div class="menu-medida-titulo">{{ menuMedida.opcion.medida }} · {{ menuMedida.opcion.tipo }}</div>
+                <button type="button" class="menu-medida-boton" @click="marcarMedidaReportada(menuMedida.opcion)">✓ Marcar como reportado</button>
+            </div>
+        </div>
 
         <div class="productos-container">
             <!-- Lista de productos -->
@@ -176,6 +188,7 @@
 </template>
 
 <script>
+import { v4 as uuid } from 'uuid';
 import { ordenarMedidasMovil } from '@/utils/medidasMovilOrden';
 import { claveReferenciaProducto, estadoPedido, estadoMedidaProducto, tarasCrudoPorTalla, referenciaPedidoProducto } from '@/utils/embarquePedidoEstado';
 import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
@@ -310,7 +323,7 @@ export default {
         'abrir-modal-pdf-fecha'
     ],
 
-    data() { return { menuClienteAbierto: false, medidaMovilActiva: null }; },
+    data() { return { menuClienteAbierto: false, medidaMovilActiva: null, menuMedida: null, temporizadorPulsacionMedida: null, pulsacionLargaMedida: false }; },
     computed: {
         opcionesMedidasMovil() {
             const productos = this.productos.filter(p => p.id).map(p => ({
@@ -432,6 +445,63 @@ export default {
             producto.medida = medida;
             this.actualizarProducto(producto);
             this.$emit('seleccionar-medida', producto, medida);
+        },
+
+        // Menú del chip de medida: clic derecho en escritorio, pulsación larga
+        // en móvil. Solo aparece cuando hay taras pesadas sin reportar
+        // (etiqueta 'Falta reportar'); el botón copia las taras pesadas al
+        // reporte, así el chip pasa a verde si el pedido está cubierto.
+        abrirMenuMedida(event, opcion) {
+            if (!opcion.productoId || opcion.etiqueta !== 'Falta reportar') return;
+            const x = event.clientX != null ? event.clientX : 0;
+            const y = event.clientY != null ? event.clientY : 0;
+            this.menuMedida = {
+                opcion,
+                x: Math.max(8, Math.min(x, window.innerWidth - 240)),
+                y: Math.max(8, Math.min(y, window.innerHeight - 110)),
+            };
+        },
+        cerrarMenuMedida() {
+            this.menuMedida = null;
+        },
+        iniciarPulsacionMedida(event, opcion) {
+            this.cancelarPulsacionMedida();
+            if (!opcion.productoId || opcion.etiqueta !== 'Falta reportar') return;
+            const touch = event.touches && event.touches[0];
+            const x = touch ? touch.clientX : 0;
+            const y = touch ? touch.clientY : 0;
+            this.temporizadorPulsacionMedida = setTimeout(() => {
+                this.pulsacionLargaMedida = true;
+                if (navigator.vibrate) navigator.vibrate(15);
+                this.abrirMenuMedida({ clientX: x, clientY: y }, opcion);
+            }, 600);
+        },
+        cancelarPulsacionMedida() {
+            if (this.temporizadorPulsacionMedida) {
+                clearTimeout(this.temporizadorPulsacionMedida);
+                this.temporizadorPulsacionMedida = null;
+            }
+        },
+        seleccionarMedidaMovil(opcion) {
+            // El clic que sigue a una pulsación larga no cambia el filtro.
+            if (this.pulsacionLargaMedida) {
+                this.pulsacionLargaMedida = false;
+                return;
+            }
+            this.medidaMovilActiva = opcion.clave;
+        },
+        marcarMedidaReportada(opcion) {
+            const producto = this.productos.find(p => p.id === opcion.productoId);
+            if (!producto) return;
+            const valores = [...(producto.taras || []), ...(producto.tarasExtra || [])]
+                .map(valor => parseInt(valor, 10))
+                .filter(valor => Number.isFinite(valor) && valor > 0);
+            if (valores.length === 0) return;
+            this.$set(producto, 'reporteTaras', valores);
+            this.$set(producto, 'reporteBolsas', valores.map(() => ''));
+            this.$set(producto, 'reportesIds', valores.map(() => uuid()));
+            this.actualizarProducto(producto);
+            this.cerrarMenuMedida();
         },
 
         calcularKilosCrudos(item) { return calcularKilosCrudoItem(item); },
@@ -977,6 +1047,15 @@ button:disabled {
 .medida-cubierta .medida-estado { color: #86efac; }
 .medida-movil-chip.medida-falta-reportar { border: 2px solid #facc15; }
 .medida-falta-reportar .medida-estado { color: #fde047; }
+
+/* Menú del chip (clic derecho / pulsación larga): un botón que aparece
+   junto al chip y marca la medida como reportada. */
+.menu-medida-fondo { position: fixed; inset: 0; z-index: 10001; background: transparent; }
+.menu-medida { position: fixed; min-width: 210px; max-width: calc(100vw - 16px); background: #0f172a; border: 1px solid #22c55e; border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); padding: 10px; }
+.menu-medida-titulo { color: #a8ffcb; font-size: 13px; font-weight: 700; padding: 2px 6px 8px; }
+.menu-medida-boton { display: block; width: 100%; background: #16a34a; color: #fff; border: 0; border-radius: 8px; padding: 10px 12px; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.menu-medida-boton:hover { background: #22c55e; }
+.menu-medida-boton:focus-visible { outline: 2px solid #a8ffcb; outline-offset: 2px; }
 .medida-movil-chip.medida-incompleto { border: 2px solid #fb923c; }
 .medida-incompleto .medida-estado { color: #fdba74; }
 .medida-movil-chip .medida-tipo { display: inline-block; padding: 2px 6px; margin: 4px 0; border-radius: 5px; font-weight: 700; }
