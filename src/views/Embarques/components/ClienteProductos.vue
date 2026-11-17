@@ -140,7 +140,8 @@
         <div v-if="menuMedida" class="menu-medida-fondo" @click="cerrarMenuMedida" @contextmenu.prevent="cerrarMenuMedida">
             <div class="menu-medida" :style="{ left: menuMedida.x + 'px', top: menuMedida.y + 'px' }" @click.stop>
                 <div class="menu-medida-titulo">{{ menuMedida.opcion.medida }} · {{ menuMedida.opcion.tipo }}</div>
-                <button v-if="menuMedida.puedeMarcar" type="button" class="menu-medida-boton" @click="marcarMedidaReportada(menuMedida.opcion)">✓ Marcar como reportado</button>
+                <button v-if="menuMedida.accion === 'completar'" type="button" class="menu-medida-boton" @click="marcarMedidaCompleta(menuMedida.opcion)">✓ Marcar como completo</button>
+                <button v-else-if="menuMedida.accion === 'quitar'" type="button" class="menu-medida-boton menu-medida-boton-quitar" @click="quitarMarcaCompleto(menuMedida.opcion)">↩ Quitar marca de completo</button>
                 <div v-else class="menu-medida-nada">{{ menuMedida.motivo }}</div>
             </div>
         </div>
@@ -449,26 +450,29 @@ export default {
         },
 
         // Menú del chip de medida: clic derecho en escritorio, pulsación larga
-        // en móvil. El menú siempre aparece en chips de productos limpios; el
-        // botón solo se puede usar cuando hay taras pesadas sin reportar
-        // (etiqueta 'Falta reportar'): copia las taras pesadas al reporte, así
-        // el chip pasa a verde si el pedido está cubierto. En los demás estados
-        // el menú explica por qué no hay nada que marcar.
+        // en móvil. El menú siempre aparece en chips de productos limpios:
+        // - Con taras pesadas sin completar ('Pendiente · Reportado' o 'Falta
+        //   reportar'): botón «Marcar como completo», que además llena el
+        //   reporte si falta. El chip pasa a verde (marca manual, sin tocar
+        //   kilos ni pedido) y el menú luego ofrece quitar la marca.
+        // - En los demás estados el menú explica por qué no hay nada que marcar.
         abrirMenuMedida(event, opcion) {
             if (!opcion.productoId) return;
             const motivos = {
                 'Reportado': 'Ya está reportado',
-                'Pendiente · Reportado': 'Ya está reportado (pedido incompleto)',
                 'Pendiente': 'Nada pesado todavía',
                 'Sin referencia': 'Sin referencia de pedido',
                 'Completo': 'Ya está completo',
             };
+            let accion = '';
+            if (opcion.completadoManual) accion = 'quitar';
+            else if (opcion.etiqueta === 'Pendiente · Reportado' || opcion.etiqueta === 'Falta reportar') accion = 'completar';
             const x = event.clientX != null ? event.clientX : 0;
             const y = event.clientY != null ? event.clientY : 0;
             this.menuMedida = {
                 opcion,
-                puedeMarcar: opcion.etiqueta === 'Falta reportar',
-                motivo: motivos[opcion.etiqueta] || 'Nada que reportar',
+                accion,
+                motivo: motivos[opcion.etiqueta] || 'Nada que marcar',
                 x: Math.max(8, Math.min(x, window.innerWidth - 240)),
                 y: Math.max(8, Math.min(y, window.innerHeight - 110)),
             };
@@ -502,16 +506,28 @@ export default {
             }
             this.medidaMovilActiva = opcion.clave;
         },
-        marcarMedidaReportada(opcion) {
+        marcarMedidaCompleta(opcion) {
             const producto = this.productos.find(p => p.id === opcion.productoId);
             if (!producto) return;
-            const valores = [...(producto.taras || []), ...(producto.tarasExtra || [])]
-                .map(valor => parseInt(valor, 10))
-                .filter(valor => Number.isFinite(valor) && valor > 0);
-            if (valores.length === 0) return;
-            this.$set(producto, 'reporteTaras', valores);
-            this.$set(producto, 'reporteBolsas', valores.map(() => ''));
-            this.$set(producto, 'reportesIds', valores.map(() => uuid()));
+            // Si faltan taras por reportar, primero se llena el reporte con
+            // las taras pesadas, para que el reporte también quede completo.
+            if (opcion.etiqueta === 'Falta reportar') {
+                const valores = [...(producto.taras || []), ...(producto.tarasExtra || [])]
+                    .map(valor => parseInt(valor, 10))
+                    .filter(valor => Number.isFinite(valor) && valor > 0);
+                if (valores.length === 0) return;
+                this.$set(producto, 'reporteTaras', valores);
+                this.$set(producto, 'reporteBolsas', valores.map(() => ''));
+                this.$set(producto, 'reportesIds', valores.map(() => uuid()));
+            }
+            this.$set(producto, 'completadoManual', true);
+            this.actualizarProducto(producto);
+            this.cerrarMenuMedida();
+        },
+        quitarMarcaCompleto(opcion) {
+            const producto = this.productos.find(p => p.id === opcion.productoId);
+            if (!producto) return;
+            this.$set(producto, 'completadoManual', false);
             this.actualizarProducto(producto);
             this.cerrarMenuMedida();
         },
@@ -1068,6 +1084,8 @@ button:disabled {
 .menu-medida-boton { display: block; width: 100%; background: #16a34a; color: #fff; border: 0; border-radius: 8px; padding: 10px 12px; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 .menu-medida-boton:hover { background: #22c55e; }
 .menu-medida-boton:focus-visible { outline: 2px solid #a8ffcb; outline-offset: 2px; }
+.menu-medida-boton-quitar { background: transparent; border: 1px solid #f97316; color: #fdba74; }
+.menu-medida-boton-quitar:hover { background: rgba(249, 115, 22, 0.15); }
 .menu-medida-nada { color: #94a3b8; font-size: 14px; padding: 6px; }
 .medida-movil-chip.medida-incompleto { border: 2px solid #fb923c; }
 .medida-incompleto .medida-estado { color: #fdba74; }

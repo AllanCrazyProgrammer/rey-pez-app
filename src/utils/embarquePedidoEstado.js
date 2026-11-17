@@ -24,6 +24,12 @@ export function totalTarasReportadas(producto) {
 // pedido conserva por separado el cumplimiento de la cantidad solicitada.
 export function estadoMedidaProducto(producto, individuales, agrupados, referencia = producto.pedidoReferencia) {
   const pedido = estadoPedido(referencia, agrupados);
+  // Marcado manual como completo (desde el menú del chip): el chip se muestra
+  // en verde como si el pedido estuviera cubierto y reportado, sin tocar los
+  // kilos ni el pedido. Solo afecta al chip; el resto del embarque no cambia.
+  if (producto.completadoManual) {
+    return { ...pedido, sinPesar: individuales.totalTaras === 0, pedidoCubierto: true, cubierto: true, etiqueta: 'Reportado', completadoManual: true };
+  }
   // En 0, sin nada pesado: el chip va en rojo (grupo 'pendiente').
   const sinPesar = individuales.totalTaras === 0;
   if (individuales.totalTaras > 0) {
