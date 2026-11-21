@@ -1,16 +1,5 @@
 <template>
   <main class="pesadas-page pesadas-rapida-page">
-    <header class="pesadas-heading">
-      <div>
-        <router-link class="pesadas-back" :to="`/pesadas/${fecha}`"><span class="pesadas-back-icon">←</span> Ver hoja del día</router-link>
-        <h1>Pesar rápido <span v-if="fechaValida">{{ fechaTexto }}</span></h1>
-        <p>Escribe el nombre, pesa, quita el traste y registra. Una pesada a la vez.</p>
-      </div>
-      <div class="pesadas-day-controls">
-        <router-link class="pesadas-button" to="/despicadoras">Despicadoras</router-link>
-        <span class="pesadas-status" role="status" aria-live="polite">{{ estadoTexto }}</span>
-      </div>
-    </header>
     <section v-if="!fechaValida" class="pesadas-card"><p class="pesadas-alert">La fecha no es válida. Vuelve al historial y selecciona un día.</p></section>
     <section v-else-if="cargando" class="pesadas-card"><p class="pesadas-empty">Abriendo la hoja del día…</p><p v-if="errorCarga" class="pesadas-alert" role="alert">{{ errorCarga }}</p><button v-if="errorCarga" class="pesadas-button" @click="reintentar">Reintentar</button></section>
     <section v-else-if="datosGuardados.eliminado" class="pesadas-card">
@@ -18,13 +7,6 @@
       <router-link class="pesadas-button" to="/pesadas">Volver al historial</router-link>
     </section>
     <template v-else>
-      <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
-        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div>
-        <div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div>
-        <div><small>Pago a despicadoras</small><strong>${{ pago(resumen.pagosRedondeados) }}</strong></div>
-        <div><small>Pesadas en esta sesión</small><strong>{{ ultimas.length }}</strong></div>
-      </section>
-
       <section class="pesadas-card pesadas-rapida-card" aria-label="Registro rápido de pesada">
         <div class="pesadas-rapida-medidas" role="group" aria-label="Medida de esta pesada">
           <span class="pesadas-rapida-label">Medida</span>
@@ -138,8 +120,7 @@ import { guardarDespicadora, observarDespicadoras } from '@/services/despicadora
 import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, normalizarTextoPesada,
   parsearKilosBrutos, parsearPrecioColumna, parsearTraste, siguienteMedida, sumarPesada,
   sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
-import { elementosPesadas, fechaPesadasValida, formatoFechaPesadas,
-  formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
+import { elementosPesadas, fechaPesadasValida, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
 
 export default {
@@ -152,7 +133,6 @@ export default {
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
-    fechaTexto() { return this.fechaValida ? formatoFechaPesadas(this.fecha) : ''; },
     trastes() { return TRASTES_PREDEFINIDOS; },
     datos() {
       const data = { ...this.datosGuardados };
@@ -215,14 +195,6 @@ export default {
       if (!this.editandoColumna || this.editandoColumna.campo !== 'medida') return [];
       return sugerenciasMedidaUtil(this.columnas, this.editandoColumna.id, this.editandoColumna.valor);
     },
-    estadoTexto() {
-      if (this.errorCarga || this.estado.error) return 'Error de sincronización';
-      if (!this.online && (this.estado.pending || this.servidorPendiente)) return 'Sin conexión · cambios pendientes';
-      if (this.estado.saving || this.servidorPendiente) return 'Guardando…';
-      if (this.estado.pending) return 'Cambios pendientes';
-      if (this.desdeCache || !this.online) return 'Sin confirmar conexión';
-      return this.datosGuardados.fecha ? 'Guardado' : 'Hoja nueva';
-    }
   },
   watch: {
     fecha() { this.iniciar(); },
@@ -268,7 +240,6 @@ export default {
   },
   methods: {
     numero: formatoPesada,
-    pago: formatoPagoPesada,
     cargarTraste() {
       try {
         const guardado = JSON.parse(localStorage.getItem(CLAVE_TRASTE_LOCAL) || 'null');
