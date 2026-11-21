@@ -28,12 +28,27 @@
       <section class="pesadas-card pesadas-rapida-card" aria-label="Registro rápido de pesada">
         <div class="pesadas-rapida-medidas" role="group" aria-label="Medida de esta pesada">
           <span class="pesadas-rapida-label">Medida</span>
-          <button v-for="columna in columnas" :key="columna.id" type="button"
-            class="pesadas-rapida-chip" :class="{ activo: columna.id === medidaId }"
-            @click="medidaId = columna.id">
-            {{ columna.medida || 'Sin medida' }} <small>${{ columna.precio }}/kg</small>
-          </button>
+          <div v-for="columna in columnas" :key="columna.id"
+            class="pesadas-rapida-chip" :class="{ activo: columna.id === medidaId }">
+            <input v-if="editandoColumna && editandoColumna.id === columna.id && editandoColumna.campo === 'medida'"
+              ref="editorColumna" v-model="editandoColumna.valor" type="text" autocomplete="off"
+              aria-label="Editar medida" @keydown.enter.prevent="confirmarEdicionColumna"
+              @keydown.esc="cancelarEdicionColumna" @blur="confirmarEdicionColumna">
+            <button v-else type="button" class="pesadas-rapida-chip-mitad"
+              :aria-label="`Medida ${columna.medida || 'sin medida'}`" @click="tocarMitad(columna, 'medida')">
+              {{ columna.medida || 'Sin medida' }}
+            </button>
+            <input v-if="editandoColumna && editandoColumna.id === columna.id && editandoColumna.campo === 'precio'"
+              ref="editorColumna" v-model="editandoColumna.valor" type="text" inputmode="decimal" autocomplete="off"
+              aria-label="Editar precio por kilo" @keydown.enter.prevent="confirmarEdicionColumna"
+              @keydown.esc="cancelarEdicionColumna" @blur="confirmarEdicionColumna">
+            <button v-else type="button" class="pesadas-rapida-chip-mitad precio"
+              :aria-label="`Precio ${columna.precio} pesos por kilo`" @click="tocarMitad(columna, 'precio')">
+              ${{ columna.precio }}/kg
+            </button>
+          </div>
           <span v-if="!columnas.length" class="pesadas-hint">Primero define las medidas en la hoja del día.</span>
+          <span class="pesadas-hint">Toca una medida para pesar con ella. Toca de nuevo la medida o el precio de la seleccionada para editarlos.</span>
         </div>
 
         <div class="pesadas-rapida-nombre">
@@ -119,7 +134,7 @@ import { conectarPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { guardarDespicadora, observarDespicadoras } from '@/services/despicadoras.service';
 import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, normalizarTextoPesada,
-  parsearKilosBrutos, parsearTraste, sumarPesada, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
+  parsearKilosBrutos, parsearPrecioColumna, parsearTraste, sumarPesada, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoFechaPesadas,
   formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
@@ -130,7 +145,7 @@ export default {
   data: () => ({ datosGuardados: {}, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
-    trasteManualActivo: false, medidaId: '', mostrarSugerencias: false, indiceActivo: -1,
+    trasteManualActivo: false, medidaId: '', editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
@@ -248,6 +263,34 @@ export default {
           : { manual: false, valor: this.traste }));
       } catch (_error) { /* El traste solo no se recuerda en este dispositivo. */ }
     },
+    // Mitades del chip: el primer toque selecciona la columna; tocar de nuevo
+    // la mitad de la columna ya seleccionada abre la edición de ese campo.
+    tocarMitad(columna, campo) {
+      if (this.medidaId !== columna.id) { this.medidaId = columna.id; return; }
+      this.editandoColumna = { id: columna.id, campo,
+        valor: campo === 'medida' ? (columna.medida || '') : String(columna.precio ?? 10) };
+      this.$nextTick(() => {
+        const input = this.$refs.editorColumna;
+        const campoInput = Array.isArray(input) ? input[0] : input;
+        if (campoInput) { campoInput.focus(); campoInput.select(); }
+      });
+    },
+    confirmarEdicionColumna() {
+      const edicion = this.editandoColumna;
+      if (!edicion) return;
+      this.editandoColumna = null;
+      if (edicion.campo === 'medida') {
+        this.guardarCampos({ [`columnas.${edicion.id}.medida`]: edicion.valor.trim() });
+      } else {
+        let precio;
+        try { precio = parsearPrecioColumna(edicion.valor); }
+        catch (error) { this.error = error.message; this.editandoColumna = edicion; return; }
+        this.guardarCampos({ [`columnas.${edicion.id}.precio`]: precio });
+      }
+      this.error = '';
+      this._outbox.flush();
+    },
+    cancelarEdicionColumna() { this.editandoColumna = null; },
     elegirTraste(valor) {
       this.trasteManualActivo = false;
       this.trasteManual = '';

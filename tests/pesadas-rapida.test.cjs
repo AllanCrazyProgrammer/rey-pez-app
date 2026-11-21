@@ -64,6 +64,15 @@ test('traste manual: decimal de 0 a 9.9, una décima', async () => {
   assert.throws(() => parsearTraste('0.25'), /máximo un decimal/);
 });
 
+test('precio de columna: decimal positivo o cero, una décima', async () => {
+  const { parsearPrecioColumna } = await helpers;
+  assert.equal(parsearPrecioColumna('12.5'), 12.5);
+  assert.equal(parsearPrecioColumna('.5'), 0.5);
+  assert.equal(parsearPrecioColumna('0'), 0);
+  assert.throws(() => parsearPrecioColumna(''), /número/);
+  assert.throws(() => parsearPrecioColumna('-1'), /positivo/);
+});
+
 test('kilos brutos deben ser positivos', async () => {
   const { parsearKilosBrutos } = await helpers;
   assert.equal(parsearKilosBrutos('12.4'), 12.4);

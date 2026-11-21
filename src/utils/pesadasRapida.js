@@ -82,6 +82,11 @@ export function parsearTraste(valor) {
   return numero;
 }
 
+// Precio por kilo de una columna: decimal positivo o cero, máximo una décima.
+export function parsearPrecioColumna(valor) {
+  return decimalPesada(normalizarDecimal(valor), false, false);
+}
+
 // Kilos brutos de la pesada: decimal positivo, máximo una décima.
 export function parsearKilosBrutos(valor) {
   const numero = decimalPesada(normalizarDecimal(valor), false, false);
