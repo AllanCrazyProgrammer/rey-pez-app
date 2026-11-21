@@ -6,6 +6,7 @@ const { initGoogleDrive } = require('./googleDrive');
 const { renderHtmlPdf } = require('./printHtml');
 const { identificarPeticionesDeAuth } = require('./authReferer');
 const { crearActualizador, urlDeActualizaciones } = require('./actualizaciones');
+const { instalarSelectorBluetooth } = require('./bluetooth');
 
 // A separate profile supports isolated QA without touching real shipments.
 const profile = app.commandLine.getSwitchValue('user-data-dir');
@@ -102,14 +103,10 @@ function createMainWindow() {
   // Docs: https://www.electronjs.org/docs/latest/tutorial/devices
   // En macOS el emparejamiento lo resuelve el sistema, no hace falta pairing handler.
   const sesion = win.webContents.session;
-  win.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
-    event.preventDefault();
-    // La báscula es casi siempre el único dispositivo BLE cerca: se prefiere por nombre
-    // (NVK / K9 / K02) y, si no hay coincidencia, el primero de la lista.
-    const preferida = deviceList.find(d => /nvk|k-?9|k02/i.test(d.deviceName || ''))
-      || deviceList[0];
-    callback(preferida ? preferida.deviceId : '');
-  });
+  // Bluetooth: la búsqueda emite 'select-bluetooth-device' varias veces y la NVK tarda en
+  // aparecer; elegir el primero de la primera lista conectaba a otro dispositivo. El selector
+  // espera a la báscula y muestra un diálogo para elegirla (ver electron/bluetooth.js).
+  instalarSelectorBluetooth(win, dialog);
   sesion.on('select-serial-port', (event, portList, _webContents, callback) => {
     event.preventDefault();
     const preferido = portList.find(p => /nvk|k02/i.test(`${p.portId} ${p.displayName || ''}`))
