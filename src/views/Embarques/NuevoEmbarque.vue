@@ -45,6 +45,9 @@
         @ver-pedido-dia="mostrarModalPedidoDia = true"
       />
 
+      <!-- Peso de la báscula Bluetooth junto al campo de kilos enfocado (se cuelga del body). -->
+      <bascula-peso-flotante />
+
       <!-- Barra de progreso: kilos pesados en el embarque frente al pedido
            del día (limpios + crudos), de 0 a 100 %. -->
       <progreso-embarque
@@ -287,6 +290,7 @@ import AuthErrorNotification from '@/components/layout/AuthErrorNotification.vue
 import authDiagnostic from '@/utils/authDiagnostic.js'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
+import BasculaPesoFlotante from './components/BasculaPesoFlotante.vue'
 import ProgresoEmbarque from './components/ProgresoEmbarque.vue'
 import pdfGenerationMixin from './mixins/pdfGenerationMixin';
 import calculosMixin from './mixins/calculosMixin';
@@ -364,6 +368,7 @@ export default {
     ColaboracionEmbarque,
     Sidebar,
     HeaderEmbarque,
+    BasculaPesoFlotante,
     ProgresoEmbarque,
         ClienteProductos,
     // Registrar los componentes modales

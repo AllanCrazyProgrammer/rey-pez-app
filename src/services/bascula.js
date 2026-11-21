@@ -1,6 +1,8 @@
 // Conexión con la báscula NVK NK-K9 (o cualquier indicador con módulo BLE-UART)
 // usando Web Bluetooth. Funciona en Chrome/Edge (Android, Windows, Mac) con HTTPS.
 // No funciona en iPhone ni dentro de la APK de Android (el WebView no trae Web Bluetooth).
+// Más abajo hay una segunda vía, por puerto serie (Web Serial), para básculas con Bluetooth
+// clásico que se emparejan con PIN desde los ajustes del sistema.
 import { bytesAHex, bytesATexto } from '@/utils/bascula';
 
 // Web Bluetooth exige declarar por adelantado los servicios que se quieren leer.
@@ -94,4 +96,84 @@ export async function leerTodo(servicios) {
     }
   }
   return lecturas;
+}
+
+// --- Puerto serie (Web Serial) ------------------------------------------------------------
+// Si la báscula se empareja desde Ajustes del Sistema / Bluetooth (pide PIN), el sistema crea un
+// puerto serie (en Mac: /dev/cu.NVK-K02) y Chrome lo lee con Web Serial, sin pasar por BLE.
+// Solo en Chrome/Edge de computadora, con HTTPS o localhost.
+export function serialDisponible() {
+  return typeof navigator !== 'undefined' && !!navigator.serial;
+}
+
+// Pide al usuario elegir un puerto, lo abre y entrega cada paquete a
+// onDatos({ uuid: 'serie', bytes, hex, texto }). Los cortes entre paquetes son arbitrarios.
+// onFin(falla) se llama si el puerto se corta solo (apagan la báscula, se sale de alcance);
+// falla es el error, o null si el flujo simplemente terminó. Devuelve { cerrar() }.
+// opciones.serial permite inyectar un navigator.serial falso en las pruebas.
+export async function conectarSerial(onDatos, onFin, opciones = {}) {
+  const { baudRate = 9600 } = opciones;
+  const serial = opciones.serial || (typeof navigator !== 'undefined' ? navigator.serial : undefined);
+  if (!serial) {
+    throw new Error('Este navegador no soporta puertos serie. Abre la app en Chrome o Edge (computadora).');
+  }
+  const puerto = await serial.requestPort();
+  // En enlaces Bluetooth (SPP) la velocidad no importa; para un cable serie común suele ser 9600.
+  await puerto.open({ baudRate });
+
+  let cerrando = false;
+  let lector = null;
+
+  const lectura = (async () => {
+    let falla = null;
+    try {
+      lector = puerto.readable.getReader();
+      for (;;) {
+        const { value, done } = await lector.read();
+        if (done) break;
+        if (value && value.length) {
+          onDatos({ uuid: 'serie', bytes: value, hex: bytesAHex(value), texto: bytesATexto(value) });
+        }
+      }
+    } catch (e) {
+      falla = e;
+    } finally {
+      try {
+        lector.releaseLock();
+      } catch (e) {
+        // El lector ya estaba liberado o nunca se creó.
+      }
+      lector = null;
+    }
+    return falla;
+  })();
+
+  lectura.then(async falla => {
+    if (cerrando) return; // lo cerró la pantalla con cerrar()
+    cerrando = true;
+    try {
+      await puerto.close();
+    } catch (e) {
+      // El puerto ya estaba cerrado (se desconectó el dispositivo).
+    }
+    onFin(falla);
+  });
+
+  return {
+    async cerrar() {
+      if (cerrando) return;
+      cerrando = true;
+      try {
+        if (lector) await lector.cancel();
+      } catch (e) {
+        // Ya estaba cerrado.
+      }
+      await lectura;
+      try {
+        await puerto.close();
+      } catch (e) {
+        // Ya estaba cerrado.
+      }
+    },
+  };
 }

@@ -22,6 +22,20 @@
         {{ menuMovilAbierto ? 'Cerrar menú' : 'Menú del embarque' }}
       </button>
       <div id="embarque-herramientas" class="botones">
+        <!-- Báscula Bluetooth: conecta/reconecta; el peso se ve al enfocar un campo de kilos. -->
+        <button
+          type="button"
+          class="btn-bascula"
+          :class="{ 'btn-bascula--conectada': bascula.conectada, 'btn-bascula--conectando': bascula.conectando }"
+          :disabled="!bascula.soportada || bascula.conectando"
+          :title="tituloBascula"
+          :aria-pressed="bascula.conectada ? 'true' : 'false'"
+          data-bascula-conectar
+          @click="alternarBascula"
+        >
+          <i :class="['fas', bascula.conectando ? 'fa-spinner fa-spin' : 'fa-weight-scale']" aria-hidden="true"></i>
+          {{ textoBascula }}
+        </button>
         <button
           type="button"
           class="btn-sonidos"
@@ -151,6 +165,7 @@ import PreciosHistorialModal from '@/components/Precios/PreciosHistorialModal.vu
 import GenerarEsqueletoEmbarqueButton from './GenerarEsqueletoEmbarqueButton.vue';
 import ConfiguracionTemaEmbarque from './ConfiguracionTemaEmbarque.vue';
 import { useUIStore } from '@/stores/ui';
+import { useBasculaStore } from '@/stores/bascula';
 
 export default {
     directives: { campoColaborativo },
@@ -224,6 +239,21 @@ export default {
     },
     navbarPrincipalVisible() {
       return useUIStore().navbarVisibleEnEmbarque;
+    },
+    bascula() {
+      return useBasculaStore();
+    },
+    textoBascula() {
+      if (this.bascula.conectando) return 'Conectando…';
+      if (this.bascula.conectada) return 'Báscula conectada';
+      if (this.bascula.puedeReconectar) return 'Reconectar báscula';
+      return 'Conectar báscula';
+    },
+    tituloBascula() {
+      if (!this.bascula.soportada) return 'Este navegador no soporta Bluetooth. Abre el embarque en Chrome (computadora o Android).';
+      if (this.bascula.conectada) return `${this.bascula.nombre}: toca un campo de kilos para ver el peso. Clic aquí para desconectar.`;
+      if (this.bascula.puedeReconectar) return 'Se perdió la conexión con la báscula. Enciéndela y toca para reconectar.';
+      return 'Conectar la báscula por Bluetooth y registrar su peso en los campos de kilos';
     }
   },
   watch: {
@@ -239,6 +269,10 @@ export default {
     presenciaCampo(campo) { return { campo: { tipo: 'cabecera', campo }, editores: this.editoresColaboracion }; },
     toggleNavbarPrincipal() {
       useUIStore().toggleNavbarEnEmbarque();
+    },
+    alternarBascula() {
+      if (this.bascula.conectada) this.bascula.desconectar();
+      else this.bascula.conectar();
     },
     volverAEmbarquesMenu() {
       this.$emit('volver');
@@ -633,6 +667,7 @@ label {
 .btn-bloqueo,
 .btn-navbar-principal,
 .btn-sonidos,
+.btn-bascula,
 .btn-configuracion-medidas,
 .btn {
   display: inline-flex;
@@ -658,6 +693,7 @@ label {
 .btn-navbar-principal:hover,
 .btn-sonidos:hover,
 .btn-configuracion-medidas:hover,
+.btn-bascula:hover:not(:disabled),
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
   color: #fff;
@@ -677,6 +713,42 @@ label {
 .btn-bloqueo:not(.bloqueado) i { color: #4ade80; }
 .btn-bloqueo.bloqueado i { color: #fb7185; }
 .btn-configuracion-medidas i { color: var(--embarque-acento, #38d9ff); }
+
+/* Conectar báscula: el botón que más se usa al pesar. Resalta con color propio (ámbar mientras
+   está desconectada, verde al conectar) para que se distinga del resto de la barra. */
+.btn-bascula {
+  color: #1a0f00;
+  border-color: #fbbf24;
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, .35), 0 6px 18px rgba(249, 115, 22, .4);
+  font-weight: 800;
+  animation: bascula-latido 2.4s ease-in-out infinite;
+}
+.btn-bascula i { color: #1a0f00; font-size: 1rem; }
+.btn-bascula:hover:not(:disabled) {
+  color: #1a0f00;
+  border-color: #fde68a;
+  background: linear-gradient(135deg, #fcd34d, #fb923c);
+}
+.btn-bascula:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.btn-bascula:disabled { animation: none; opacity: .55; cursor: not-allowed; filter: grayscale(.45); }
+.btn-bascula--conectando { animation: none; }
+.btn-bascula--conectada,
+.btn-bascula--conectada:hover:not(:disabled) {
+  color: #02170b;
+  border-color: #4ade80;
+  background: linear-gradient(135deg, #4ade80, #22c55e);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, .35), 0 6px 18px rgba(34, 197, 94, .4);
+  animation: none;
+}
+.btn-bascula--conectada i { color: #02170b; }
+@keyframes bascula-latido {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(251, 191, 36, .35), 0 6px 18px rgba(249, 115, 22, .3); }
+  50% { box-shadow: 0 0 0 4px rgba(251, 191, 36, .22), 0 6px 24px rgba(249, 115, 22, .6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-bascula { animation: none; }
+}
 
 .btn-volver i,
 .btn-bloqueo i,

@@ -291,6 +291,7 @@
                         @blur="actualizarProducto"
                         :disabled="embarqueBloqueado"
                         enterkeyhint="enter"
+                        @bascula-registrado="actualizarProducto"
                         @keydown.tab="handleKiloTab($event, kiloIndex)"
                         data-pesada
                         @keydown="handlePesadaEnter($event, 'kilo')"
