@@ -75,7 +75,7 @@
             <label class="pesadas-rapida-label" for="pesadas-rapida-kilos">Kilos en la báscula</label>
             <!-- La báscula NVK llenará este input al final (mismo store que embarques). -->
             <input id="pesadas-rapida-kilos" ref="kilos" v-model="kilosTexto" type="text" inputmode="decimal"
-              autocomplete="off" placeholder="0.0" @keydown.enter.prevent="registrar">
+              autocomplete="off" placeholder="0.0" @keydown.enter.prevent="enterKilos">
           </div>
           <div class="pesadas-rapida-traste">
             <span class="pesadas-rapida-label">Traste (se resta)</span>
@@ -381,6 +381,11 @@ export default {
         this.seleccionada = { id: ref.id, nombre, apodo: '' };
         if (this.$refs.kilos) this.$refs.kilos.focus();
       } catch (_error) { this.error = 'No se pudo dar de alta. Revisa la conexión e inténtalo de nuevo.'; }
+    },
+    // Enter en kilos SOLO oculta el teclado: no registra ni limpia nada.
+    // Únicamente el botón "Registrar pesada" registra.
+    enterKilos() {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     },
     registrar() {
       if (this.registrando || !this.medidaId) return;
