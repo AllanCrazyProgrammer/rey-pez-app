@@ -86,14 +86,11 @@
               <button type="button" class="pesadas-rapida-traste-btn" :class="{ activo: trasteManualActivo }"
                 @click="activarTrasteManual">Otro</button>
               <input v-if="trasteManualActivo" v-model="trasteManual" type="text" inputmode="decimal"
-                autocomplete="off" placeholder="0.0" aria-label="Traste manual en kilos" @input="guardarTraste">
+                autocomplete="off" placeholder="ej. 0.4" aria-label="Traste manual en kilos" @input="guardarTraste">
             </div>
           </div>
         </div>
 
-        <p v-if="vistaPrevia" class="pesadas-rapida-preview" role="status">
-          {{ vistaPrevia }}
-        </p>
         <p v-if="error" class="pesadas-alert" role="alert">{{ error }}</p>
 
         <div class="pesadas-rapida-total-row">
@@ -189,25 +186,11 @@ export default {
       }
       return this.traste || 0;
     },
-    bruto() {
-      try { return parsearKilosBrutos(this.kilosTexto); } catch (_error) { return null; }
-    },
-    neto() {
-      if (this.bruto == null || this.trasteEfectivo == null) return null;
-      return calcularNetoPesada(this.bruto, this.trasteEfectivo);
-    },
     medidaActual() { return this.columnas.find(col => col.id === this.medidaId) || null; },
     // Kilos en grande: los que lleva hoy la despicadora seleccionada; si aún no
     // hay nadie seleccionada, el total del día.
     kilosGrandes() { return this.personaActual ? this.kilosHoyPersona : this.resumen.kilos; },
     etiquetaKilosGrandes() { return this.personaActual ? `${this.nombreCanonico} lleva hoy` : 'Kilos del día'; },
-    vistaPrevia() {
-      if (this.bruto == null || this.neto == null || !this.medidaActual) return '';
-      const actual = this.personaActual ? (this.datos.pesos?.[this.personaActual.id]?.[this.medidaId] || 0) : 0;
-      const nuevo = sumarPesada(actual, this.neto);
-      const quien = this.nombreCanonico ? `${this.nombreCanonico} · ` : '';
-      return `${quien}${this.bruto} kg − traste ${this.trasteEfectivo} = ${this.neto} kg netos en ${this.medidaActual.medida || 'Sin medida'} · llevaba ${actual} kg, quedaría en ${nuevo} kg (hoy lleva ${this.kilosHoyPersona} kg en total).`;
-    },
     estadoTexto() {
       if (this.errorCarga || this.estado.error) return 'Error de sincronización';
       if (!this.online && (this.estado.pending || this.servidorPendiente)) return 'Sin conexión · cambios pendientes';

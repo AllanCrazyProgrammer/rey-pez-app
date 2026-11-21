@@ -74,11 +74,14 @@ function normalizarDecimal(valor) {
   return texto.startsWith('.') ? `0${texto}` : texto;
 }
 
-// Traste manual: decimal positivo o cero, máximo una décima (0 a 9.9).
+// Traste manual: SIEMPRE decimal, nunca entero. Un dígito solo (1-9) se toma
+// como décimas: "4" es 0.4 kg, ".7" es 0.7 kg, "0.5" es 0.5 kg. Máximo 9.9.
 export function parsearTraste(valor) {
-  if (String(valor == null ? '' : valor).trim() === '') return null;
-  const numero = decimalPesada(normalizarDecimal(valor), false, false);
-  if (numero == null || numero > 9.9) throw new Error('El traste debe ser de 0 a 9.9 kg.');
+  const texto = normalizarDecimal(valor);
+  if (texto === '') return null;
+  if (/^[1-9]$/.test(texto)) return Number(texto) / 10;
+  const numero = decimalPesada(texto, false, false);
+  if (numero == null || numero > 9.9) throw new Error('El traste debe ser decimal, ej. 0.4 (no enteros).');
   return numero;
 }
 

@@ -232,7 +232,6 @@
 .pesadas-rapida-traste-btn { border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-width: 72px; min-height: 64px; padding: 10px 14px; font-size: 24px; font-weight: 800; cursor: pointer; font-variant-numeric: tabular-nums; }
 .pesadas-rapida-traste-btn.activo { border-color: #583d92; background: #efeaf6; box-shadow: 0 0 0 2px #583d92; }
 .pesadas-rapida-trastes input { width: 110px; border: 2px solid #583d92; border-radius: 12px; padding: 10px 14px; font-size: 24px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
-.pesadas-rapida-preview { background: #eef4fb; border: 1px solid #c9dcf0; color: #215d82; border-radius: 10px; padding: 14px 16px; font-size: 18px; font-weight: 700; margin: 8px 0 16px; }
 .pesadas-rapida-exito { color: #23654c; background: #eaf7f1; border: 1px solid #bfe6d2; border-radius: 8px; padding: 12px 14px; font-size: 16px; font-weight: 700; margin: 12px 0; }
 .pesadas-rapida-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .pesadas-rapida-registrar { min-height: 64px; padding: 14px 32px; font-size: 20px; }

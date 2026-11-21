@@ -55,12 +55,16 @@ test('sumar pesada acumula sobre lo que ya lleva, a una décima', async () => {
   assert.equal(sumarPesada(0, 0.1), 0.1);
 });
 
-test('traste manual: decimal de 0 a 9.9, una décima', async () => {
+test('traste manual: siempre decimal, nunca entero', async () => {
   const { parsearTraste } = await helpers;
   assert.equal(parsearTraste('0.5'), 0.5);
   assert.equal(parsearTraste('.7'), 0.7);
+  assert.equal(parsearTraste('4'), 0.4);
+  assert.equal(parsearTraste('7'), 0.7);
+  assert.equal(parsearTraste('4.5'), 4.5);
   assert.equal(parsearTraste(''), null);
-  assert.throws(() => parsearTraste('10'), /0 a 9.9/);
+  assert.throws(() => parsearTraste('12'), /decimal/);
+  assert.throws(() => parsearTraste('10'), /decimal/);
   assert.throws(() => parsearTraste('0.25'), /máximo un decimal/);
 });
 
