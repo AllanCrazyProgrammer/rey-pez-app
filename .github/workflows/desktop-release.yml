@@ -1,0 +1,106 @@
+# Compila el DMG de escritorio para Mac (Apple Silicon) y lo publica en GitHub Releases.
+#
+# No había workflow para el DMG: antes se generaba a mano en la Mac
+# (`npm run electron:mac`). Este workflow lo hace en Actions (macos-latest, arm64).
+#
+# Secrets del repositorio (Settings → Secrets and variables → Actions):
+#   DESKTOP_DRIVE_CLIENTS_JSON    Contenido de electron/google-drive-clients.local.json
+#                                 (JSON con la clave "darwin": { clientId, clientSecret }).
+#                                 Lo exige scripts/validate-drive-build.cjs (beforePack):
+#                                 sin ese cliente OAuth de escritorio, electron-builder falla.
+#                                 El archivo está en .gitignore y solo existe en la Mac de Allan.
+#   VUE_APP_GOOGLE_PICKER_API_KEY       (opcionales) las mismas variables de .env.local,
+#   VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID   que no está en Git. Sin ellas, la web se compila
+#   VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER  igual pero sin la integración con Google Drive.
+#
+# Se dispara a mano (Actions → DMG Escritorio (Mac) → Run workflow) o al crear una etiqueta
+# desktop-v* (por ejemplo: git tag desktop-v0.3.23 && git push origin desktop-v0.3.23).
+# La etiqueta de la release es desktop-v<versión de package.json>.
+#
+# El DMG no está firmado ni notarizado (identity "-", hardenedRuntime false en package.json):
+# en Mac, después de arrastrar la app a Aplicaciones, correr una vez en Terminal
+# `xattr -dr com.apple.quarantine /Applications/ReyPez.app`.
+#
+# Ojo: un cambio en electron/ (como los handlers de Bluetooth de la báscula NVK)
+# exige instalador nuevo: la actualización dentro de la app solo trae pantallas,
+# y "reypez.minimoInstalador.escritorio" en package.json debe subirse a la misma
+# versión para que las apps viejas no descarguen pantallas que su instalador
+# no puede correr. Ver docs/ACTUALIZACIONES_EN_APP.md.
+name: DMG Escritorio (Mac)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Etiqueta de la release (vacío = desktop-v<versión>)'
+        required: false
+        default: ''
+  push:
+    tags: ['desktop-v*']
+
+jobs:
+  build-dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Preparar clientes OAuth de escritorio (Drive)
+        env:
+          DRIVE_CLIENTS_JSON: ${{ secrets.DESKTOP_DRIVE_CLIENTS_JSON }}
+        run: |
+          if [ -z "$DRIVE_CLIENTS_JSON" ]; then
+            echo "::error::Falta el secret DESKTOP_DRIVE_CLIENTS_JSON con electron/google-drive-clients.local.json (clave darwin). Sin él, validate-drive-build.cjs falla el empaquetado."
+            exit 1
+          fi
+          printf '%s' "$DRIVE_CLIENTS_JSON" > electron/google-drive-clients.local.json
+          node -e "const c=require('./electron/google-drive-clients.local.json'); if(!c.darwin?.clientId || !c.darwin?.clientSecret) throw new Error('El secret DESKTOP_DRIVE_CLIENTS_JSON no trae darwin.clientId/clientSecret')"
+
+      - name: Compilar DMG (Mac Apple Silicon)
+        run: npm run electron:mac
+        env:
+          VUE_APP_GOOGLE_PICKER_API_KEY: ${{ secrets.VUE_APP_GOOGLE_PICKER_API_KEY }}
+          VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID: ${{ secrets.VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID }}
+          VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER: ${{ secrets.VUE_APP_GOOGLE_CLOUD_PROJECT_NUMBER }}
+
+      - name: Verificar DMG
+        run: |
+          DMG=$(find release -name 'ReyPez-*.dmg' -type f | head -n 1)
+          test -n "$DMG"
+          echo "DMG=$DMG" >> "$GITHUB_ENV"
+          ls -lh "$DMG"
+
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_ENTRADA: ${{ inputs.tag }}
+          TAG_PUSH: ${{ github.ref_name }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$TAG_ENTRADA" ]; then
+            TAG="$TAG_ENTRADA"
+          elif [[ "$TAG_PUSH" == desktop-v* ]]; then
+            TAG="$TAG_PUSH"
+          else
+            TAG="desktop-v$VERSION"
+          fi
+          test -f "$DMG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG" --clobber
+          else
+            gh release create "$TAG" "$DMG" \
+              --title "ReyPez Escritorio $VERSION (Mac)" \
+              --notes "DMG de ReyPez para Mac Apple Silicon (M1/M2/M3/M4).
+
+          Instalación: abre el DMG, arrastra ReyPez a Aplicaciones y corre una vez en Terminal: xattr -dr com.apple.quarantine /Applications/ReyPez.app (el instalador no está firmado).
+
+          Esta versión exige instalador nuevo: trae cambio nativo en electron/ (handlers de Bluetooth para la báscula NVK NK-K9). La actualización dentro de la app no alcanza."
+          fi
+          echo "Release: https://github.com/${{ github.repository }}/releases/tag/$TAG"
