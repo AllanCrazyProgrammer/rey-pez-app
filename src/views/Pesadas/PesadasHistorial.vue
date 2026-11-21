@@ -3,6 +3,7 @@
     <header class="pesadas-heading">
       <div><p class="pesadas-eyebrow">REGISTRO DIARIO</p><h1>Pesadas</h1><p>Las pesadas y los pagos de cada jornada, en su propia hoja.</p></div>
       <button class="pesadas-button primary" :disabled="!!creando" @click="crearDia">Crear día de hoy <span aria-hidden="true">→</span></button>
+      <router-link class="pesadas-button" to="/despicadoras">Despicadoras</router-link>
     </header>
     <section class="pesadas-card">
       <form class="pesadas-toolbar" @submit.prevent="crearDia">
@@ -21,6 +22,7 @@
             <div class="pesadas-history-day-heading">
               <router-link :to="`/pesadas/${dia.fecha}`"><strong>{{ fechaTexto(dia.fecha) }}</strong><small v-if="dia.pendiente">Pendiente de sincronizar</small></router-link>
               <div class="pesadas-history-actions">
+                <router-link class="pesadas-button primary" :to="`/pesadas/${dia.fecha}/rapida`">⚡ Pesar rápido</router-link>
                 <button class="pesadas-button" :aria-label="`Ver kilos por medida del ${fechaTexto(dia.fecha)}`" @click="fechaMedidas = dia.fecha">Kilos por medida</button>
                 <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
               </div>

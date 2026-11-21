@@ -198,7 +198,50 @@
 }
 
 /* Menú de fila (clic derecho / mantener pulsado el nombre). */
-.pesadas-grid .name-cell { -webkit-touch-callout: none; }
-.pesadas-row-menu { position: fixed; z-index: 1060; min-width: 210px; padding: 6px; border: 1px solid #d9d2e3; border-radius: 10px; background: #fff; box-shadow: 0 12px 32px rgba(36, 22, 56, .22); display: flex; flex-direction: column; gap: 2px; }
+.pesadas-grid .name-cell { -webkit-touch-callout: none; }.pesadas-row-menu { position: fixed; z-index: 1060; min-width: 210px; padding: 6px; border: 1px solid #d9d2e3; border-radius: 10px; background: #fff; box-shadow: 0 12px 32px rgba(36, 22, 56, .22); display: flex; flex-direction: column; gap: 2px; }
 .pesadas-row-menu button { border: 0; background: transparent; color: #2d2340; text-align: left; font-weight: 600; font-size: 16px; padding: 12px 14px; border-radius: 6px; cursor: pointer; }
 .pesadas-row-menu button:hover, .pesadas-row-menu button:focus-visible { background: #efeaf6; outline: none; }
+
+/* Modo rápido de pesadas (zoom in): una pesada a la vez, todo grande. */
+.pesadas-rapida-page .pesadas-heading { align-items: flex-start; }
+.pesadas-rapida-card { padding: 28px; }
+.pesadas-rapida-label { display: block; font-size: 15px; font-weight: 800; color: #453575; margin-bottom: 10px; }
+.pesadas-rapida-medidas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 28px; }
+.pesadas-rapida-medidas .pesadas-rapida-label { margin-bottom: 0; margin-right: 6px; }
+.pesadas-rapida-chip { border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-height: 56px; padding: 10px 18px; font-size: 18px; font-weight: 800; cursor: pointer; }
+.pesadas-rapida-chip small { display: block; font-size: 13px; font-weight: 600; color: #746780; }
+.pesadas-rapida-chip.activo { border-color: #583d92; background: #efeaf6; box-shadow: 0 0 0 2px #583d92; }
+.pesadas-rapida-nombre { position: relative; margin-bottom: 28px; }
+.pesadas-rapida-nombre input { width: 100%; border: 2px solid #cec7e0; border-radius: 12px; background: #fff; color: #25233c; padding: 16px 20px; font-size: 28px; font-weight: 700; }
+.pesadas-rapida-nombre input:focus { border-color: #583d92; outline: none; box-shadow: 0 0 0 3px #583d9233; }
+.pesadas-rapida-sugerencias { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); list-style: none; padding: 8px; margin: 0; border: 1px solid #d9d2e3; border-radius: 12px; background: #fff; box-shadow: 0 16px 40px rgba(36, 22, 56, .25); max-height: 320px; overflow-y: auto; }
+.pesadas-rapida-sugerencias button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-radius: 8px; background: transparent; color: #25233c; text-align: left; font-size: 20px; font-weight: 600; padding: 14px 16px; cursor: pointer; }
+.pesadas-rapida-sugerencias button.activo, .pesadas-rapida-sugerencias button:hover { background: #efeaf6; }
+.pesadas-rapida-sugerencias small { color: #746780; font-weight: 400; margin-left: 6px; }
+.pesadas-rapida-ya { color: #23654c; background: #eaf7f1; border-radius: 20px; font-size: 14px; font-weight: 800; padding: 6px 12px; white-space: nowrap; }
+.pesadas-rapida-kilos-row { display: flex; flex-wrap: wrap; gap: 28px; margin-bottom: 20px; }
+.pesadas-rapida-kilos { flex: 1 1 260px; }
+.pesadas-rapida-kilos input { width: 100%; border: 2px solid #cec7e0; border-radius: 12px; background: #fff; color: #25233c; padding: 16px 20px; font-size: 40px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.pesadas-rapida-kilos input:focus { border-color: #583d92; outline: none; box-shadow: 0 0 0 3px #583d9233; }
+.pesadas-rapida-traste { flex: 1 1 300px; }
+.pesadas-rapida-trastes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pesadas-rapida-traste-btn { border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-width: 72px; min-height: 64px; padding: 10px 14px; font-size: 24px; font-weight: 800; cursor: pointer; font-variant-numeric: tabular-nums; }
+.pesadas-rapida-traste-btn.activo { border-color: #583d92; background: #efeaf6; box-shadow: 0 0 0 2px #583d92; }
+.pesadas-rapida-trastes input { width: 110px; border: 2px solid #583d92; border-radius: 12px; padding: 10px 14px; font-size: 24px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.pesadas-rapida-preview { background: #eef4fb; border: 1px solid #c9dcf0; color: #215d82; border-radius: 10px; padding: 14px 16px; font-size: 18px; font-weight: 700; margin: 8px 0 16px; }
+.pesadas-rapida-exito { color: #23654c; background: #eaf7f1; border: 1px solid #bfe6d2; border-radius: 8px; padding: 12px 14px; font-size: 16px; font-weight: 700; margin: 12px 0; }
+.pesadas-rapida-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.pesadas-rapida-registrar { min-height: 64px; padding: 14px 32px; font-size: 20px; }
+.pesadas-rapida-sesion { margin-top: 28px; border-top: 1px solid #eeeaf4; padding-top: 20px; }
+.pesadas-rapida-sesion h2 { font-size: 18px; margin: 0 0 10px; color: #453575; }
+.pesadas-rapida-sesion ul { list-style: none; padding: 0; margin: 0; }
+.pesadas-rapida-sesion li { padding: 10px 0; border-bottom: 1px solid #f0edf5; font-size: 16px; }
+.pesadas-rapida-sesion small { color: #746780; }
+.pesadas-rapida-terminar { margin-top: 4px; min-height: 56px; padding: 12px 28px; font-size: 17px; }
+@media (max-width: 760px) {
+  .pesadas-rapida-card { padding: 18px; }
+  .pesadas-rapida-nombre input { font-size: 22px; }
+  .pesadas-rapida-kilos input { font-size: 32px; }
+  .pesadas-rapida-registrar { width: 100%; }
+  .pesadas-rapida-terminar { width: 100%; }
+}

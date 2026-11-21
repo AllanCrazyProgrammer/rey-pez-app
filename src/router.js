@@ -65,9 +65,21 @@ Vue.use(Router);
 
 const routes = [
   {
+    path: '/despicadoras',
+    name: 'DespicadorasMenu',
+    component: () => import('@/views/Pesadas/DespicadorasMenu.vue')
+  },
+  {
     path: '/pesadas',
     name: 'PesadasHistorial',
     component: () => import('@/views/Pesadas/PesadasHistorial.vue')
+  },
+  {
+    // Modo rápido (zoom in): una pesada a la vez. Antes de /pesadas/:fecha.
+    path: '/pesadas/:fecha/rapida',
+    name: 'PesadasRapida',
+    component: () => import('@/views/Pesadas/PesadasRapida.vue'),
+    props: true
   },
   {
     path: '/pesadas/:fecha',
