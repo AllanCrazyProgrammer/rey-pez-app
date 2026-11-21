@@ -76,6 +76,11 @@ const routes = [
     props: true
   },
   {
+    path: '/bascula',
+    name: 'BasculaDiagnostico',
+    component: () => import('@/views/Bascula/BasculaDiagnostico.vue')
+  },
+  {
     path: '/login',
     name: 'Login',
     component: Login
