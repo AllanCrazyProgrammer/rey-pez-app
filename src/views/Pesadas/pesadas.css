@@ -253,6 +253,7 @@
 .pesadas-rapida-total-row { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 12px; margin-top: 8px; }
 .pesadas-rapida-total { flex: 1 1 auto; min-width: 0; background: #f4f1f8; border: 1px solid #e3ddf0; border-radius: 12px; padding: 10px 20px; }
 .pesadas-rapida-total small { display: block; color: #716780; font-size: 14px; font-weight: 700; }
+.pesadas-rapida-total-hoy { margin-top: 4px; }
 .pesadas-rapida-total strong { font-size: 56px; line-height: 1.05; color: #453575; font-variant-numeric: tabular-nums; }
 .pesadas-rapida-total strong span { font-size: 24px; font-weight: 400; }
 .pesadas-rapida-total-row .pesadas-rapida-registrar { flex: 0 1 auto; min-height: 80px; white-space: normal; text-align: center; }

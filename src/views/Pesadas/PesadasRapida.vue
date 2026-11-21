@@ -100,8 +100,9 @@
 
         <div class="pesadas-rapida-total-row">
           <div class="pesadas-rapida-total">
-            <small>{{ etiquetaKilosGrandes }}</small>
-            <strong>{{ numero(kilosGrandes) }} <span>kg</span></strong>
+            <small>Neto a registrar</small>
+            <strong>{{ numero(netoMostrar) }} <span>kg</span></strong>
+            <small class="pesadas-rapida-total-hoy">{{ textoLlevaHoy }}</small>
           </div>
           <button class="pesadas-button primary pesadas-rapida-registrar" type="button"
             :disabled="!medidaId || registrando" @click="registrar">
@@ -193,6 +194,21 @@ export default {
       return this.traste || 0;
     },
     medidaActual() { return this.columnas.find(col => col.id === this.medidaId) || null; },
+    // En grande va el neto de la pesada que se va a registrar (kilos − traste),
+    // no lo que lleva la despicadora ni el total del día.
+    netoActual() {
+      let bruto;
+      try { bruto = parsearKilosBrutos(this.kilosTexto); } catch (_error) { return null; }
+      if (this.trasteEfectivo == null) return null;
+      return calcularNetoPesada(bruto, this.trasteEfectivo);
+    },
+    netoMostrar() { const neto = this.netoActual; return neto == null || neto <= 0 ? 0 : neto; },
+    // Abajo, en chiquito: lo que lleva hoy la despicadora (0 si es nueva).
+    // Sin nombre escrito, el total del día.
+    textoLlevaHoy() {
+      if (!this.nombreCanonico) return `Kilos del día: ${formatoPesada(this.resumen.kilos)} kg`;
+      return `${this.nombreCanonico} lleva hoy ${formatoPesada(this.kilosHoyPersona)} kg`;
+    },
     // La hoja ya se conoce (cargó o se confirmó que no existe): no son los
     // valores por defecto previos a la primera lectura.
     datosListos() { return !this.cargando || Object.keys(this.datosGuardados.columnas || {}).length > 0 || !!this.datosGuardados.fecha; },
@@ -200,10 +216,6 @@ export default {
       if (!this.editandoColumna || this.editandoColumna.campo !== 'medida') return [];
       return sugerenciasMedidaUtil(this.columnas, this.editandoColumna.id, this.editandoColumna.valor);
     },
-    // Kilos en grande: los que lleva hoy la despicadora seleccionada; si aún no
-    // hay nadie seleccionada, el total del día.
-    kilosGrandes() { return this.personaActual ? this.kilosHoyPersona : this.resumen.kilos; },
-    etiquetaKilosGrandes() { return this.personaActual ? `${this.nombreCanonico} lleva hoy` : 'Kilos del día'; },
     estadoTexto() {
       if (this.errorCarga || this.estado.error) return 'Error de sincronización';
       if (!this.online && (this.estado.pending || this.servidorPendiente)) return 'Sin conexión · cambios pendientes';
