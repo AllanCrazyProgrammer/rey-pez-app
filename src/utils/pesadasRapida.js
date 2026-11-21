@@ -74,14 +74,32 @@ function normalizarDecimal(valor) {
   return texto.startsWith('.') ? `0${texto}` : texto;
 }
 
-// Traste manual: SIEMPRE decimal, nunca entero. Un dígito solo (1-9) se toma
-// como décimas: "4" es 0.4 kg, ".7" es 0.7 kg, "0.5" es 0.5 kg. Máximo 9.9.
+// Lo que se muestra en el campo "Otro" mientras se escribe: siempre con
+// punto decimal por default, para que nunca se escriba 1 kg o más.
+// "2" -> "0.2", "05" -> "0.5", ".7" -> "0.7", "0" -> "0.", "0.5" -> "0.5".
+export function formatearTrasteManual(valor) {
+  const texto = String(valor == null ? '' : valor).trim().replace(/[^0-9.]/g, '');
+  if (texto === '') return '';
+  if (texto === '0') return '0.';
+  if (texto.startsWith('.')) return `0${texto}`;
+  if (!texto.includes('.')) {
+    const digitos = texto.replace(/^0+/, '');
+    return `0.${digitos}`;
+  }
+  const [entero, ...resto] = texto.split('.');
+  return `${entero}.${resto.join('')}`;
+}
+
+// Traste manual: SIEMPRE decimal menor a 1 kg, con punto por default.
+// "2" es 0.2 kg, ".7" es 0.7 kg, "0.5" es 0.5 kg. Un valor de 1 kg o más
+// no es traste: se rechaza (antes se aceptaba hasta 9.9).
 export function parsearTraste(valor) {
-  const texto = normalizarDecimal(valor);
+  let texto = formatearTrasteManual(valor);
   if (texto === '') return null;
-  if (/^[1-9]$/.test(texto)) return Number(texto) / 10;
+  if (texto.endsWith('.')) texto = texto.slice(0, -1);
+  if (texto === '') return null;
   const numero = decimalPesada(texto, false, false);
-  if (numero == null || numero > 9.9) throw new Error('El traste debe ser decimal, ej. 0.4 (no enteros).');
+  if (numero == null || numero >= 1) throw new Error('El traste debe ser menor a 1 kg, ej. 0.2.');
   return numero;
 }
 

@@ -71,8 +71,8 @@
                 @click="elegirTraste(valor)">{{ valor.toFixed(1) }}</button>
               <button type="button" class="pesadas-rapida-traste-btn" :class="{ activo: trasteManualActivo }"
                 @click="activarTrasteManual">Otro</button>
-              <input v-if="trasteManualActivo" v-model="trasteManual" type="text" inputmode="decimal"
-                autocomplete="off" placeholder="ej. 0.4" aria-label="Traste manual en kilos" @input="guardarTraste">
+              <input v-if="trasteManualActivo" :value="trasteManual" type="text" inputmode="decimal"
+                autocomplete="off" placeholder="ej. 0.4" aria-label="Traste manual en kilos" @input="escribirTrasteManual">
             </div>
           </div>
         </div>
@@ -117,7 +117,7 @@ import { nanoid } from 'nanoid';
 import { conectarPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { guardarDespicadora, observarDespicadoras } from '@/services/despicadoras.service';
-import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, normalizarTextoPesada,
+import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, formatearTrasteManual, normalizarTextoPesada,
   parsearKilosBrutos, parsearPrecioColumna, parsearTraste, siguienteMedida, sumarPesada,
   sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoPesada, resumenPesadas } from '@/utils/pesadas';
@@ -244,7 +244,7 @@ export default {
       try {
         const guardado = JSON.parse(localStorage.getItem(CLAVE_TRASTE_LOCAL) || 'null');
         if (!guardado) return;
-        if (guardado.manual) { this.trasteManualActivo = true; this.trasteManual = String(guardado.valor); }
+        if (guardado.manual) { this.trasteManualActivo = true; this.trasteManual = formatearTrasteManual(String(guardado.valor)); }
         else if (TRASTES_PREDEFINIDOS.includes(guardado.valor)) this.traste = guardado.valor;
       } catch (_error) { /* Sin traste guardado: se pesa sin restar nada. */ }
     },
@@ -315,6 +315,18 @@ export default {
       this.trasteManualActivo = false;
       this.trasteManual = '';
       this.traste = this.traste === valor ? null : valor;
+      this.guardarTraste();
+    },
+    // Traste "Otro": al escribir se pone el punto decimal por default
+    // ("2" -> "0.2") y solo se acepta una décima, para que nunca sea 1 kg o más.
+    escribirTrasteManual(event) {
+      const crudo = event.target.value;
+      const anterior = this.trasteManual;
+      // Al borrar no se reformatea, para poder vaciar el campo.
+      if (crudo.length < anterior.length) { this.trasteManual = crudo; this.guardarTraste(); return; }
+      const formateado = formatearTrasteManual(crudo);
+      if ((formateado.split('.')[1] || '').length > 1) { event.target.value = anterior; return; }
+      this.trasteManual = formateado;
       this.guardarTraste();
     },
     activarTrasteManual() {

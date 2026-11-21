@@ -55,17 +55,25 @@ test('sumar pesada acumula sobre lo que ya lleva, a una décima', async () => {
   assert.equal(sumarPesada(0, 0.1), 0.1);
 });
 
-test('traste manual: siempre decimal, nunca entero', async () => {
-  const { parsearTraste } = await helpers;
+test('traste manual: siempre decimal menor a 1 kg, con punto por default', async () => {
+  const { parsearTraste, formatearTrasteManual } = await helpers;
   assert.equal(parsearTraste('0.5'), 0.5);
   assert.equal(parsearTraste('.7'), 0.7);
   assert.equal(parsearTraste('4'), 0.4);
   assert.equal(parsearTraste('7'), 0.7);
-  assert.equal(parsearTraste('4.5'), 4.5);
+  assert.equal(parsearTraste('2'), 0.2);
+  assert.equal(parsearTraste('0'), 0);
   assert.equal(parsearTraste(''), null);
-  assert.throws(() => parsearTraste('12'), /decimal/);
-  assert.throws(() => parsearTraste('10'), /decimal/);
+  assert.throws(() => parsearTraste('4.5'), /menor a 1/);
+  assert.throws(() => parsearTraste('1.5'), /menor a 1/);
   assert.throws(() => parsearTraste('0.25'), /máximo un decimal/);
+  assert.equal(formatearTrasteManual('2'), '0.2');
+  assert.equal(formatearTrasteManual('05'), '0.5');
+  assert.equal(formatearTrasteManual('.7'), '0.7');
+  assert.equal(formatearTrasteManual('0'), '0.');
+  assert.equal(formatearTrasteManual('0.5'), '0.5');
+  assert.equal(formatearTrasteManual('1.5'), '1.5');
+  assert.equal(formatearTrasteManual(''), '');
 });
 
 test('siguiente medida: la de después de la última con kilos', async () => {
