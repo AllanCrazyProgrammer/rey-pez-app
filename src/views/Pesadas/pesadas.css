@@ -210,8 +210,8 @@
 .pesadas-rapida-medidas .pesadas-rapida-label { margin-bottom: 0; margin-right: 6px; }
 .pesadas-rapida-chip { display: flex; align-items: stretch; border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-height: 56px; overflow: hidden; }
 .pesadas-rapida-chip.activo { border-color: #583d92; background: #efeaf6; box-shadow: 0 0 0 2px #583d92; }
-.pesadas-rapida-chip-mitad { flex: 1 1 0; min-width: 0; border: 0; background: transparent; color: #453575; font-size: 18px; font-weight: 800; padding: 10px 14px; cursor: pointer; }
-.pesadas-rapida-chip-mitad.precio { border-left: 2px solid #cec7e0; font-variant-numeric: tabular-nums; }
+.pesadas-rapida-chip-mitad { flex: 1 1 0; min-width: 0; border: 0; background: transparent; color: #453575; font-size: 18px; font-weight: 800; padding: 10px 14px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pesadas-rapida-chip-mitad.precio { border-left: 2px solid #cec7e0; font-size: 15px; padding: 10px 8px; font-variant-numeric: tabular-nums; }
 .pesadas-rapida-chip.activo .pesadas-rapida-chip-mitad.precio { border-left-color: #583d92; }
 .pesadas-rapida-chip input { flex: 1 1 0; min-width: 0; border: 0; background: #fff; color: #25233c; font-size: 18px; font-weight: 800; padding: 10px 14px; text-align: center; }
 .pesadas-rapida-chip input:focus { outline: 2px solid #583d92; outline-offset: -2px; }

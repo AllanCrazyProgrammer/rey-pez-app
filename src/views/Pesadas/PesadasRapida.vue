@@ -53,7 +53,6 @@
             </li>
           </ul>
           <span v-if="!columnas.length" class="pesadas-hint">Primero define las medidas en la hoja del día.</span>
-          <span class="pesadas-hint">Al entrar se selecciona la siguiente medida después de la última pesada. Toca una medida para pesar con ella; toca de nuevo la medida o el precio de la seleccionada para editarlos.</span>
         </div>
 
         <div class="pesadas-rapida-nombre">
@@ -306,11 +305,16 @@ export default {
         if (campoInput) { campoInput.focus(); campoInput.select(); }
       });
     },
+    // Elegir una medida sugerida la pone como nombre NUEVO en la columna que
+    // se está editando, aunque ya exista otra columna con ese nombre.
+    // Nunca salta a la columna ya registrada.
     elegirSugerenciaMedida(medida) {
-      const columna = this.columnas.find(col => normalizarTextoPesada(col.medida || '') === normalizarTextoPesada(medida));
-      if (columna) this.medidaId = columna.id;
+      const edicion = this.editandoColumna;
+      if (!edicion) return;
       this.editandoColumna = null;
+      this.guardarCampos({ [`columnas.${edicion.id}.medida`]: medida.trim() });
       this.error = '';
+      this._outbox.flush();
     },
     // Mitades del chip: el primer toque selecciona la columna; tocar de nuevo
     // la mitad de la columna ya seleccionada abre la edición de ese campo.
@@ -325,13 +329,7 @@ export default {
       if (!edicion) return;
       this.editandoColumna = null;
       if (edicion.campo === 'medida') {
-        const nombre = edicion.valor.trim();
-        // Si la medida ya existe en otra columna, se selecciona esa en lugar
-        // de duplicarla.
-        const duplicada = nombre ? this.columnas.find(col => col.id !== edicion.id
-          && normalizarTextoPesada(col.medida || '') === normalizarTextoPesada(nombre)) : null;
-        if (duplicada) { this.medidaId = duplicada.id; this.error = ''; this._outbox.flush(); return; }
-        this.guardarCampos({ [`columnas.${edicion.id}.medida`]: nombre });
+        this.guardarCampos({ [`columnas.${edicion.id}.medida`]: edicion.valor.trim() });
       } else {
         let precio;
         try { precio = parsearPrecioColumna(edicion.valor); }
