@@ -93,6 +93,46 @@ function createMainWindow() {
     }
   });
   mainWindow = win;
+
+  // --- Báscula NVK NK-K9 (Web Bluetooth / Web Serial) ---------------------------------
+  // En Electron, navigator.bluetooth y navigator.serial existen, pero sin estos
+  // handlers Chrome nunca muestra la lista de dispositivos y requestDevice/requestPort
+  // se quedan esperando. Es el paso que faltaba para que la báscula funcione en la
+  // app local de escritorio (Mac/Windows), igual que en Chrome.
+  // Docs: https://www.electronjs.org/docs/latest/tutorial/devices
+  // En macOS el emparejamiento lo resuelve el sistema, no hace falta pairing handler.
+  const sesion = win.webContents.session;
+  win.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
+    event.preventDefault();
+    // La báscula es casi siempre el único dispositivo BLE cerca: se prefiere por nombre
+    // (NVK / K9 / K02) y, si no hay coincidencia, el primero de la lista.
+    const preferida = deviceList.find(d => /nvk|k-?9|k02/i.test(d.deviceName || ''))
+      || deviceList[0];
+    callback(preferida ? preferida.deviceId : '');
+  });
+  sesion.on('select-serial-port', (event, portList, _webContents, callback) => {
+    event.preventDefault();
+    const preferido = portList.find(p => /nvk|k02/i.test(`${p.portId} ${p.displayName || ''}`))
+      || portList[0];
+    callback(preferido ? preferido.portId : '');
+  });
+  // La app se carga desde file:// (desktop-dist), así que hay que conceder el permiso
+  // de dispositivo para Bluetooth y serie en ese origen; sin esto, el selector no aparece.
+  // En desarrollo (electron:dev) el origen es http://localhost, también se permite.
+  const origenBasculaPermitido = origen => origen === 'file://'
+    || (typeof origen === 'string' && origen.startsWith('http://localhost'));
+  sesion.setDevicePermissionHandler(details => {
+    if ((details.deviceType === 'bluetooth' || details.deviceType === 'serial')
+      && origenBasculaPermitido(details.origin)) return true;
+    return false;
+  });
+  sesion.setPermissionCheckHandler((_webContents, permission, _requestingOrigin, details) => {
+    if ((permission === 'bluetooth' || permission === 'serial')
+      && details && (details.securityOrigin === 'file:///'
+        || (typeof details.securityOrigin === 'string' && details.securityOrigin.startsWith('http://localhost')))) return true;
+    // Para el resto, sin respuesta explícita (como en el ejemplo de WebHID de Electron).
+    return undefined;
+  });
   let readyToSave = false;
   let closeApproved = false;
   let closeRequest = null;

@@ -1,5 +1,10 @@
 import { defineStore } from 'pinia';
 import { bluetoothDisponible, conectarBascula, descubrir, escucharTodo } from '@/services/bascula';
+import {
+  abrirEnlaceCapacitor,
+  capacitorDisponible,
+  conectarBasculaCapacitor,
+} from '@/services/basculaCapacitor';
 import { crearLectorPeso } from '@/utils/bascula';
 import { useUIStore } from '@/stores/ui';
 
@@ -7,8 +12,16 @@ import { useUIStore } from '@/stores/ui';
 // embarque y la leen los campos de kilos. Se queda aquí, y no en un componente, para que siga
 // conectada aunque el encabezado se vuelva a dibujar.
 //
-// Los objetos del navegador (dispositivo, lector) van fuera del estado: no deben volverse reactivos.
+// Dos transportes, mismo parser y mismo estado:
+// - Web / escritorio (Electron, Mac): Web Bluetooth (navigator.bluetooth). En Electron los
+//   selectores los resuelve electron/main.js (select-bluetooth-device).
+// - APK de Android: BLE nativo con BleClient, porque el WebView no trae Web Bluetooth.
+//
+// Los objetos del navegador / nativos (dispositivo, lector) van fuera del estado:
+// no deben volverse reactivos.
 let dispositivo = null;
+let conexionCapacitor = null;
+let deviceIdCapacitor = '';
 let lector = crearLectorPeso();
 
 function avisarPerdida() {
@@ -16,14 +29,24 @@ function avisarPerdida() {
 }
 
 function olvidarEnlace() {
-  if (!dispositivo) return;
-  dispositivo.removeEventListener('gattserverdisconnected', avisarPerdida);
-  if (dispositivo.gatt && dispositivo.gatt.connected) dispositivo.gatt.disconnect();
+  if (dispositivo) {
+    dispositivo.removeEventListener('gattserverdisconnected', avisarPerdida);
+    if (dispositivo.gatt && dispositivo.gatt.connected) dispositivo.gatt.disconnect();
+  }
+}
+
+async function olvidarCapacitor() {
+  if (!conexionCapacitor) return;
+  const conexion = conexionCapacitor;
+  conexionCapacitor = null;
+  try { await conexion.desconectar(); } catch (_ignorado) { /* ya estaba desconectada */ }
 }
 
 export const useBasculaStore = defineStore('bascula', {
   state: () => ({
-    soportada: bluetoothDisponible(),
+    soportada: bluetoothDisponible() || capacitorDisponible(),
+    // 'web' | 'capacitor' | '' (sin conectar aún)
+    transporte: '',
     conectando: false,
     conectada: false,
     nombre: '',
@@ -42,12 +65,18 @@ export const useBasculaStore = defineStore('bascula', {
 
   actions: {
     // Conecta la báscula. Si ya se había conectado antes y se perdió el enlace (se apagó, se salió
-    // del alcance), se reconecta directo; si no, abre la lista de Chrome (pide un toque del usuario).
+    // del alcance), se reconecta directo; si no, abre el selector (Chrome en web/escritorio,
+    // selector nativo de Android en la APK).
     async conectar() {
       if (this.conectando || !this.soportada) return;
       this.conectando = true;
       const ui = useUIStore();
       try {
+        if (capacitorDisponible()) {
+          await this.conectarCapacitor();
+          ui.notify(`Báscula conectada: ${this.nombre}`, 'success');
+          return;
+        }
         if (dispositivo) {
           try {
             await this.abrirEnlace(dispositivo);
@@ -66,11 +95,50 @@ export const useBasculaStore = defineStore('bascula', {
         ui.notify(`Báscula conectada: ${this.nombre}`, 'success');
       } catch (e) {
         // NotFoundError = el usuario cerró la lista sin elegir.
-        if (e.name !== 'NotFoundError') ui.notify(`No se pudo conectar la báscula: ${e.message}`, 'error', 6000);
+        // En Android, cancelar el selector también llega como error y no se muestra.
+        if (e.name !== 'NotFoundError' && !/cancel/i.test(e.message || '')) {
+          ui.notify(`No se pudo conectar la báscula: ${e.message}`, 'error', 6000);
+        }
         this.olvidar();
       } finally {
         this.conectando = false;
       }
+    },
+
+    async conectarCapacitor() {
+      lector = crearLectorPeso();
+      const alRecibir = datos => this.alRecibir(datos);
+      if (deviceIdCapacitor) {
+        try {
+          await abrirEnlaceCapacitor(deviceIdCapacitor, alRecibir, avisarPerdida);
+          conexionCapacitor = {
+            deviceId: deviceIdCapacitor,
+            desconectar: async () => {
+              const { BleClient } = await import('@capacitor-community/bluetooth-le');
+              await BleClient.disconnect(deviceIdCapacitor);
+            },
+          };
+          this.transporte = 'capacitor';
+          this.conectada = true;
+          this.kilos = null;
+          this.estable = null;
+          this.trama = '';
+          return;
+        } catch (e) {
+          // La báscula ya no responde: se olvida el id y se abre el selector.
+          deviceIdCapacitor = '';
+          conexionCapacitor = null;
+        }
+      }
+      const conexion = await conectarBasculaCapacitor(alRecibir, avisarPerdida);
+      conexionCapacitor = conexion;
+      deviceIdCapacitor = conexion.deviceId;
+      this.transporte = 'capacitor';
+      this.nombre = conexion.nombre;
+      this.kilos = null;
+      this.estable = null;
+      this.trama = '';
+      this.conectada = true;
     },
 
     async abrirEnlace(device) {
@@ -88,6 +156,7 @@ export const useBasculaStore = defineStore('bascula', {
       }
       dispositivo = device;
       device.addEventListener('gattserverdisconnected', avisarPerdida);
+      this.transporte = 'web';
       this.nombre = device.name || 'Báscula';
       this.kilos = null;
       this.estable = null;
@@ -121,7 +190,10 @@ export const useBasculaStore = defineStore('bascula', {
 
     olvidar() {
       olvidarEnlace();
+      void olvidarCapacitor();
       dispositivo = null;
+      deviceIdCapacitor = '';
+      this.transporte = '';
       this.conectada = false;
       this.nombre = '';
       this.kilos = null;

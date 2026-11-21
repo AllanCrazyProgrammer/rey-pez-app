@@ -19,7 +19,8 @@
 
     <p v-if="!soportado && !serialSoportado" class="error">
       Este navegador no soporta Bluetooth ni puertos serie. Abre esta página en <strong>Chrome</strong>
-      (Android o computadora). No funciona en iPhone ni dentro de la APK.
+      (Android o computadora), en la app de escritorio (Mac) o en la APK de Android.
+      No funciona en iPhone.
     </p>
 
     <div class="acciones">
@@ -83,6 +84,7 @@ import {
   leerTodo,
   serialDisponible,
 } from '@/services/bascula';
+import { capacitorDisponible, conectarBasculaCapacitor } from '@/services/basculaCapacitor';
 import { crearLectorPeso } from '@/utils/bascula';
 
 const MAX_LOG = 40;
@@ -91,7 +93,7 @@ export default {
   name: 'BasculaDiagnostico',
   data() {
     return {
-      soportado: bluetoothDisponible(),
+      soportado: bluetoothDisponible() || capacitorDisponible(),
       serialSoportado: serialDisponible(),
       conectando: false,
       conectado: false,
@@ -107,6 +109,7 @@ export default {
   created() {
     this.device = null;
     this.serial = null;
+    this.capacitor = null;
     this.lector = crearLectorPeso();
   },
   beforeDestroy() {
@@ -118,6 +121,19 @@ export default {
       this.conectando = true;
       try {
         await this.desconectar();
+        // APK de Android: BLE nativo (el WebView no trae Web Bluetooth).
+        if (capacitorDisponible()) {
+          const conexion = await conectarBasculaCapacitor(
+            datos => this.recibir(datos, true),
+            () => this.alDesconectar(),
+          );
+          this.capacitor = conexion;
+          this.nombre = conexion.nombre;
+          this.servicios = conexion.servicios;
+          this.conectado = true;
+          this.modo = 'ble';
+          return;
+        }
         const { device, server } = await conectarBascula();
         this.device = device;
         this.nombre = device.name || '(sin nombre)';
@@ -162,6 +178,7 @@ export default {
       }
     },
     async leer() {
+      if (this.capacitor) return; // En la APK no hay lectura única por característica web.
       const lecturas = await leerTodo(this.servicios);
       lecturas.forEach(l => this.agregarLog(l));
     },
@@ -198,6 +215,11 @@ export default {
         } catch (e) {
           // Ya estaba cerrado.
         }
+      }
+      const capacitor = this.capacitor;
+      this.capacitor = null;
+      if (capacitor) {
+        try { await capacitor.desconectar(); } catch (e) { /* ya estaba desconectada */ }
       }
       if (this.device) {
         this.device.removeEventListener('gattserverdisconnected', this.alDesconectar);

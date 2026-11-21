@@ -250,7 +250,7 @@ export default {
       return 'Conectar báscula';
     },
     tituloBascula() {
-      if (!this.bascula.soportada) return 'Este navegador no soporta Bluetooth. Abre el embarque en Chrome (computadora o Android).';
+      if (!this.bascula.soportada) return 'Este dispositivo no soporta Bluetooth para la báscula. Abre el embarque en Chrome (computadora o Android), en la app de escritorio (Mac) o en la APK de Android.';
       if (this.bascula.conectada) return `${this.bascula.nombre}: toca un campo de kilos para ver el peso. Clic aquí para desconectar.`;
       if (this.bascula.puedeReconectar) return 'Se perdió la conexión con la báscula. Enciéndela y toca para reconectar.';
       return 'Conectar la báscula por Bluetooth y registrar su peso en los campos de kilos';

@@ -38,4 +38,14 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Báscula NVK NK-K9 por BLE nativo (plugin @capacitor-community/bluetooth-le).
+         Android 12+ (API 31+): BLUETOOTH_SCAN / BLUETOOTH_CONNECT. Con neverForLocation
+         no hace falta el permiso de ubicación para escanear. En Android 11 o menos
+         valen BLUETOOTH / BLUETOOTH_ADMIN / ACCESS_FINE_LOCATION. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 </manifest>

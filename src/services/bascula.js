@@ -1,6 +1,9 @@
 // Conexión con la báscula NVK NK-K9 (o cualquier indicador con módulo BLE-UART)
-// usando Web Bluetooth. Funciona en Chrome/Edge (Android, Windows, Mac) con HTTPS.
-// No funciona en iPhone ni dentro de la APK de Android (el WebView no trae Web Bluetooth).
+// usando Web Bluetooth. Funciona en Chrome/Edge (Android, Windows, Mac) con HTTPS
+// y en la app de escritorio (Electron, Mac/Windows: los selectores los resuelve
+// electron/main.js). No funciona en iPhone.
+// En la APK de Android no se usa esta vía (el WebView no trae Web Bluetooth):
+// ahí va src/services/basculaCapacitor.js (BLE nativo con BleClient).
 // Más abajo hay una segunda vía, por puerto serie (Web Serial), para básculas con Bluetooth
 // clásico que se emparejan con PIN desde los ajustes del sistema.
 import { bytesAHex, bytesATexto } from '@/utils/bascula';
