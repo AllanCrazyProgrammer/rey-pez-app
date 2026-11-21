@@ -34,6 +34,7 @@
       </ul>
       <div v-if="editandoId" class="pesadas-toolbar">
         <button class="pesadas-button pesadas-delete-day" type="button" @click="darDeBaja">Dar de baja</button>
+        <button class="pesadas-button pesadas-delete-day" type="button" @click="eliminarDefinitiva">Eliminar definitivamente</button>
         <button v-if="editando && editando.activo === false" class="pesadas-button" type="button" @click="reactivar">Reactivar</button>
       </div>
     </section>
@@ -41,7 +42,7 @@
 </template>
 
 <script>
-import { desactivarDespicadora, guardarDespicadora, observarDespicadoras, reactivarDespicadora } from '@/services/despicadoras.service';
+import { desactivarDespicadora, eliminarDespicadora, guardarDespicadora, observarDespicadoras, reactivarDespicadora } from '@/services/despicadoras.service';
 import { normalizarTextoPesada } from '@/utils/pesadasRapida';
 import './pesadas.css';
 
@@ -108,6 +109,16 @@ export default {
         this.mensaje = `${this.nombre.trim()} quedó reactivada.`;
         this.limpiarFormulario();
       } catch (_error) { this.error = 'No se pudo reactivar. Revisa la conexión e inténtalo de nuevo.'; }
+    },
+    async eliminarDefinitiva() {
+      if (!this.editandoId) return;
+      if (!window.confirm(`¿Eliminar definitivamente a ${this.nombre.trim()} del catálogo? Ya no aparecerá en las sugerencias. Sus pesadas de días anteriores NO se borran, quedan en cada hoja.`)) return;
+      this.error = '';
+      try {
+        await eliminarDespicadora(this.editandoId);
+        this.mensaje = `${this.nombre.trim()} quedó eliminada del catálogo. Sus pesadas anteriores se conservan.`;
+        this.limpiarFormulario();
+      } catch (_error) { this.error = 'No se pudo eliminar. Revisa la conexión e inténtalo de nuevo.'; }
     }
   }
 };

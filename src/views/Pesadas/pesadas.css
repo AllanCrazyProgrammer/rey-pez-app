@@ -245,3 +245,15 @@
   .pesadas-rapida-registrar { width: 100%; }
   .pesadas-rapida-terminar { width: 100%; }
 }
+
+/* Kilos en grande junto al botón Registrar (modo rápido). */
+.pesadas-rapida-total-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 16px; margin-top: 8px; }
+.pesadas-rapida-total { flex: 1 1 220px; background: #f4f1f8; border: 1px solid #e3ddf0; border-radius: 12px; padding: 10px 20px; }
+.pesadas-rapida-total small { display: block; color: #716780; font-size: 14px; font-weight: 700; }
+.pesadas-rapida-total strong { font-size: 56px; line-height: 1.05; color: #453575; font-variant-numeric: tabular-nums; }
+.pesadas-rapida-total strong span { font-size: 24px; font-weight: 400; }
+.pesadas-rapida-total-row .pesadas-rapida-registrar { flex: 1 1 220px; min-height: 80px; }
+.pesadas-rapida-total-row .pesadas-button:not(.pesadas-rapida-registrar) { align-self: center; }
+@media (max-width: 760px) {
+  .pesadas-rapida-total strong { font-size: 44px; }
+}

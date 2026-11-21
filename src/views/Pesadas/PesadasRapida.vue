@@ -80,9 +80,12 @@
           {{ vistaPrevia }}
         </p>
         <p v-if="error" class="pesadas-alert" role="alert">{{ error }}</p>
-        <p v-if="mensaje" class="pesadas-rapida-exito" role="status">{{ mensaje }}</p>
 
-        <div class="pesadas-rapida-acciones">
+        <div class="pesadas-rapida-total-row">
+          <div class="pesadas-rapida-total">
+            <small>{{ etiquetaKilosGrandes }}</small>
+            <strong>{{ numero(kilosGrandes) }} <span>kg</span></strong>
+          </div>
           <button class="pesadas-button primary pesadas-rapida-registrar" type="button"
             :disabled="!medidaId || registrando" @click="registrar">
             {{ registrando ? 'Registrando…' : 'Registrar pesada' }}
@@ -115,8 +118,8 @@ import { nanoid } from 'nanoid';
 import { conectarPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { guardarDespicadora, observarDespicadoras } from '@/services/despicadoras.service';
-import { buscarDespicadoras, calcularNetoPesada, CLAVE_TRASTE_LOCAL, normalizarTextoPesada,
-  parsearKilosBrutos, parsearTraste, sumarPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
+import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, normalizarTextoPesada,
+  parsearKilosBrutos, parsearTraste, sumarPesada, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoFechaPesadas,
   formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
@@ -128,7 +131,7 @@ export default {
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
     trasteManualActivo: false, medidaId: '', mostrarSugerencias: false, indiceActivo: -1,
-    mensaje: '', error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
+    error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
     fechaTexto() { return this.fechaValida ? formatoFechaPesadas(this.fecha) : ''; },
@@ -152,7 +155,8 @@ export default {
       return mapa;
     },
     coincidencias() {
-      return buscarDespicadoras(this.despicadoras.filter(item => item.activo !== false), this.nombre, this.kilosHoyMapa).slice(0, 8);
+      // Catálogo + las que ya pesaron hoy aunque no estén registradas.
+      return sugerenciasPesada(this.despicadoras.filter(item => item.activo !== false), this.resumen.personas, this.nombre, this.kilosHoyMapa).slice(0, 8);
     },
     nombreCanonico() { return this.seleccionada ? this.seleccionada.nombre : this.nombre.trim(); },
     personaActual() {
@@ -178,6 +182,10 @@ export default {
       return calcularNetoPesada(this.bruto, this.trasteEfectivo);
     },
     medidaActual() { return this.columnas.find(col => col.id === this.medidaId) || null; },
+    // Kilos en grande: los que lleva hoy la despicadora seleccionada; si aún no
+    // hay nadie seleccionada, el total del día.
+    kilosGrandes() { return this.personaActual ? this.kilosHoyPersona : this.resumen.kilos; },
+    etiquetaKilosGrandes() { return this.personaActual ? `${this.nombreCanonico} lleva hoy` : 'Kilos del día'; },
     vistaPrevia() {
       if (this.bruto == null || this.neto == null || !this.medidaActual) return '';
       const actual = this.personaActual ? (this.datos.pesos?.[this.personaActual.id]?.[this.medidaId] || 0) : 0;
@@ -260,7 +268,6 @@ export default {
       this.desconectar();
       this.datosGuardados = {};
       this.errorCarga = '';
-      this.mensaje = '';
       this.error = '';
       this.cargando = true;
       this.desdeCache = true;
@@ -329,14 +336,12 @@ export default {
       try {
         const ref = await guardarDespicadora({ nombre, apodo: '' });
         this.seleccionada = { id: ref.id, nombre, apodo: '' };
-        this.mensaje = `${nombre} quedó dada de alta. Ya puedes pesarla.`;
         if (this.$refs.kilos) this.$refs.kilos.focus();
       } catch (_error) { this.error = 'No se pudo dar de alta. Revisa la conexión e inténtalo de nuevo.'; }
     },
     registrar() {
       if (this.registrando || !this.medidaId) return;
       this.error = '';
-      this.mensaje = '';
       const nombre = this.nombreCanonico;
       if (!nombre) { this.error = 'Escribe el nombre de la despicadora.'; if (this.$refs.nombre) this.$refs.nombre.focus(); return; }
       let bruto;
@@ -361,12 +366,13 @@ export default {
         const registro = { personaId, medidaId: this.medidaId, anterior: actual, neto, nuevo, nombre, medida, cuando: Date.now() };
         this.ultimoRegistro = registro;
         this.ultimas.unshift(registro);
-        this.mensaje = `✓ ${nombre}: ${formatoPesada(neto)} kg netos en ${medida}. Llevaba ${formatoPesada(actual)} kg, ahora ${formatoPesada(nuevo)} kg.`;
         this.nombre = '';
         this.seleccionada = null;
         this.kilosTexto = '';
         this.indiceActivo = -1;
-        this.$nextTick(() => { if (this.$refs.nombre) this.$refs.nombre.focus(); });
+        this.mostrarSugerencias = false;
+        // No se pasa al siguiente: se oculta el teclado para ver la pantalla.
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       } catch (_error) { this.error = 'No se pudo registrar la pesada. Inténtalo de nuevo.'; }
       finally { this.registrando = false; }
     },
@@ -375,7 +381,6 @@ export default {
       const { personaId, medidaId, anterior } = this.ultimoRegistro;
       this.guardarCampos({ [`pesos.${personaId}.${medidaId}`]: anterior });
       this._outbox.flush();
-      this.mensaje = `Se deshizo la última pesada de ${this.ultimoRegistro.nombre} (${formatoPesada(this.ultimoRegistro.neto)} kg).`;
       this.ultimas.shift();
       this.ultimoRegistro = this.ultimas[0] || null;
     },

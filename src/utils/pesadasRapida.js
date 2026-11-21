@@ -52,17 +52,39 @@ export function sumarPesada(actual, neto) {
   return (actualDecimas + netoDecimas) / 10;
 }
 
+// Sugerencias del modo rápido: el catálogo más las despicadoras que ya tienen
+// pesada en el día, aunque no estén registradas. El catálogo manda si el nombre
+// se repite (conserva el apodo). `personasDia`: [{ nombre, kilos }] del resumen.
+export function sugerenciasPesada(registradas, personasDia, termino, kilosHoy) {
+  const mezcladas = [...(registradas || [])];
+  const claves = new Set((registradas || []).map(item => normalizarTextoPesada(item.nombre)));
+  (personasDia || []).forEach(row => {
+    const clave = normalizarTextoPesada(row.nombre);
+    if (clave && !claves.has(clave)) {
+      claves.add(clave);
+      mezcladas.push({ id: `dia:${clave}`, nombre: (row.nombre || '').trim(), apodo: '' });
+    }
+  });
+  return buscarDespicadoras(mezcladas, termino, kilosHoy);
+}
+
+// Un valor como ".7" siempre es 0.7 kg: se le antepone el cero antes de validar.
+function normalizarDecimal(valor) {
+  const texto = String(valor == null ? '' : valor).trim();
+  return texto.startsWith('.') ? `0${texto}` : texto;
+}
+
 // Traste manual: decimal positivo o cero, máximo una décima (0 a 9.9).
 export function parsearTraste(valor) {
   if (String(valor == null ? '' : valor).trim() === '') return null;
-  const numero = decimalPesada(valor, false, false);
+  const numero = decimalPesada(normalizarDecimal(valor), false, false);
   if (numero == null || numero > 9.9) throw new Error('El traste debe ser de 0 a 9.9 kg.');
   return numero;
 }
 
 // Kilos brutos de la pesada: decimal positivo, máximo una décima.
 export function parsearKilosBrutos(valor) {
-  const numero = decimalPesada(valor, false, false);
+  const numero = decimalPesada(normalizarDecimal(valor), false, false);
   if (numero == null || numero <= 0) throw new Error('Escribe los kilos de la pesada.');
   return numero;
 }

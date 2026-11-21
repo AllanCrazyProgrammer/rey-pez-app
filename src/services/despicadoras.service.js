@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase';
 
 // Catálogo de despicadoras para el modo rápido de pesadas.
@@ -27,4 +27,12 @@ export function desactivarDespicadora(id) {
 export function reactivarDespicadora(id) {
   if (!id) throw new Error('Falta la despicadora.');
   return updateDoc(doc(db, 'despicadoras', id), { activo: true, actualizadoEn: serverTimestamp() });
+}
+
+// Eliminar definitivamente del catálogo: ya no aparece en las sugerencias.
+// Las pesadas de días anteriores NO se borran: viven en cada hoja de
+// pesadasDiarias (personas/pesos del día), no en este catálogo.
+export function eliminarDespicadora(id) {
+  if (!id) throw new Error('Falta la despicadora.');
+  return deleteDoc(doc(db, 'despicadoras', id));
 }

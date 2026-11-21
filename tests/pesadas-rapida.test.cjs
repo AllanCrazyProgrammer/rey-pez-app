@@ -58,6 +58,7 @@ test('sumar pesada acumula sobre lo que ya lleva, a una décima', async () => {
 test('traste manual: decimal de 0 a 9.9, una décima', async () => {
   const { parsearTraste } = await helpers;
   assert.equal(parsearTraste('0.5'), 0.5);
+  assert.equal(parsearTraste('.7'), 0.7);
   assert.equal(parsearTraste(''), null);
   assert.throws(() => parsearTraste('10'), /0 a 9.9/);
   assert.throws(() => parsearTraste('0.25'), /máximo un decimal/);
@@ -66,6 +67,22 @@ test('traste manual: decimal de 0 a 9.9, una décima', async () => {
 test('kilos brutos deben ser positivos', async () => {
   const { parsearKilosBrutos } = await helpers;
   assert.equal(parsearKilosBrutos('12.4'), 12.4);
+  assert.equal(parsearKilosBrutos('.7'), 0.7);
   assert.throws(() => parsearKilosBrutos('0'), /kilos/);
   assert.throws(() => parsearKilosBrutos(''), /kilos|número/);
+});
+
+test('sugerencias incluyen a quien pesó hoy aunque no esté registrada', async () => {
+  const { sugerenciasPesada } = await helpers;
+  const kilosHoy = new Map([['pedro', 5], ['nayeli', 3]]);
+  const personasDia = [{ nombre: 'Pedro', kilos: 5 }, { nombre: 'Nayeli', kilos: 3 }];
+  const resultado = sugerenciasPesada(registradas, personasDia, 'ped', kilosHoy);
+  assert.equal(resultado.length, 1);
+  assert.equal(resultado[0].nombre, 'Pedro');
+  assert.equal(resultado[0].yaPeso, true);
+  assert.equal(resultado[0].kilosHoy, 5);
+  // Sin término: Pedro aparece junto al catálogo, y Nayeli no se duplica.
+  const todas = sugerenciasPesada(registradas, personasDia, '', kilosHoy);
+  assert.deepEqual(todas.map(item => item.nombre), ['Nayeli', 'Pedro', 'María José', 'Sandra']);
+  assert.equal(todas.find(item => item.nombre === 'Nayeli').apodo, 'Nay');
 });
