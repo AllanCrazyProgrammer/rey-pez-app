@@ -48,7 +48,10 @@
 .pesadas-sheet-card { padding: 20px 0 0; overflow: hidden; }
 
 .pesadas-sheet-card > .pesadas-toolbar, .pesadas-sheet-card > .pesadas-alert { margin-left: 20px; margin-right: 20px; }
-.pesadas-grid-scroll { overflow: auto; max-height: 65vh; min-height: 230px; border-top: 1px solid #d5cfdf; border-bottom: 1px solid #d5cfdf; }
+.pesadas-grid-scroll { overflow: auto; max-height: 65vh; min-height: 230px; border-top: 1px solid #d5cfdf; border-bottom: 1px solid #d5cfdf; scrollbar-width: thin; scrollbar-color: #b9aec9 #f4f1f8; }
+.pesadas-grid-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
+.pesadas-grid-scroll::-webkit-scrollbar-thumb { background: #cfc6dd; border-radius: 6px; border: 2px solid #fff; }
+.pesadas-grid-scroll::-webkit-scrollbar-track { background: #f4f1f8; }
 .pesadas-day-page .pesadas-heading { margin-bottom: 12px; }
 .pesadas-day-page .pesadas-heading h1 { margin: 4px 0; }
 .pesadas-day-page .pesadas-heading p { margin: 4px 0; }
@@ -56,18 +59,18 @@
 .pesadas-day-page .pesadas-summary-cards small { margin-bottom: 3px; }
 .pesadas-day-page .pesadas-sheet-card { padding-top: 12px; margin-bottom: 0; }
 .pesadas-day-page .pesadas-toolbar { margin-bottom: 10px; }
-.pesadas-day-page .pesadas-grid-scroll { max-height: none; min-height: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+.pesadas-day-page .pesadas-grid-scroll { max-height: none; min-height: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; }
 .pesadas-day-page .pesadas-sheet-footer { padding: 10px 20px; }
 .pesadas-grid { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: auto; font-size: 15px; margin: 0; }
 .pesadas-grid th, .pesadas-grid td { padding: 0; border-right: 1px solid #ded9e7; border-bottom: 1px solid #ded9e7; background: white; min-width: 140px; height: 50px; }
 .pesadas-grid thead th, .pesadas-grid thead td { position: sticky; z-index: 3; text-align: center; }
 .pesadas-grid thead .number-row th { top: 0; background: #ece8f2; color: #613775; height: 44px; }
 .pesadas-grid thead .measure-row th, .pesadas-grid thead .measure-row td { top: 44px; background: #f4f1f8; }
-.pesadas-grid thead .price-row th, .pesadas-grid thead .price-row td { top: 94px; background: #faf9fc; }
+.pesadas-grid thead .price-row th, .pesadas-grid thead .price-row td { top: 94px; background: #faf9fc; box-shadow: 0 2px 4px rgba(37, 35, 60, .10); }
 .pesadas-grid thead .number-row .total-header { background: #e8f3fc; color: #215d82; }
 .pesadas-grid thead .number-row .pay-header { background: #eaf7f1; color: #23654c; }
 .pesadas-grid thead small { display: block; font-size: 11px; color: #746780; margin-top: 6px; }
-.pesadas-grid .name-cell { position: sticky; left: 0; z-index: 2; min-width: 240px; width: 240px; background: #f5f3f8; text-align: left; }
+.pesadas-grid .name-cell { position: sticky; left: 0; z-index: 2; min-width: 240px; width: 240px; background: #f5f3f8; text-align: left; box-shadow: 3px 0 6px -3px rgba(37, 35, 60, .20); }
 .pesadas-grid .name-cell.active-person { box-shadow: inset 4px 0 0 #1976a8, inset 0 0 0 2px #1976a8; background: #edf7fd; }
 .pesadas-grid thead .number-row .active-column { background: #dceefa; color: #155d85; box-shadow: inset 0 0 0 3px #1976a8; }
 .pesadas-search-results { list-style: none; padding: 0; max-height: 45vh; overflow-y: auto; }
@@ -96,6 +99,8 @@
 .pesadas-grid .total-cell:not(.final-cell) { background: #f0f7fc; color: #215d82; }
 .pesadas-grid .final-cell { background: #f1f8f5; color: #23654c; }
 .pesadas-grid .column-totals-row th, .pesadas-grid .column-totals-row td { background: #e9f3fb; color: #215d82; font-weight: 800; text-align: right; }
+/* Filas alternas: se sigue la fila al desplazar en horizontal. */
+.pesadas-grid tbody tr:nth-child(even) td { background: #faf9fc; }
 .pesadas-grid .column-totals-row .name-cell { text-align: left; }
 .pesadas-grid .negative { color: #a12e2e; background: #fff0ec; }
 .pesadas-sheet-footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 20px; font-size: 13px; color: #746880; background: #faf9fc; }
@@ -141,10 +146,26 @@
 .pesadas-grid .name-width { min-height: 65px; line-height: 45px; }
 .pesadas-grid .measure-row input { font-size: 26px; }
 .pesadas-grid .price-row input { font-size: 20px; }
-.pesadas-day-page .pesadas-sheet-card, .pesadas-day-page .pesadas-grid-scroll { overflow: visible; }
 @media (max-width: 760px) {
   .pesadas-grid tbody { font-size: 24px; }
   .pesadas-grid .measure-row input { font-size: 24px; }
+}
+
+/* Móvil: nombres más angostos y celdas más compactas para que quepan más
+   columnas y el desplazamiento horizontal sea con un dedo. */
+@media (max-width: 760px) {
+  .pesadas-day-page .pesadas-toolbar { gap: 8px; margin-bottom: 8px; }
+  .pesadas-grid .name-editor { max-width: min(200px, 38vw); }
+  .pesadas-grid .name-width { padding: 8px 10px; min-height: 56px; line-height: 40px; }
+  .pesadas-grid tbody { font-size: 20px; }
+  .pesadas-grid tbody th, .pesadas-grid tbody td { height: 56px; }
+  .pesadas-grid tbody input { height: 55px; }
+  .pesadas-grid .measure-row input { font-size: 20px; }
+  .pesadas-grid .price-row input { font-size: 16px; }
+  .pesadas-grid th, .pesadas-grid td { min-width: 112px; }
+  .pesadas-grid input { padding: 8px 10px; }
+  .pesadas-grid .row-number { padding-left: 6px; }
+  .pesadas-grid .name-input button { padding: 6px; }
 }
 
 .pesadas-page .pesadas-cuentas-button {
@@ -208,9 +229,9 @@
 .pesadas-rapida-label { display: block; font-size: 15px; font-weight: 800; color: #453575; margin-bottom: 10px; }
 .pesadas-rapida-medidas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 28px; position: relative; }
 .pesadas-rapida-medidas .pesadas-rapida-label { margin-bottom: 0; margin-right: 6px; }
-.pesadas-rapida-chip { display: flex; align-items: stretch; border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-height: 56px; overflow: hidden; }
+.pesadas-rapida-chip { display: flex; align-items: stretch; flex: 0 0 auto; border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-height: 56px; overflow: hidden; }
 .pesadas-rapida-chip.activo { border-color: #583d92; background: #efeaf6; box-shadow: 0 0 0 2px #583d92; }
-.pesadas-rapida-chip-mitad { flex: 1 1 0; min-width: 0; border: 0; background: transparent; color: #453575; font-size: 15px; font-weight: 800; padding: 10px 10px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pesadas-rapida-chip-mitad { flex: 0 1 auto; min-width: 0; border: 0; background: transparent; color: #453575; font-size: 15px; font-weight: 800; padding: 10px 10px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pesadas-rapida-chip-mitad.precio { border-left: 2px solid #cec7e0; font-size: 14px; padding: 10px 8px; font-variant-numeric: tabular-nums; }
 .pesadas-rapida-chip.activo .pesadas-rapida-chip-mitad.precio { border-left-color: #583d92; }
 .pesadas-rapida-chip input { flex: 1 1 0; min-width: 0; border: 0; background: #fff; color: #25233c; font-size: 15px; font-weight: 800; padding: 10px 10px; text-align: center; }

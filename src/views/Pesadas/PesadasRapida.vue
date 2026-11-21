@@ -26,7 +26,7 @@
               @keydown.esc="cancelarEdicionColumna" @blur="confirmarEdicionColumna">
             <button v-else type="button" class="pesadas-rapida-chip-mitad precio"
               :aria-label="`Precio ${columna.precio} pesos por kilo`" @click="tocarMitad(columna, 'precio')">
-              ${{ columna.precio }}/kg
+              ${{ columna.precio }}
             </button>
           </div>
           <ul v-if="sugerenciasMedida.length" class="pesadas-rapida-sugerencias" role="listbox" aria-label="Medidas ya hechas">
