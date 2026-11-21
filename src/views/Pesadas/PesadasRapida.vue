@@ -47,8 +47,13 @@
               ${{ columna.precio }}/kg
             </button>
           </div>
+          <ul v-if="sugerenciasMedida.length" class="pesadas-rapida-sugerencias" role="listbox" aria-label="Medidas ya hechas">
+            <li v-for="medida in sugerenciasMedida" :key="medida">
+              <button type="button" @mousedown.prevent="elegirSugerenciaMedida(medida)">{{ medida }}</button>
+            </li>
+          </ul>
           <span v-if="!columnas.length" class="pesadas-hint">Primero define las medidas en la hoja del día.</span>
-          <span class="pesadas-hint">Toca una medida para pesar con ella. Toca de nuevo la medida o el precio de la seleccionada para editarlos.</span>
+          <span class="pesadas-hint">Al entrar se selecciona la siguiente medida después de la última pesada. Toca una medida para pesar con ella; toca de nuevo la medida o el precio de la seleccionada para editarlos.</span>
         </div>
 
         <div class="pesadas-rapida-nombre">
@@ -102,10 +107,10 @@
             :disabled="!medidaId || registrando" @click="registrar">
             {{ registrando ? 'Registrando…' : 'Registrar pesada' }}
           </button>
-          <button class="pesadas-button" type="button" :disabled="!ultimoRegistro" @click="deshacerUltima">
-            Deshacer última
-          </button>
         </div>
+        <button class="pesadas-button pesadas-rapida-deshacer" type="button" :disabled="!ultimoRegistro" @click="deshacerUltima">
+          Deshacer última
+        </button>
 
         <div v-if="ultimas.length" class="pesadas-rapida-sesion">
           <h2>Últimas pesadas de esta sesión</h2>
@@ -131,7 +136,8 @@ import { conectarPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { guardarDespicadora, observarDespicadoras } from '@/services/despicadoras.service';
 import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, normalizarTextoPesada,
-  parsearKilosBrutos, parsearPrecioColumna, parsearTraste, sumarPesada, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
+  parsearKilosBrutos, parsearPrecioColumna, parsearTraste, siguienteMedida, sumarPesada,
+  sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoFechaPesadas,
   formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
@@ -142,7 +148,7 @@ export default {
   data: () => ({ datosGuardados: {}, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
-    trasteManualActivo: false, medidaId: '', editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
+    trasteManualActivo: false, medidaId: '', seleccionMedidaInicialHecha: false, editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
@@ -187,6 +193,13 @@ export default {
       return this.traste || 0;
     },
     medidaActual() { return this.columnas.find(col => col.id === this.medidaId) || null; },
+    // La hoja ya se conoce (cargó o se confirmó que no existe): no son los
+    // valores por defecto previos a la primera lectura.
+    datosListos() { return !this.cargando || Object.keys(this.datosGuardados.columnas || {}).length > 0 || !!this.datosGuardados.fecha; },
+    sugerenciasMedida() {
+      if (!this.editandoColumna || this.editandoColumna.campo !== 'medida') return [];
+      return sugerenciasMedidaUtil(this.columnas, this.editandoColumna.id, this.editandoColumna.valor);
+    },
     // Kilos en grande: los que lleva hoy la despicadora seleccionada; si aún no
     // hay nadie seleccionada, el total del día.
     kilosGrandes() { return this.personaActual ? this.kilosHoyPersona : this.resumen.kilos; },
@@ -203,7 +216,21 @@ export default {
   watch: {
     fecha() { this.iniciar(); },
     columnas(columnas) {
-      if (!columnas.some(col => col.id === this.medidaId) && columnas.length) this.medidaId = columnas[0].id;
+      if (!columnas.length || columnas.some(col => col.id === this.medidaId)) return;
+      if (!this.seleccionMedidaInicialHecha) {
+        // Espera a conocer la hoja real (no los valores por defecto).
+        if (!this.datosListos) return;
+        this.seleccionMedidaInicialHecha = true;
+        this.seleccionarSiguienteMedida();
+        return;
+      }
+      this.medidaId = columnas[0].id;
+    },
+    cargando(cargando) {
+      if (!cargando && !this.seleccionMedidaInicialHecha) {
+        this.seleccionMedidaInicialHecha = true;
+        this.seleccionarSiguienteMedida();
+      }
     },
     nombre(texto) {
       if (this.seleccionada && normalizarTextoPesada(texto) !== normalizarTextoPesada(this.seleccionada.nombre)) this.seleccionada = null;
@@ -246,24 +273,53 @@ export default {
           : { manual: false, valor: this.traste }));
       } catch (_error) { /* El traste solo no se recuerda en este dispositivo. */ }
     },
-    // Mitades del chip: el primer toque selecciona la columna; tocar de nuevo
-    // la mitad de la columna ya seleccionada abre la edición de ese campo.
-    tocarMitad(columna, campo) {
-      if (this.medidaId !== columna.id) { this.medidaId = columna.id; return; }
-      this.editandoColumna = { id: columna.id, campo,
-        valor: campo === 'medida' ? (columna.medida || '') : String(columna.precio ?? 10) };
+    // Al entrar a Pesar rápido: la siguiente medida después de la última con
+    // kilos del día. Si ya todas tienen kilos, se agrega una columna en blanco
+    // y se abre su nombre para que el usuario la elija (con sugerencias).
+    seleccionarSiguienteMedida() {
+      const siguiente = siguienteMedida(this.columnas, this.resumen.kilosPorColumna);
+      if (siguiente) { this.medidaId = siguiente.id; return; }
+      const hayRegistradas = this.columnas.some(col => (this.resumen.kilosPorColumna[col.id] || 0) > 0);
+      if (!hayRegistradas) { if (this.columnas.length) this.medidaId = this.columnas[0].id; return; }
+      const id = nanoid();
+      this.guardarCampos({ [`columnas.${id}.medida`]: '', [`columnas.${id}.precio`]: 10, [`columnas.${id}.orden`]: `${Date.now()}-${id}` });
+      this.medidaId = id;
+      this.editandoColumna = { id, campo: 'medida', valor: '' };
+      this.enfocarEditorColumna();
+    },
+    enfocarEditorColumna() {
       this.$nextTick(() => {
         const input = this.$refs.editorColumna;
         const campoInput = Array.isArray(input) ? input[0] : input;
         if (campoInput) { campoInput.focus(); campoInput.select(); }
       });
     },
+    elegirSugerenciaMedida(medida) {
+      const columna = this.columnas.find(col => normalizarTextoPesada(col.medida || '') === normalizarTextoPesada(medida));
+      if (columna) this.medidaId = columna.id;
+      this.editandoColumna = null;
+      this.error = '';
+    },
+    // Mitades del chip: el primer toque selecciona la columna; tocar de nuevo
+    // la mitad de la columna ya seleccionada abre la edición de ese campo.
+    tocarMitad(columna, campo) {
+      if (this.medidaId !== columna.id) { this.medidaId = columna.id; return; }
+      this.editandoColumna = { id: columna.id, campo,
+        valor: campo === 'medida' ? (columna.medida || '') : String(columna.precio ?? 10) };
+      this.enfocarEditorColumna();
+    },
     confirmarEdicionColumna() {
       const edicion = this.editandoColumna;
       if (!edicion) return;
       this.editandoColumna = null;
       if (edicion.campo === 'medida') {
-        this.guardarCampos({ [`columnas.${edicion.id}.medida`]: edicion.valor.trim() });
+        const nombre = edicion.valor.trim();
+        // Si la medida ya existe en otra columna, se selecciona esa en lugar
+        // de duplicarla.
+        const duplicada = nombre ? this.columnas.find(col => col.id !== edicion.id
+          && normalizarTextoPesada(col.medida || '') === normalizarTextoPesada(nombre)) : null;
+        if (duplicada) { this.medidaId = duplicada.id; this.error = ''; this._outbox.flush(); return; }
+        this.guardarCampos({ [`columnas.${edicion.id}.medida`]: nombre });
       } else {
         let precio;
         try { precio = parsearPrecioColumna(edicion.valor); }
@@ -295,6 +351,9 @@ export default {
       this.datosGuardados = {};
       this.errorCarga = '';
       this.error = '';
+      this.medidaId = '';
+      this.editandoColumna = null;
+      this.seleccionMedidaInicialHecha = false;
       this.cargando = true;
       this.desdeCache = true;
       this.servidorPendiente = false;

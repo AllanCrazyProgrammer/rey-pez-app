@@ -85,6 +85,32 @@ export function parsearTraste(valor) {
   return numero;
 }
 
+// La siguiente medida después de la última con kilos del día (por orden).
+// Null si aún no se ha pesado nada o si la última con kilos es la última columna.
+export function siguienteMedida(columnas, kilosPorColumna) {
+  let ultimo = -1;
+  columnas.forEach((col, index) => { if ((kilosPorColumna[col.id] || 0) > 0) ultimo = index; });
+  if (ultimo < 0 || ultimo + 1 >= columnas.length) return null;
+  return columnas[ultimo + 1];
+}
+
+// Medidas ya hechas hoy, para sugerir al escribir el nombre de una nueva.
+// Excluye la columna que se está editando y no repite nombres.
+export function sugerenciasMedida(columnas, idExcluir, termino) {
+  const clave = normalizarTextoPesada(termino || '');
+  const vistas = new Set();
+  return columnas
+    .filter(col => col.id !== idExcluir && (col.medida || '').trim())
+    .filter(col => !clave || normalizarTextoPesada(col.medida).includes(clave))
+    .filter(col => {
+      const k = normalizarTextoPesada(col.medida);
+      if (vistas.has(k)) return false;
+      vistas.add(k);
+      return true;
+    })
+    .map(col => col.medida.trim());
+}
+
 // Precio por kilo de una columna: decimal positivo o cero, máximo una décima.
 export function parsearPrecioColumna(valor) {
   return decimalPesada(normalizarDecimal(valor), false, false);

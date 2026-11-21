@@ -206,7 +206,7 @@
 .pesadas-rapida-page .pesadas-heading { align-items: flex-start; }
 .pesadas-rapida-card { padding: 28px; }
 .pesadas-rapida-label { display: block; font-size: 15px; font-weight: 800; color: #453575; margin-bottom: 10px; }
-.pesadas-rapida-medidas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 28px; }
+.pesadas-rapida-medidas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 28px; position: relative; }
 .pesadas-rapida-medidas .pesadas-rapida-label { margin-bottom: 0; margin-right: 6px; }
 .pesadas-rapida-chip { display: flex; align-items: stretch; border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-height: 56px; overflow: hidden; }
 .pesadas-rapida-chip.activo { border-color: #583d92; background: #efeaf6; box-shadow: 0 0 0 2px #583d92; }
@@ -245,18 +245,18 @@
   .pesadas-rapida-card { padding: 18px; }
   .pesadas-rapida-nombre input { font-size: 22px; }
   .pesadas-rapida-kilos input { font-size: 32px; }
-  .pesadas-rapida-registrar { width: 100%; }
+  .pesadas-rapida-registrar { font-size: 18px; padding: 14px 16px; }
   .pesadas-rapida-terminar { width: 100%; }
 }
 
 /* Kilos en grande junto al botón Registrar (modo rápido). */
-.pesadas-rapida-total-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 16px; margin-top: 8px; }
-.pesadas-rapida-total { flex: 1 1 220px; background: #f4f1f8; border: 1px solid #e3ddf0; border-radius: 12px; padding: 10px 20px; }
+.pesadas-rapida-total-row { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 12px; margin-top: 8px; }
+.pesadas-rapida-total { flex: 1 1 auto; min-width: 0; background: #f4f1f8; border: 1px solid #e3ddf0; border-radius: 12px; padding: 10px 20px; }
 .pesadas-rapida-total small { display: block; color: #716780; font-size: 14px; font-weight: 700; }
 .pesadas-rapida-total strong { font-size: 56px; line-height: 1.05; color: #453575; font-variant-numeric: tabular-nums; }
 .pesadas-rapida-total strong span { font-size: 24px; font-weight: 400; }
-.pesadas-rapida-total-row .pesadas-rapida-registrar { flex: 1 1 220px; min-height: 80px; }
-.pesadas-rapida-total-row .pesadas-button:not(.pesadas-rapida-registrar) { align-self: center; }
+.pesadas-rapida-total-row .pesadas-rapida-registrar { flex: 0 1 auto; min-height: 80px; white-space: normal; text-align: center; }
+.pesadas-rapida-deshacer { margin-top: 12px; }
 @media (max-width: 760px) {
   .pesadas-rapida-total strong { font-size: 44px; }
 }

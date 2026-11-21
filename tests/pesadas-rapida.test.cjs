@@ -68,6 +68,30 @@ test('traste manual: siempre decimal, nunca entero', async () => {
   assert.throws(() => parsearTraste('0.25'), /máximo un decimal/);
 });
 
+test('siguiente medida: la de después de la última con kilos', async () => {
+  const { siguienteMedida } = await helpers;
+  const columnas = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  assert.equal(siguienteMedida(columnas, { a: 5, b: 0, c: 0 })?.id, 'b');
+  assert.equal(siguienteMedida(columnas, { a: 5, b: 3, c: 0 })?.id, 'c');
+  assert.equal(siguienteMedida(columnas, { a: 5, b: 3, c: 1 }), null);
+  assert.equal(siguienteMedida(columnas, { a: 0, b: 0, c: 0 }), null);
+  assert.equal(siguienteMedida(columnas, { a: 0, b: 0, c: 4 }), null);
+});
+
+test('sugerencias de medida: las ya hechas, similares a lo escrito', async () => {
+  const { sugerenciasMedida } = await helpers;
+  const columnas = [
+    { id: 'a', medida: '41/50' },
+    { id: 'b', medida: '51/60' },
+    { id: 'c', medida: '41/50' },
+    { id: 'd', medida: '' }
+  ];
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', '41'), ['41/50']);
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', ''), ['41/50', '51/60']);
+  assert.deepEqual(sugerenciasMedida(columnas, 'a', ''), ['51/60', '41/50']);
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', '61'), []);
+});
+
 test('precio de columna: decimal positivo o cero, una décima', async () => {
   const { parsearPrecioColumna } = await helpers;
   assert.equal(parsearPrecioColumna('12.5'), 12.5);
