@@ -1,0 +1,94 @@
+# Compila la APK firmada de la app de despique (solo Pesadas, docs/APP_DESPIQUE.md) y la publica
+# en GitHub Releases. Usa los mismos secrets de firma que la APK completa (android-release.yml).
+#
+# Se dispara a mano (Actions → APK Despique → Run workflow) o al crear una etiqueta despique-v*
+# (por ejemplo: git tag despique-v0.3.23 && git push origin despique-v0.3.23).
+# La etiqueta de la release es despique-v<versión de package.json>.
+#
+# Esta app NO recibe las pantallas nuevas al publicar la web: cada cambio que deba llegarle
+# necesita una APK nueva instalada encima (misma llave, así que actualiza sin desinstalar).
+name: APK Despique (Release)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Etiqueta de la release (vacío = despique-v<versión>)'
+        required: false
+        default: ''
+  push:
+    tags: ['despique-v*']
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Preparar keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Falta el secret ANDROID_KEYSTORE_BASE64. Ver docs/ANDROID_FIRMA.md."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > /tmp/reypez-release.keystore
+          test -s /tmp/reypez-release.keystore
+
+      - name: Compilar APK firmada
+        run: node scripts/build-android.cjs --despique --release
+        env:
+          REYPEZ_KEYSTORE_FILE: /tmp/reypez-release.keystore
+          REYPEZ_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          REYPEZ_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          REYPEZ_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Verificar firma y que solo trae Pesadas
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose release/android/ReyPezDespique-*.apk
+          node --test tests/app-despique.test.cjs
+
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_ENTRADA: ${{ inputs.tag }}
+          TAG_PUSH: ${{ github.ref_name }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$TAG_ENTRADA" ]; then
+            TAG="$TAG_ENTRADA"
+          elif [[ "$TAG_PUSH" == despique-v* ]]; then
+            TAG="$TAG_PUSH"
+          else
+            TAG="despique-v$VERSION"
+          fi
+          APK="release/android/ReyPezDespique-$VERSION.apk"
+          test -f "$APK"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --title "Despique Rey Pez $VERSION" \
+              --notes "APK para el colaborador que pesa las despicadas: solo Pesadas (días, pesar rápido y hoja del día), sin acceso a otras áreas.
+
+          Se instala junto a la app completa de ReyPez (es otra app). Para actualizarla, instala la APK nueva encima; no hace falta desinstalar."
+          fi
+          echo "Release: https://github.com/${{ github.repository }}/releases/tag/$TAG"

@@ -7,6 +7,13 @@ const root = path.resolve(__dirname, '..');
 // --solo-web: solo la pantalla (android-dist + paquete.json), sin SDK ni APK; lo usa la GitHub Action
 // para publicar la actualización que las apps instaladas descargan.
 const soloWeb = process.argv.includes('--solo-web');
+// --despique: la app del colaborador que pesa las despicadas (docs/APP_DESPIQUE.md). Solo Pesadas,
+// otro appId (com.reypez.despique) y su propio proyecto nativo (android-despique/). No publica
+// paquete de actualización: se actualiza instalando una APK nueva.
+const despique = process.argv.includes('--despique');
+const carpetaWeb = despique ? 'despique-dist' : 'android-dist';
+const carpetaNativa = despique ? 'android-despique' : 'android';
+const nombreApk = despique ? 'ReyPezDespique' : 'ReyPez';
 const identidad = identidadPaquete();
 const sdk = [process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT,
   path.join(os.homedir(), 'Library/Android/sdk'), '/opt/homebrew/share/android-commandlinetools',
@@ -15,20 +22,21 @@ if (!sdk && !soloWeb) {
   console.error('No se encontró el SDK de Android. Configura ANDROID_HOME e intenta nuevamente.');
   process.exit(1);
 }
-const env = { ...process.env, VUE_APP_TARGET: 'android', ...entornoPaquete(identidad), ...(sdk ? { ANDROID_HOME: sdk } : {}) };
+const env = { ...process.env, VUE_APP_TARGET: 'android', ...(despique ? { VUE_APP_VARIANTE: 'despique' } : {}),
+  ...entornoPaquete(identidad), ...(sdk ? { ANDROID_HOME: sdk } : {}) };
 function run(command, args, cwd = root) {
   const result = spawnSync(command, args, { cwd, env, stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status || 1);
 }
 run(process.execPath, [require.resolve('@vue/cli-service/bin/vue-cli-service.js'), 'build']);
-const html = fs.readFileSync(path.join(root, 'android-dist/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, carpetaWeb, 'index.html'), 'utf8');
 if (!/<script\b[^>]*\bsrc=/.test(html)) {
   console.error('La entrada Android no contiene scripts de arranque. No se generará un APK vacío.');
   process.exit(1);
 }
-escribirManifiesto('android', identidad);
-console.log(`Paquete de Android ${identidad.version}`);
+if (!despique) escribirManifiesto('android', identidad);
+console.log(`${despique ? 'App de despique' : 'Paquete de Android'} ${identidad.version}`);
 if (soloWeb) process.exit(0);
 run(process.execPath, [require.resolve('@capacitor/cli/bin/capacitor'), 'sync', 'android']);
 // --release: APK firmada con el keystore de distribución (CI de Releases). Sin él, debug local.
@@ -37,11 +45,11 @@ if (release && (!process.env.REYPEZ_KEYSTORE_FILE || !fs.existsSync(process.env.
   console.error('Para --release hace falta REYPEZ_KEYSTORE_FILE con el keystore de distribución.');
   process.exit(1);
 }
-const android = path.join(root, 'android');
+const android = path.join(root, carpetaNativa);
 run(process.platform === 'win32' ? 'gradlew.bat' : './gradlew', [release ? 'assembleRelease' : 'assembleDebug'], android);
 const output = path.join(root, 'release/android');
 fs.mkdirSync(output, { recursive: true });
 const version = require('../package.json').version;
-const target = path.join(output, `ReyPez-${version}.apk`);
+const target = path.join(output, `${nombreApk}-${version}.apk`);
 fs.copyFileSync(path.join(android, 'app/build/outputs/apk', release ? 'release/app-release.apk' : 'debug/app-debug.apk'), target);
 console.log(`${release ? 'APK firmada lista' : 'APK de prueba lista'}: ${target}`);

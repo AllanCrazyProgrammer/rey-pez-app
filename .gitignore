@@ -53,6 +53,15 @@ android/**/build/
 android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
+# App de despique (docs/APP_DESPIQUE.md)
+despique-dist/
+android-despique/.gradle/
+android-despique/local.properties
+android-despique/**/build/
+android-despique/capacitor-cordova-android-plugins/
+android-despique/app/src/main/assets/public/
+android-despique/app/src/main/assets/capacitor.config.json
+android-despique/app/src/main/assets/capacitor.plugins.json
 
 # Desktop OAuth client configuration (bundled in native installers, never in Git/web)
 electron/google-drive-clients.local.json

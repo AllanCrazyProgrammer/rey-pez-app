@@ -66,6 +66,13 @@ de distribución se publica en GitHub Releases (`.github/workflows/android-relea
 ver `docs/ANDROID_FIRMA.md`). Arranque de la APK: `npm run test:android:arranque`
 (tras `npm run build:android:web`).
 
+## App de despique (APK aparte, solo Pesadas)
+
+Variante `VUE_APP_VARIANTE=despique`: entrada `src/despique/`, build en `despique-dist/`,
+proyecto nativo `android-despique/` (`com.reypez.despique`). Solo login, días de pesadas, pesar
+rápido y hoja del día. No usa el canal de actualizaciones (APK nueva por cada cambio).
+Detalles: `docs/APP_DESPIQUE.md`. Pruebas: `node --test tests/app-despique.test.cjs`.
+
 ## Módulo de Barcos
 
 Entrada de producto por descarga: `src/views/Barcos/EntradaProductoBarco.vue`
