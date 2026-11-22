@@ -31,7 +31,10 @@ Hoja del día (estos cambios aplican también a la app completa, salvo donde dic
 
 Lógica pura de granel: `src/utils/pesadasGranel.js` (`tests/pesadas-granel.test.cjs`).
 Datos en el día (`pesadasDiarias/<fecha>`): `trastesDia.t6 = 0.6`, `granelKgPorTara`,
-`granel.<columnaId>.<filaId> = { taras, kilos, orden, hora }`.
+`granel.<columnaId>.<filaId> = { taras, kilos, orden, hora }`, `granelCrudo.<columnaId>` (kilos en
+crudo, solo se capturan al abrir la pesada a granel desde la hoja). Rendimiento = crudo ÷ neto a
+granel con dos decimales, p. ej. "En crudo 34 kg (1.20)" en los cards de la hoja. En la pesada a
+granel, Enter en los kilos suelta el campo (cierra el teclado del celular) y guarda.
 
 Cualquier otra ruta regresa a `/pesadas`. Las demás áreas de Rey Pez (embarques, cuentas,
 préstamos, catálogo de despicadoras, etc.) **no se compilan** dentro de esta app: no hay forma

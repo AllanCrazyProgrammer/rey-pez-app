@@ -44,7 +44,8 @@
           <input :value="borrador(`${medida.id}.${fila.id}.kilos`, fila.kilos)" type="text" inputmode="decimal" autocomplete="off"
             placeholder="0.0" :aria-label="`Kilos con tara, renglón ${index + 1} de ${medida.medida}`"
             :class="{ 'pesadas-granel-error': errores[`${medida.id}.${fila.id}.kilos`] }"
-            @input="escribir(`${medida.id}.${fila.id}.kilos`, $event)" @change="guardarCelda(medida.id, fila, 'kilos', $event)">
+            @input="escribir(`${medida.id}.${fila.id}.kilos`, $event)" @change="guardarCelda(medida.id, fila, 'kilos', $event)"
+            @keydown.enter.prevent="soltar">
           <output class="pesadas-granel-neto">{{ netoTexto(medida.id, fila) }}</output>
         </div>
         <p v-if="errorMedida(medida.id)" class="pesadas-alert" role="alert">{{ errorMedida(medida.id) }}</p>
@@ -58,6 +59,16 @@
           <span><small>Con tara</small><strong>{{ numero(medida.total.bruto) }} kg</strong></span>
           <span><small>Tara</small><strong>{{ numero(medida.total.tara) }} kg</strong></span>
           <span class="pesadas-granel-total-neto"><small>Neto</small><strong>{{ numero(medida.total.neto) }} kg</strong></span>
+        </div>
+        <!-- Al editar desde la hoja (sin ?medida=): kilos en crudo de la medida y su rendimiento. -->
+        <div v-if="!medidaFiltro" class="pesadas-granel-crudo">
+          <label>Kilos en crudo
+            <input :value="borrador(`${medida.id}.crudo`, medida.crudo)" type="text" inputmode="decimal" autocomplete="off"
+              placeholder="0.0" :aria-label="`Kilos en crudo de ${medida.medida}`"
+              :class="{ 'pesadas-granel-error': errores[`${medida.id}.crudo`] }"
+              @input="escribir(`${medida.id}.crudo`, $event)" @change="guardarCrudo(medida.id, $event)" @keydown.enter.prevent="soltar">
+          </label>
+          <span class="pesadas-granel-rendimiento">Rendimiento <strong>{{ medida.rendimiento == null ? '—' : `(${rendimientoTexto(medida.rendimiento)})` }}</strong></span>
         </div>
       </section>
 
@@ -86,7 +97,7 @@ import { nanoid } from 'nanoid';
 import { conectarPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPesada, resumenPesadas } from '@/utils/pesadas';
-import { filasGranel, kgPorTaraGranel, netoFilaGranel, parsearKgPorTara, parsearKilosGranel, parsearTarasGranel,
+import { crudoGranel, filasGranel, formatoRendimiento, kgPorTaraGranel, rendimientoGranel, netoFilaGranel, parsearKgPorTara, parsearKilosGranel, parsearTarasGranel,
   resumenFilasGranel, resumenGranel } from '@/utils/pesadasGranel';
 import './pesadas.css';
 
@@ -122,8 +133,10 @@ export default {
         // dentro del computed); al escribir en él se guarda con ese id.
         const inicial = { id: `inicial-${col.id}`, taras: null, kilos: null, nueva: true };
         const filas = guardadas.length ? [...guardadas, ...nuevas] : [inicial, ...nuevas];
+        const total = resumenFilasGranel(guardadas, this.kgPorTara);
+        const crudo = crudoGranel(this.datosGuardados, col.id);
         return { id: col.id, medida: col.medida || 'Sin medida', despicadoras: this.kilosPorColumna[col.id] || 0,
-          filas, guardadas: guardadas.length, total: resumenFilasGranel(guardadas, this.kgPorTara) };
+          filas, guardadas: guardadas.length, total, crudo, rendimiento: rendimientoGranel(crudo, total.neto) };
       });
     }
   },
@@ -176,6 +189,18 @@ export default {
       // eliminado: false por si el id inicial de la medida se había quitado antes.
       if (fila.nueva) Object.assign(campos, { [`granel.${columnaId}.${fila.id}.orden`]: `${Date.now()}-${fila.id}`, [`granel.${columnaId}.${fila.id}.eliminado`]: false });
       this.guardarCampos(campos);
+      this.limpiar(clave);
+      if (!this.hayErrores()) this.errorAccion = '';
+    },
+    // Enter en kilos: soltar el campo cierra el teclado del celular (y el change guarda el valor).
+    soltar(event) { event.target.blur(); },
+    rendimientoTexto: formatoRendimiento,
+    guardarCrudo(columnaId, event) {
+      const clave = `${columnaId}.crudo`;
+      let valor;
+      try { valor = parsearKilosGranel(event.target.value); }
+      catch (error) { this.$set(this.errores, clave, error.message); return; }
+      this.guardarCampos({ [`granelCrudo.${columnaId}`]: valor });
       this.limpiar(clave);
       if (!this.hayErrores()) this.errorAccion = '';
     },

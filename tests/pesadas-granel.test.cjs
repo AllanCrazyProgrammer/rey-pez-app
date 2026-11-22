@@ -75,3 +75,20 @@ test('hora de cada renglón en 12 horas (de `hora` o, en los viejos, del orden)'
   assert.equal(formatoHora12(new Date(2026, 10, 21, 12, 0).getTime()), '12:00 p.m.');
   assert.equal(formatoHora12(null), '—');
 });
+
+test('kilos en crudo y rendimiento (crudo ÷ neto a granel, dos decimales)', async () => {
+  const { crudoGranel, rendimientoGranel, formatoRendimiento, resumenGranel } = await helpers;
+  assert.equal(crudoGranel({ granelCrudo: { c1: 50.9 } }, 'c1'), 50.9);
+  assert.equal(crudoGranel({ granelCrudo: { c1: 0 } }, 'c1'), null);
+  assert.equal(crudoGranel({}, 'c1'), null);
+  assert.equal(rendimientoGranel(50.9, 42.4), 1.2);
+  assert.equal(formatoRendimiento(rendimientoGranel(50.9, 42.4)), '1.20');
+  assert.equal(rendimientoGranel(null, 42.4), null);
+  assert.equal(rendimientoGranel(50, 0), null);
+  assert.equal(formatoRendimiento(null), '');
+  const data = { granel: { c1: { f1: { taras: 6, kilos: 40.3, orden: '1' }, f2: { taras: 3, kilos: 20.1, orden: '2' } } }, granelCrudo: { c1: 50.9 } };
+  const [medida] = resumenGranel(data, [{ id: 'c1', medida: '21/25' }], {}).medidas;
+  assert.equal(medida.neto, 42.4);
+  assert.equal(medida.crudo, 50.9);
+  assert.equal(medida.rendimiento, 1.2);
+});

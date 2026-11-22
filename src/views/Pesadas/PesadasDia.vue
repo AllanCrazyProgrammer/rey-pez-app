@@ -50,6 +50,7 @@
             @click="granelAbierto = granelAbierto === medida.id ? '' : medida.id">
             <span>{{ medida.medida }}</span>
             <strong>{{ numero(medida.neto) }} kg</strong>
+            <small v-if="medida.crudo" class="pesadas-granel-card-crudo">En crudo {{ numero(medida.crudo) }} kg <b>({{ rendimientoTexto(medida.rendimiento) }})</b></small>
           </button>
         </div>
         <!-- Desglose de la medida tocada: cada pesada con su hora. -->
@@ -94,7 +95,7 @@ import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/components/Pesadas/Cuentas.vue';
 import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
-import { formatoHora12, resumenGranel } from '@/utils/pesadasGranel';
+import { formatoHora12, formatoRendimiento, resumenGranel } from '@/utils/pesadasGranel';
 import { crearHistorial, valorEnRuta } from '@/utils/historialCambios';
 import { ES_DESPIQUE } from '@/config/variante';
 import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, ordenInsercionPesadas, resumenPesadas } from '@/utils/pesadas';
@@ -168,6 +169,7 @@ export default {
   methods: {
     numero: formatoPesada,
     hora12: formatoHora12,
+    rendimientoTexto: formatoRendimiento,
     pago: formatoPagoPesada,
     seleccionarPersona(persona) {
       // Wait until the modal releases focus before moving into the sheet.

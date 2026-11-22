@@ -344,3 +344,11 @@
 .pesadas-row-menu .pesadas-row-menu-eliminar { color: #a62f2f; }
 .pesadas-row-menu .pesadas-row-menu-eliminar:hover, .pesadas-row-menu .pesadas-row-menu-eliminar:focus-visible { background: #ffede9; }
 .pesadas-row-menu-pregunta { margin: 4px 8px 6px; max-width: 240px; color: #2d2340; font-size: 15px; font-weight: 600; line-height: 1.35; }
+/* Pesada a granel: kilos en crudo y rendimiento (crudo ÷ neto). */
+.pesadas-granel-crudo { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed #ded9e7; }
+.pesadas-granel-crudo label { display: flex; flex-direction: column; gap: 6px; margin: 0; color: #69637b; font-size: 13px; font-weight: 700; }
+.pesadas-granel-crudo input { width: 160px; min-height: 50px; padding: 8px 12px; border: 1px solid #cec7e0; border-radius: 10px; font-size: 20px; font-weight: 800; text-align: right; }
+.pesadas-granel-rendimiento { color: #69637b; font-size: 15px; }
+.pesadas-granel-rendimiento strong { color: #2d2440; font-size: 20px; }
+.pesadas-granel-card .pesadas-granel-card-crudo { color: #69637b; font-size: 13px; font-weight: 600; }
+.pesadas-granel-card .pesadas-granel-card-crudo b { color: #453575; }

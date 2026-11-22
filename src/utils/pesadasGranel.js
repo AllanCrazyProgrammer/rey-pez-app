@@ -96,6 +96,22 @@ export function formatoHora12(ms) {
   return `${horas % 12 || 12}:${String(fecha.getMinutes()).padStart(2, '0')} ${horas < 12 ? 'a.m.' : 'p.m.'}`;
 }
 
+// Kilos en crudo de cada medida (se capturan al editar la pesada a granel desde la hoja):
+// `granelCrudo.<columnaId> = 84.6`. Rendimiento = crudo ÷ neto a granel, con dos decimales (1.20).
+export function crudoGranel(data, columnaId) {
+  const valor = Number(((data && data.granelCrudo) || {})[columnaId]);
+  return Number.isFinite(valor) && valor > 0 ? valor : null;
+}
+
+export function rendimientoGranel(crudo, neto) {
+  if (!(Number(crudo) > 0) || !(Number(neto) > 0)) return null;
+  return Math.round((Number(crudo) / Number(neto)) * 100) / 100;
+}
+
+export function formatoRendimiento(valor) {
+  return valor == null ? '' : Number(valor).toFixed(2);
+}
+
 // Por medida (en el orden de las columnas del día) y el total. `kilosPorColumna` es lo que
 // registraron las despicadoras (resumenPesadas) para comparar contra lo pesado a granel.
 export function resumenGranel(data, columnas, kilosPorColumna = {}) {
@@ -106,8 +122,9 @@ export function resumenGranel(data, columnas, kilosPorColumna = {}) {
     const resumen = resumenFilasGranel(filas, kgPorTara);
     const detalle = filas.map(fila => ({ id: fila.id, taras: Number(fila.taras) || 0, kilos: fila.kilos == null || fila.kilos === '' ? null : Number(fila.kilos),
       neto: netoFilaGranel(fila, kgPorTara), hora: horaFilaGranel(fila) }));
+    const crudo = crudoGranel(data, columna.id);
     return { id: columna.id, medida: columna.medida || 'Sin medida', filas: filas.length, detalle, ...resumen,
-      despicadoras, diferencia: (decimas(resumen.neto) - decimas(despicadoras)) / 10 };
+      crudo, rendimiento: rendimientoGranel(crudo, resumen.neto), despicadoras, diferencia: (decimas(resumen.neto) - decimas(despicadoras)) / 10 };
   }).filter(medida => medida.filas > 0);
   const total = resumenFilasGranel(medidas.map(medida => ({ taras: medida.taras, kilos: medida.bruto })), kgPorTara);
   const despicadoras = medidas.reduce((suma, medida) => suma + decimas(medida.despicadoras), 0) / 10;
