@@ -70,7 +70,8 @@ ver `docs/ANDROID_FIRMA.md`). Arranque de la APK: `npm run test:android:arranque
 
 Variante `VUE_APP_VARIANTE=despique`: entrada `src/despique/`, build en `despique-dist/`,
 proyecto nativo `android-despique/` (`com.reypez.despique`). Solo login, días de pesadas, pesar
-rápido y hoja del día. No usa el canal de actualizaciones (APK nueva por cada cambio).
+rápido y hoja del día. Se actualiza sola desde 0.3.25 con su propio paquete (`actualizaciones/despique/`,
+solo con wifi) y funciona sin internet.
 Detalles: `docs/APP_DESPIQUE.md`. Pruebas: `node --test tests/app-despique.test.cjs`.
 Prueba local con datos de ejemplo y sin la base real: `npm run despique:local` (emuladores).
 

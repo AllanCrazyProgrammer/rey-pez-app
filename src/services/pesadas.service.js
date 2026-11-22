@@ -17,9 +17,26 @@ export function eliminarDiaPesadas(fecha) {
   });
 }
 
-export function crearDiaPesadas(fecha) {
+// Sin internet no hay transacciones: el día se anota en la caché local de Firestore (aparece de
+// inmediato en el historial) y se sube solo al reconectar. Es un merge de la fecha nada más: nunca
+// borra lo que el día ya tenga en el servidor. No se espera la promesa (sin red no termina hasta
+// reconectar).
+function crearDiaSinConexion(reference, fecha) {
+  setDoc(reference, { fecha, actualizadoEn: serverTimestamp() }, { merge: true })
+    .catch(error => console.warn('No se pudo anotar el día sin conexión:', error));
+}
+
+export function errorSinConexion(error) {
+  return Boolean(error && ['unavailable', 'deadline-exceeded'].includes(String(error.code || '').replace(/^firestore\//, '')));
+}
+
+export function crearDiaPesadas(fecha, { enLinea = typeof navigator === 'undefined' || navigator.onLine !== false } = {}) {
   if (!fechaPesadasValida(fecha)) throw new Error('Fecha inválida.');
   const reference = doc(db, 'pesadasDiarias', fecha);
+  if (!enLinea) {
+    crearDiaSinConexion(reference, fecha);
+    return Promise.resolve();
+  }
   return runTransaction(db, async transaction => {
     const current = await transaction.get(reference);
     // Existing active days retain all of their capture. A deleted day starts clean.
@@ -28,6 +45,10 @@ export function crearDiaPesadas(fecha) {
       fecha, eliminado: false, creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp(),
       columnas: {}, personas: {}, pesos: {}
     });
+  }).catch(error => {
+    // La red se cayó a medio camino (el teléfono creía tener internet).
+    if (!errorSinConexion(error)) throw error;
+    crearDiaSinConexion(reference, fecha);
   });
 }
 
