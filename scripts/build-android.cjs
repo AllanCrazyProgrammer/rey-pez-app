@@ -8,8 +8,8 @@ const root = path.resolve(__dirname, '..');
 // para publicar la actualización que las apps instaladas descargan.
 const soloWeb = process.argv.includes('--solo-web');
 // --despique: la app del colaborador que pesa las despicadas (docs/APP_DESPIQUE.md). Solo Pesadas,
-// otro appId (com.reypez.despique) y su propio proyecto nativo (android-despique/). No publica
-// paquete de actualización: se actualiza instalando una APK nueva.
+// otro appId (com.reypez.despique) y su propio proyecto nativo (android-despique/). Su paquete de
+// actualización va aparte (actualizaciones/despique/), así nunca recibe las pantallas de la app completa.
 const despique = process.argv.includes('--despique');
 const carpetaWeb = despique ? 'despique-dist' : 'android-dist';
 const carpetaNativa = despique ? 'android-despique' : 'android';
@@ -35,7 +35,7 @@ if (!/<script\b[^>]*\bsrc=/.test(html)) {
   console.error('La entrada Android no contiene scripts de arranque. No se generará un APK vacío.');
   process.exit(1);
 }
-if (!despique) escribirManifiesto('android', identidad);
+escribirManifiesto(despique ? 'despique' : 'android', identidad, path.join(root, carpetaWeb));
 console.log(`${despique ? 'App de despique' : 'Paquete de Android'} ${identidad.version}`);
 if (soloWeb) process.exit(0);
 run(process.execPath, [require.resolve('@capacitor/cli/bin/capacitor'), 'sync', 'android']);

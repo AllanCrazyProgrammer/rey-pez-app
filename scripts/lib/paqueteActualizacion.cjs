@@ -5,6 +5,7 @@
 // web, `publicar()` copia esos paquetes a `dist/actualizaciones/`, que Firebase Hosting sirve:
 //   escritorio/ultima.json + escritorio/<versión>/<archivos>  (se descargan uno por uno)
 //   android/ultima.json    + android/<versión>.zip            (lo descarga el plugin de Capacitor)
+//   despique/ultima.json   + despique/<versión>.zip           (APK de despique: solo Pesadas)
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -12,7 +13,7 @@ const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..', '..');
 const MANIFIESTO = 'paquete.json';
-const CARPETAS = { escritorio: 'desktop-dist', android: 'android-dist' };
+const CARPETAS = { escritorio: 'desktop-dist', android: 'android-dist', despique: 'despique-dist' };
 
 function sha256(contenido) {
   return crypto.createHash('sha256').update(contenido).digest('hex');
@@ -71,7 +72,7 @@ function leerManifiesto(carpeta) {
 }
 
 // Copia los paquetes ya construidos a <dist>/actualizaciones/.
-function publicar({ dist = path.join(root, 'dist'), escritorio = path.join(root, CARPETAS.escritorio), android = path.join(root, CARPETAS.android) } = {}) {
+function publicar({ dist = path.join(root, 'dist'), escritorio = path.join(root, CARPETAS.escritorio), android = path.join(root, CARPETAS.android), despique = null } = {}) {
   const destino = path.join(dist, 'actualizaciones');
   fs.rmSync(destino, { recursive: true, force: true });
   const resumen = {};
@@ -87,21 +88,31 @@ function publicar({ dist = path.join(root, 'dist'), escritorio = path.join(root,
   fs.writeFileSync(path.join(destino, 'escritorio', 'ultima.json'), JSON.stringify(mEsc));
   resumen.escritorio = mEsc.version;
 
-  const { zipSync } = require('fflate');
-  const mAnd = leerManifiesto(android);
-  const entradas = {};
-  // El paquete.json va dentro del zip: así la versión descargada sabe qué número es.
-  for (const ruta of [...mAnd.archivos.map(a => a.ruta), MANIFIESTO]) {
-    entradas[ruta] = [new Uint8Array(fs.readFileSync(path.join(android, ruta))), { mtime: new Date('2000-01-01T00:00:00Z') }];
-  }
-  const zip = Buffer.from(zipSync(entradas, { level: 9 }));
-  const archivoZip = `${mAnd.version}.zip`;
-  fs.mkdirSync(path.join(destino, 'android'), { recursive: true });
-  fs.writeFileSync(path.join(destino, 'android', archivoZip), zip);
-  const { archivos, ...datos } = mAnd;
-  fs.writeFileSync(path.join(destino, 'android', 'ultima.json'), JSON.stringify({ ...datos, archivo: archivoZip, sha256: sha256(zip), tamano: zip.length }));
-  resumen.android = mAnd.version;
+  resumen.android = publicarZip(android, path.join(destino, 'android'));
+  // La APK de despique tiene su propio paquete (solo Pesadas). Opcional: solo si se pasa su carpeta.
+  if (despique) resumen.despique = publicarZip(despique, path.join(destino, 'despique'));
   return resumen;
 }
 
-module.exports = { identidadPaquete, entornoPaquete, escribirManifiesto, leerManifiesto, publicar, sha256, MANIFIESTO };
+// Zip de las pantallas + ultima.json para el plugin de Capacitor (Android y despique).
+function publicarZip(carpeta, destino) {
+  const { zipSync } = require('fflate');
+  const manifiesto = leerManifiesto(carpeta);
+  const entradas = {};
+  // El paquete.json va dentro del zip: así la versión descargada sabe qué número es.
+  for (const ruta of [...manifiesto.archivos.map(a => a.ruta), MANIFIESTO]) {
+    const contenido = fs.readFileSync(path.join(carpeta, ruta));
+    const esperado = manifiesto.archivos.find(a => a.ruta === ruta);
+    if (esperado && sha256(contenido) !== esperado.sha256) throw new Error(`${path.basename(carpeta)} cambió después de generar su paquete.json (${ruta}).`);
+    entradas[ruta] = [new Uint8Array(contenido), { mtime: new Date('2000-01-01T00:00:00Z') }];
+  }
+  const zip = Buffer.from(zipSync(entradas, { level: 9 }));
+  const archivoZip = `${manifiesto.version}.zip`;
+  fs.mkdirSync(destino, { recursive: true });
+  fs.writeFileSync(path.join(destino, archivoZip), zip);
+  const { archivos, ...datos } = manifiesto;
+  fs.writeFileSync(path.join(destino, 'ultima.json'), JSON.stringify({ ...datos, archivo: archivoZip, sha256: sha256(zip), tamano: zip.length }));
+  return manifiesto.version;
+}
+
+module.exports = { identidadPaquete, entornoPaquete, escribirManifiesto, leerManifiesto, publicar, sha256, MANIFIESTO, CARPETAS };

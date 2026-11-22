@@ -69,9 +69,33 @@ en GitHub Releases.
 
 ## Actualizaciones
 
-Esta app **no** usa el canal de actualizaciones dentro de la app (ese canal trae la app completa).
-Para que le llegue un cambio hay que compilar e instalar una APK nueva encima (misma llave, no
-hace falta desinstalar).
+Desde la **0.3.25** se actualiza sola, sin reinstalar, con su **propio** paquete
+(`actualizaciones/despique/ultima.json` + zip en Firebase Hosting; nunca recibe el de la app
+completa). Lo publica la GitHub Action de la web junto con los demás
+(`node scripts/build-android.cjs --despique --solo-web`).
+
+- Solo revisa **con wifi** (o si el sistema no dice el tipo de red): al abrir, cada 30 min, al
+  volver a la app, al recuperar internet y al pasar a wifi (`src/despique/actualizacion.js`,
+  `hayWifi` en `src/mobile/actualizacionAndroid.js`).
+- La versión descargada se aplica sola al abrir la app (primeros 20 s) o al mandarla a segundo
+  plano; nunca con la app en uso. Los cambios de pesadas ya están guardados en el teléfono.
+- Las APK 0.3.24 y anteriores no traen este código: hay que instalar la 0.3.25 a mano una vez.
+- Un cambio nativo (plugins, permisos, `android-despique/`) sí necesita APK nueva y subir
+  `reypez.minimoInstalador.despique` en `package.json`.
+- Pruebas: `node --test scripts/test-actualizaciones.cjs` (pruebas "despique: …").
+
+## Sin internet
+
+- La sesión sigue al abrir sin internet (Firebase guarda al usuario en el teléfono); solo el
+  primer inicio de sesión necesita internet.
+- Las pantallas abren con la caché de Firestore. Lo capturado se guarda primero en el teléfono
+  (`PesadasOutbox`, `localStorage`) y en la cola persistente de Firestore, y se sube solo al
+  reconectar (aunque se cierre la app en medio).
+- **Crear día** sin internet: como no hay transacciones sin red, se anota el día con un merge de
+  la fecha (no borra nada del servidor) y aparece de inmediato (`crearDiaPesadas`,
+  `src/services/pesadas.service.js`).
+- Probado contra los emuladores congelando Firestore (`kill -STOP`): crear día, capturar,
+  reabrir la app y, al descongelar, todo subió y quedó "Guardado".
 
 ## Cuenta del colaborador
 

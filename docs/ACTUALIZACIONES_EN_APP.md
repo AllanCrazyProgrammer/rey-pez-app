@@ -59,6 +59,8 @@ instalar la app" con el enlace a GitHub Releases.
   - `actualizaciones/escritorio/ultima.json` y `actualizaciones/escritorio/<versión>/…`. Se
     descargan archivo por archivo, y solo los que cambiaron.
   - `actualizaciones/android/ultima.json` y `actualizaciones/android/<versión>.zip`.
+  - `actualizaciones/despique/ultima.json` y su zip: la APK de despique (solo Pesadas), ver
+    `docs/APP_DESPIQUE.md`.
 
   En local: `npm run build:actualizaciones`.
 - **Escritorio:** `electron/actualizaciones.js` descarga a

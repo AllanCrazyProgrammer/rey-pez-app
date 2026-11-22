@@ -285,3 +285,61 @@ test('android: iniciar avisa al plugin que la versión arrancó', async () => {
   assert.equal(updater.llamadas[0], 'ready');
 });
 
+
+test('despique: publica su propio zip aparte del de la app completa', () => {
+  const dir = tmp();
+  const identidad = { version: '0.3.25-600', numero: 600, commit: 'abc', minimoInstalador: { escritorio: '0.3.20', android: '0.3.20', despique: '0.3.24' } };
+  escribir(path.join(dir, 'desktop-dist'), { 'index.html': 'esc' });
+  escribir(path.join(dir, 'android-dist'), { 'index.html': 'and' });
+  escribir(path.join(dir, 'despique-dist'), { 'index.html': 'desp', 'js/p.js': 'p' });
+  escribirManifiesto('escritorio', identidad, path.join(dir, 'desktop-dist'));
+  escribirManifiesto('android', identidad, path.join(dir, 'android-dist'));
+  escribirManifiesto('despique', identidad, path.join(dir, 'despique-dist'));
+  const resumen = publicar({ dist: path.join(dir, 'dist'), escritorio: path.join(dir, 'desktop-dist'), android: path.join(dir, 'android-dist'), despique: path.join(dir, 'despique-dist') });
+  assert.equal(resumen.despique, '0.3.25-600');
+  const ultima = android.validarUltima(JSON.parse(fs.readFileSync(path.join(dir, 'dist/actualizaciones/despique/ultima.json'))), 'despique');
+  assert.equal(ultima.minimoInstalador, '0.3.24');
+  const zip = fs.readFileSync(path.join(dir, 'dist/actualizaciones/despique', ultima.archivo));
+  assert.equal(ultima.sha256, sha256(zip));
+  assert.equal(Buffer.from(unzipSync(new Uint8Array(zip))['index.html']).toString(), 'desp');
+  // El de la app completa sigue siendo el suyo.
+  const ultimaAndroid2 = JSON.parse(fs.readFileSync(path.join(dir, 'dist/actualizaciones/android/ultima.json')));
+  assert.equal(Buffer.from(unzipSync(new Uint8Array(fs.readFileSync(path.join(dir, 'dist/actualizaciones/android', ultimaAndroid2.archivo))))['index.html']).toString(), 'and');
+  // Si despique-dist cambia después de su manifiesto, no se publica.
+  fs.writeFileSync(path.join(dir, 'despique-dist/js/p.js'), 'otro');
+  assert.throws(() => publicar({ dist: path.join(dir, 'dist'), escritorio: path.join(dir, 'desktop-dist'), android: path.join(dir, 'android-dist'), despique: path.join(dir, 'despique-dist') }), /cambió/);
+});
+
+test('despique: no acepta el paquete de la app completa ni al revés', async () => {
+  const ultimaDespique = { ...ultimaAndroid, plataforma: 'despique' };
+  const updater = updaterFalso();
+  const despique = android.crearFuenteAndroid({ updater, versionNativa: async () => '0.3.24', numeroActual: 100, fetch: respuesta(ultimaAndroid), plataforma: 'despique' });
+  await despique.buscar();
+  assert.equal(updater.llamadas.length, 0);
+  const completa = android.crearFuenteAndroid({ updater, versionNativa: async () => '0.3.24', numeroActual: 100, fetch: respuesta(ultimaDespique) });
+  await completa.buscar();
+  assert.equal(updater.llamadas.length, 0);
+  const bien = android.crearFuenteAndroid({ updater, versionNativa: async () => '0.3.24', numeroActual: 100, fetch: respuesta(ultimaDespique), plataforma: 'despique', base: 'https://x/d/' });
+  await bien.buscar();
+  assert.equal(updater.llamadas[0][1].url, 'https://x/d/0.3.20-200.zip');
+});
+
+test('despique: sin wifi no consulta nada; con wifi o tipo desconocido sí', async () => {
+  let consultas = 0;
+  let wifi = false;
+  const fuente = android.crearFuenteAndroid({ updater: updaterFalso(), versionNativa: async () => '0.3.24', numeroActual: 100,
+    fetch: async () => { consultas++; return { ok: true, json: async () => ({ ...ultimaAndroid, plataforma: 'despique' }) }; },
+    plataforma: 'despique', puedeRevisar: () => wifi });
+  await fuente.buscar();
+  assert.equal(consultas, 0);
+  wifi = true;
+  await fuente.buscar();
+  assert.equal(consultas, 1);
+
+  assert.equal(android.hayWifi({ onLine: true, connection: { type: 'wifi' } }), true);
+  assert.equal(android.hayWifi({ onLine: true, connection: { type: 'cellular' } }), false);
+  assert.equal(android.hayWifi({ onLine: false, connection: { type: 'wifi' } }), false);
+  assert.equal(android.hayWifi({ onLine: true }), true); // el sistema no dice el tipo
+  assert.equal(android.hayWifi({ onLine: true, connection: { type: 'unknown' } }), true);
+  assert.equal(android.hayWifi(null), false);
+});

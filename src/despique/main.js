@@ -12,6 +12,7 @@ import '@fortawesome/fontawesome-free/css/all.css';
 import AppDespique from './AppDespique.vue';
 import router from './router';
 import { useAuthStore } from '../stores/auth';
+import { iniciarActualizacionesDespique } from './actualizacion';
 
 [ModalPlugin, ToastPlugin, LayoutPlugin, ButtonPlugin, FormGroupPlugin, FormInputPlugin, FormTextareaPlugin]
   .forEach(plugin => Vue.use(plugin));
@@ -33,11 +34,12 @@ new Vue({
   }
 }).$mount('#app');
 
-// Esta APK no usa el canal de actualizaciones de la app completa (traería todas las pantallas):
-// se actualiza instalando una APK nueva. Solo se avisa al plugin de Capacitor que la versión
-// incluida arrancó bien, para que nunca intente regresar a otra.
+// La APK se actualiza sola con su propio paquete (solo Pesadas), revisando con wifi.
+// Ver src/despique/actualizacion.js.
 if (Capacitor.isNativePlatform()) {
-  import('@capgo/capacitor-updater')
-    .then(({ CapacitorUpdater }) => CapacitorUpdater.notifyAppReady())
-    .catch(() => {});
+  iniciarActualizacionesDespique().catch(error => {
+    console.warn('No se pudo iniciar el actualizador:', error);
+    // Al menos avisar que esta versión arrancó bien, para que el plugin no regrese a otra.
+    import('@capgo/capacitor-updater').then(({ CapacitorUpdater }) => CapacitorUpdater.notifyAppReady()).catch(() => {});
+  });
 }
