@@ -21,7 +21,7 @@
       </thead>
       <tbody>
         <tr v-for="(persona, rowIndex) in personas" :key="persona.id" :data-persona-id="persona.id">
-          <th class="name-cell" :class="{ 'active-person': personaActivaId === persona.id }" scope="row" @contextmenu="abrirMenu($event, persona)" @touchstart="iniciarPulsacion($event, persona)" @touchmove="moverPulsacion" @touchend="terminarPulsacion" @touchcancel="cancelarPulsacion"><div class="name-input"><span class="row-number">{{ rowIndex + 1 }}</span><span class="name-editor"><span class="name-width" aria-hidden="true">{{ valor(`personas.${persona.id}.nombre`, persona.nombre) || 'Nombre' }}</span><input :ref="`nombre-${persona.id}`" :value="valor(`personas.${persona.id}.nombre`, persona.nombre)" :aria-label="`Nombre despicadora ${rowIndex + 1}`" placeholder="Nombre" maxlength="120" autocomplete="off" @focus="personaActivaId = ''" @input="editar(`personas.${persona.id}.nombre`, $event, 'texto')" @blur="confirmar(`personas.${persona.id}.nombre`)" @keydown.enter.prevent="$emit('enter-nombre', persona.id)" @keydown="navegarFlecha($event, { tipo: 'nombre', personaId: persona.id })"></span><button :aria-label="`Eliminar fila ${persona.nombre || rowIndex + 1}`" @click="$emit('eliminar-persona', persona)">×</button></div></th>
+          <th class="name-cell" :class="{ 'active-person': personaActivaId === persona.id }" scope="row" @contextmenu="abrirMenu($event, persona)" @touchstart="iniciarPulsacion($event, persona)" @touchmove="moverPulsacion" @touchend="terminarPulsacion" @touchcancel="cancelarPulsacion"><div class="name-input"><span class="row-number">{{ rowIndex + 1 }}</span><span class="name-editor"><span class="name-width" aria-hidden="true">{{ valor(`personas.${persona.id}.nombre`, persona.nombre) || 'Nombre' }}</span><input :ref="`nombre-${persona.id}`" :value="valor(`personas.${persona.id}.nombre`, persona.nombre)" :aria-label="`Nombre despicadora ${rowIndex + 1}`" placeholder="Nombre" maxlength="120" autocomplete="off" @focus="personaActivaId = ''" @input="editar(`personas.${persona.id}.nombre`, $event, 'texto')" @blur="confirmar(`personas.${persona.id}.nombre`)" @keydown.enter.prevent="$emit('enter-nombre', persona.id)" @keydown="navegarFlecha($event, { tipo: 'nombre', personaId: persona.id })"></span></div></th>
           <td v-for="(columna, colIndex) in columnas" :key="columna.id" :data-columna-id="columna.id" :class="{ 'active-column': columnaActivaId === columna.id }"><input :ref="`peso-${persona.id}-${columna.id}`" :value="valor(`pesos.${persona.id}.${columna.id}`, pesos[persona.id] && pesos[persona.id][columna.id])" inputmode="decimal" :disabled="!persona.nombre.trim()" :aria-label="`Kilos de ${persona.nombre || 'fila ' + (rowIndex + 1)}, columna ${colIndex + 1}`" :aria-invalid="!!errores[`pesos.${persona.id}.${columna.id}`]" :title="errores[`pesos.${persona.id}.${columna.id}`]" placeholder="—" @focus="personaActivaId = persona.id" @input="editar(`pesos.${persona.id}.${columna.id}`, $event, 'kilos')" @blur="confirmar(`pesos.${persona.id}.${columna.id}`)" @keydown.enter.prevent="$emit('enter-peso', { personaId: persona.id, columnaId: columna.id })" @keydown="navegarFlecha($event, { tipo: 'peso', personaId: persona.id, columnaId: columna.id })"></td>
           <td class="add-column-body" aria-hidden="true"></td><td class="total-cell">{{ total(persona.id, 'kilos') }}</td><td class="total-cell final-cell" :class="{ negative: totales[persona.id] && totales[persona.id].pago < 0 }">{{ total(persona.id, 'pago', true) }}</td>
         </tr>
@@ -35,13 +35,24 @@
       </tfoot>
     </table>
     <div v-if="menu" ref="menu" class="pesadas-row-menu" role="menu" :aria-label="`Opciones de la fila ${menu.etiqueta}`" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" @contextmenu.prevent @keydown.esc.prevent="cerrarMenu(true)">
-      <button ref="menuArriba" type="button" role="menuitem" @click="insertar('arriba')">↑ Agregar fila arriba</button>
-      <button type="button" role="menuitem" @click="insertar('abajo')">↓ Agregar fila abajo</button>
+      <!-- Eliminar se confirma aquí mismo (no con window.confirm, que algunos navegadores bloquean). -->
+      <template v-if="!menu.confirmarEliminar">
+        <button ref="menuArriba" type="button" role="menuitem" @click="insertar('arriba')">↑ Agregar fila arriba</button>
+        <button type="button" role="menuitem" @click="insertar('abajo')">↓ Agregar fila abajo</button>
+        <button type="button" role="menuitem" class="pesadas-row-menu-eliminar" @click="pedirEliminar">🗑 Eliminar fila</button>
+      </template>
+      <template v-else>
+        <p class="pesadas-row-menu-pregunta">¿Eliminar toda la fila{{ menu.nombre ? ` de ${menu.nombre}` : '' }}? Se quitan el nombre y sus pesadas de este día.</p>
+        <button ref="menuConfirmar" type="button" role="menuitem" class="pesadas-row-menu-eliminar" @click="eliminar">Sí, eliminar</button>
+        <button type="button" role="menuitem" @click="cerrarMenu(true)">Cancelar</button>
+      </template>
     </div>
   </div>
 </template>
 
 <script>
+import { ajustarAltoAPantalla, encadenarScroll } from '@/utils/scrollContenido';
+import { ES_DESPIQUE } from '@/config/variante';
 import { formatoPagoPesada, formatoPesada } from '@/utils/pesadas';
 export default {
   name: 'PesadasTabla',
@@ -55,7 +66,20 @@ export default {
   computed: {
     totalKilos() { return Object.values(this.totalesColumnas).reduce((total, kilos) => total + kilos, 0); }
   },
-  beforeDestroy() { this.cancelarPulsacion(); this.cerrarMenu(); },
+  // Al llegar arriba/abajo de la tabla, el mismo gesto sigue moviendo la página (trackpad, rueda y dedo).
+  // En la app de despique, al bajar la tabla se acomoda pegada debajo de la barra de arriba.
+  // También ahí la tabla ocupa la pantalla menos la barra y el pie de totales, para que las filas fijas
+  // (Columna y Medida) nunca queden debajo de la barra.
+  mounted() {
+    const altoBarra = () => { const barra = document.querySelector('.despique-barra'); return barra ? barra.getBoundingClientRect().bottom : 0; };
+    this._soltarScroll = encadenarScroll(this.$el, { margenSuperior: ES_DESPIQUE ? altoBarra : null });
+    this._soltarAlto = ES_DESPIQUE ? ajustarAltoAPantalla(this.$el, altoBarra) : null;
+  },
+  beforeDestroy() {
+    this.cancelarPulsacion(); this.cerrarMenu();
+    if (this._soltarScroll) this._soltarScroll();
+    if (this._soltarAlto) this._soltarAlto();
+  },
   methods: {
     abrirMenu(event, persona) {
       event.preventDefault();
@@ -67,7 +91,7 @@ export default {
     async mostrarMenu(persona, x, y) {
       const index = this.personas.findIndex(row => row.id === persona.id);
       this._menuOrigen = document.activeElement;
-      this.menu = { personaId: persona.id, etiqueta: persona.nombre || index + 1, x, y };
+      this.menu = { personaId: persona.id, etiqueta: persona.nombre || index + 1, nombre: (persona.nombre || '').trim(), confirmarEliminar: false, x, y };
       document.addEventListener('mousedown', this.clickFueraMenu, true);
       document.addEventListener('touchstart', this.clickFueraMenu, true);
       document.addEventListener('keydown', this.teclaMenu, true);
@@ -97,6 +121,17 @@ export default {
     teclaMenu(event) {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.cerrarMenu(true); }
       if (event.key === 'Tab') this.cerrarMenu();
+    },
+    async pedirEliminar() {
+      if (!this.menu) return;
+      this.menu.confirmarEliminar = true;
+      await this.$nextTick();
+      if (this.$refs.menuConfirmar) this.$refs.menuConfirmar.focus({ preventScroll: true });
+    },
+    eliminar() {
+      const persona = this.menu && this.personas.find(fila => fila.id === this.menu.personaId);
+      this.cerrarMenu();
+      if (persona) this.$emit('eliminar-persona', persona, true);
     },
     insertar(posicion) {
       const personaId = this.menu && this.menu.personaId;

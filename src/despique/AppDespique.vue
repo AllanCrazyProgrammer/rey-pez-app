@@ -1,13 +1,18 @@
 <template>
   <div id="app" class="despique-app">
-    <header v-if="!esLogin" class="despique-barra">
-      <router-link class="despique-marca" to="/pesadas" aria-label="Ir a los días de pesadas">
+    <header v-if="!esLogin" class="despique-barra" :class="{ 'despique-barra--bloqueada': barraBloqueada }">
+      <!-- Mientras se pesa (rápido o a granel) la barra no hace nada, para no salirse por error. -->
+      <span v-if="barraBloqueada" class="despique-marca" aria-label="Pesando: la barra está bloqueada">
+        <span class="despique-marca-icono" aria-hidden="true">⚖</span>
+        <span><strong>Despique</strong><small>Pesando…</small></span>
+      </span>
+      <router-link v-else class="despique-marca" to="/pesadas" aria-label="Ir a los días de pesadas">
         <span class="despique-marca-icono" aria-hidden="true">⚖</span>
         <span><strong>Despique</strong><small>Rey Pez</small></span>
       </router-link>
       <div class="despique-usuario">
         <span v-if="usuario" class="despique-nombre">{{ usuario }}</span>
-        <button type="button" class="despique-salir" @click="salir">Salir</button>
+        <button v-if="!barraBloqueada" type="button" class="despique-salir" @click="salir">Salir</button>
       </div>
     </header>
     <div class="despique-contenido">
@@ -26,10 +31,14 @@
 import { useAuthStore } from '../stores/auth';
 import { useUIStore } from '../stores/ui';
 
+// Pantallas donde la barra de arriba no hace nada (se sale de ellas con sus propios botones).
+const RUTAS_BARRA_BLOQUEADA = ['PesadasRapida', 'PesadasGranel'];
+
 export default {
   name: 'AppDespique',
   computed: {
     esLogin() { return this.$route.path === '/login'; },
+    barraBloqueada() { return RUTAS_BARRA_BLOQUEADA.includes(this.$route.name); },
     usuario() {
       const auth = useAuthStore();
       return (auth.user && auth.user.username) || '';
@@ -77,6 +86,20 @@ body { background: #100625; }
   color: #fff;
   font-family: Arial, sans-serif;
 }
+/* La tabla de la hoja ocupa toda la pantalla debajo de la barra (61 px + área segura); al bajar,
+   la tabla se acomoda pegada a la barra (src/utils/scrollContenido.js). */
+.despique-contenido .pesadas-day-page .pesadas-grid-scroll {
+  max-height: calc(100vh - 61px - env(safe-area-inset-top));
+  max-height: calc(100dvh - 61px - env(safe-area-inset-top));
+}
+/* En la tabla solo quedan fijas arriba las filas Columna y Medida; Precio / kg se va con el
+   scroll (top: auto: "Precio / kg" sigue fijo a la izquierda al moverse a los lados). */
+.despique-contenido .pesadas-grid thead .price-row th,
+.despique-contenido .pesadas-grid thead .price-row td { top: auto; z-index: 1; box-shadow: none; }
+.despique-contenido .pesadas-grid thead .price-row th.name-cell { z-index: 2; box-shadow: 3px 0 6px -3px rgba(37, 35, 60, .20); }
+.despique-contenido .pesadas-grid thead .measure-row th,
+.despique-contenido .pesadas-grid thead .measure-row td { box-shadow: 0 2px 4px rgba(37, 35, 60, .10); }
+.despique-contenido .pesadas-grid thead .measure-row th.name-cell { box-shadow: 3px 2px 6px -3px rgba(37, 35, 60, .20); }
 .despique-marca { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: #fff; text-decoration: none; }
 .despique-marca:hover { color: #fff; text-decoration: none; }
 .despique-marca-icono {
@@ -94,6 +117,8 @@ body { background: #100625; }
   background: transparent; color: #d4f8fc; font-weight: 700;
 }
 .despique-salir:hover { background: #33234b; }
+.despique-barra--bloqueada .despique-marca { cursor: default; }
+.despique-barra--bloqueada .despique-marca small { color: #ffd479; }
 .despique-salir:focus-visible, .despique-marca:focus-visible { outline: 3px solid #ace8ee; outline-offset: 2px; }
 
 .despique-contenido { flex: 1 0 auto; display: flex; flex-direction: column; }

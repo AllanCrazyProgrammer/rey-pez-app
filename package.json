@@ -1,6 +1,6 @@
 {
   "name": "rey-pez",
-  "version": "0.3.23",
+  "version": "0.3.24",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -37,6 +37,7 @@
     "android:despique:apk": "node scripts/build-android.cjs --despique",
     "android:despique:apk:release": "node scripts/build-android.cjs --despique --release",
     "android:despique:open": "VUE_APP_VARIANTE=despique cap open android",
+    "despique:local": "node scripts/despique-local.cjs",
     "test:android:inventarios": "node scripts/test-inventarios-android.cjs",
     "test:android:arranque": "node scripts/test-android-arranque.cjs",
     "test:sacadas:dias": "node scripts/test-sacadas-dias.cjs",

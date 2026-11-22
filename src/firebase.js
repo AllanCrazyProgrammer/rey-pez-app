@@ -1,6 +1,7 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
 import {
+  connectFirestoreEmulator,
   getFirestore,
   initializeFirestore,
   memoryLocalCache,
@@ -8,7 +9,7 @@ import {
   persistentMultipleTabManager,
   persistentSingleTabManager
 } from "firebase/firestore";
-import { getDatabase, ref, onDisconnect, set } from "firebase/database";
+import { connectDatabaseEmulator, getDatabase, ref, onDisconnect, set } from "firebase/database";
 import {
   initializeAuth,
   indexedDBLocalPersistence,
@@ -16,15 +17,19 @@ import {
   connectAuthEmulator
 } from "firebase/auth";
 
+// Pruebas locales con los emuladores de Firebase (scripts/despique-local.cjs): nunca se definen
+// en producción. Con ellos la app usa el proyecto de prueba "demo-reypez" y no toca la base real.
+// (Se usa process.env directo para que webpack quite estas ramas del build de producción.)
+
 // Tu configuración de Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDEXrriJ15Gg2IyPYh56gNktfGaSsP6KeE",
   authDomain: "reypezapp-1ced2.firebaseapp.com",
-  projectId: "reypezapp-1ced2",
+  projectId: process.env.VUE_APP_FIRESTORE_EMULATOR ? "demo-reypez" : "reypezapp-1ced2",
   storageBucket: "reypezapp-1ced2.firebasestorage.app",
   messagingSenderId: "512757841511",
   appId: "1:512757841511:web:d15e6a6276e84c42959ec2",
-  databaseURL: "https://reypezapp-1ced2-default-rtdb.firebaseio.com/"
+  databaseURL: process.env.VUE_APP_DATABASE_EMULATOR ? `http://${process.env.VUE_APP_DATABASE_EMULATOR}/?ns=demo-reypez-default-rtdb` : "https://reypezapp-1ced2-default-rtdb.firebaseio.com/"
 };
 
 // Inicializar Firebase
@@ -76,9 +81,17 @@ const initFirestore = () => {
 };
 
 const db = initFirestore();
+if (process.env.VUE_APP_FIRESTORE_EMULATOR) {
+  const [host, port] = process.env.VUE_APP_FIRESTORE_EMULATOR.split(':');
+  connectFirestoreEmulator(db, host, Number(port));
+}
 
 // Inicializar Realtime Database
 const rtdb = getDatabase(app);
+if (process.env.VUE_APP_DATABASE_EMULATOR) {
+  const [host, port] = process.env.VUE_APP_DATABASE_EMULATOR.split(':');
+  connectDatabaseEmulator(rtdb, host, Number(port));
+}
 
 // Storage (fotos de Bitácoras/Journal) y Cloud Functions (asesor experto) viven en
 // src/firebaseStorage.js y src/firebaseFunctions.js: así su código solo se descarga al

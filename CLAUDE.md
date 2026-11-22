@@ -72,6 +72,7 @@ Variante `VUE_APP_VARIANTE=despique`: entrada `src/despique/`, build en `despiqu
 proyecto nativo `android-despique/` (`com.reypez.despique`). Solo login, días de pesadas, pesar
 rápido y hoja del día. No usa el canal de actualizaciones (APK nueva por cada cambio).
 Detalles: `docs/APP_DESPIQUE.md`. Pruebas: `node --test tests/app-despique.test.cjs`.
+Prueba local con datos de ejemplo y sin la base real: `npm run despique:local` (emuladores).
 
 ## Módulo de Barcos
 

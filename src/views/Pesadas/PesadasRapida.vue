@@ -105,8 +105,9 @@
         </div>
       </section>
 
-      <router-link class="pesadas-button primary pesadas-rapida-terminar" :to="`/pesadas/${fecha}`">
-        Terminé de pesar — ver hoja
+      <!-- Después de pesar a cada señora sigue la pesada a granel (se puede saltar ahí mismo). -->
+      <router-link class="pesadas-button primary pesadas-rapida-terminar" :to="rutaGranel">
+        Terminé de pesar <span aria-hidden="true">→</span>
       </router-link>
     </template>
   </main>
@@ -121,6 +122,7 @@ import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, formatearTrasteManual, normaliz
   parsearKilosBrutos, parsearPrecioColumna, parsearTraste, siguienteMedida, sumarPesada,
   sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoPesada, resumenPesadas } from '@/utils/pesadas';
+import { claveTrasteDia, trastesDelDia } from '@/utils/pesadasGranel';
 import './pesadas.css';
 
 export default {
@@ -133,7 +135,8 @@ export default {
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
-    trastes() { return TRASTES_PREDEFINIDOS; },
+    // Predefinidos + los trastes "Otro" que ya se usaron este día (se guardan al registrar).
+    trastes() { return trastesDelDia(this.datosGuardados, TRASTES_PREDEFINIDOS); },
     datos() {
       const data = { ...this.datosGuardados };
       if (!Object.keys(data.columnas || {}).length) data.columnas = {
@@ -172,6 +175,11 @@ export default {
       }
       return this.traste || 0;
     },
+    // La pesada a granel abre solo la medida que se acaba de registrar (o la seleccionada).
+    rutaGranel() {
+      const medida = (this.ultimoRegistro && this.ultimoRegistro.medidaId) || this.medidaId;
+      return { path: `/pesadas/${this.fecha}/granel`, query: medida ? { medida } : {} };
+    },
     medidaActual() { return this.columnas.find(col => col.id === this.medidaId) || null; },
     // En grande va el neto de la pesada que se va a registrar (kilos − traste),
     // no lo que lleva la despicadora ni el total del día.
@@ -198,6 +206,14 @@ export default {
   },
   watch: {
     fecha() { this.iniciar(); },
+    // El traste recordado en el dispositivo puede ser un "Otro" de otro día: si este día no lo
+    // tiene como botón, se muestra en el campo "Otro" con su valor.
+    trastes(trastes) {
+      if (this.traste == null || this.trasteManualActivo || !this.datosListos || trastes.includes(this.traste)) return;
+      this.trasteManualActivo = true;
+      this.trasteManual = formatearTrasteManual(String(this.traste));
+      this.traste = null;
+    },
     columnas(columnas) {
       if (!columnas.length || columnas.some(col => col.id === this.medidaId)) return;
       if (!this.seleccionMedidaInicialHecha) {
@@ -245,7 +261,7 @@ export default {
         const guardado = JSON.parse(localStorage.getItem(CLAVE_TRASTE_LOCAL) || 'null');
         if (!guardado) return;
         if (guardado.manual) { this.trasteManualActivo = true; this.trasteManual = formatearTrasteManual(String(guardado.valor)); }
-        else if (TRASTES_PREDEFINIDOS.includes(guardado.valor)) this.traste = guardado.valor;
+        else if (Number(guardado.valor) > 0 && Number(guardado.valor) < 1) this.traste = Number(guardado.valor);
       } catch (_error) { /* Sin traste guardado: se pesa sin restar nada. */ }
     },
     guardarTraste() {
@@ -437,6 +453,10 @@ export default {
       const actual = this.personaActual ? (this.datos.pesos?.[personaId]?.[this.medidaId] || 0) : 0;
       const nuevo = sumarPesada(actual, neto);
       const campos = { [`pesos.${personaId}.${this.medidaId}`]: nuevo };
+      // Un traste "Otro" queda guardado en el día como botón, porque seguramente se vuelve a usar.
+      const trasteNuevo = this.trasteManualActivo && this.trasteEfectivo > 0 && !this.trastes.includes(this.trasteEfectivo)
+        ? this.trasteEfectivo : null;
+      if (trasteNuevo != null) campos[`trastesDia.${claveTrasteDia(trasteNuevo)}`] = trasteNuevo;
       if (!this.personaActual) {
         campos[`personas.${personaId}.nombre`] = nombre;
         campos[`personas.${personaId}.orden`] = `${Date.now()}-${personaId}`;
@@ -448,6 +468,13 @@ export default {
         const medida = this.medidaActual ? (this.medidaActual.medida || 'Sin medida') : '';
         const registro = { personaId, medidaId: this.medidaId, anterior: actual, neto, nuevo, nombre, medida, cuando: Date.now() };
         this.ultimoRegistro = registro;
+        // El traste "Otro" recién guardado pasa a ser su botón (queda seleccionado).
+        if (trasteNuevo != null) {
+          this.trasteManualActivo = false;
+          this.trasteManual = '';
+          this.traste = trasteNuevo;
+          this.guardarTraste();
+        }
         this.ultimas.unshift(registro);
         this.nombre = '';
         this.seleccionada = null;
