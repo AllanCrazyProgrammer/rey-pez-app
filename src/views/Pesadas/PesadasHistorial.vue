@@ -3,7 +3,7 @@
     <header class="pesadas-heading">
       <div><p class="pesadas-eyebrow">REGISTRO DIARIO</p><h1>Pesadas</h1><p>Las pesadas y los pagos de cada jornada, en su propia hoja.</p></div>
       <button class="pesadas-button primary" :disabled="!!creando" @click="crearDia">Crear día de hoy <span aria-hidden="true">→</span></button>
-      <router-link class="pesadas-button" to="/despicadoras">Despicadoras</router-link>
+      <router-link v-if="!esDespique" class="pesadas-button" to="/despicadoras">Despicadoras</router-link>
     </header>
     <section class="pesadas-card">
       <form class="pesadas-toolbar" @submit.prevent="crearDia">
@@ -24,7 +24,7 @@
               <div class="pesadas-history-actions">
                 <router-link class="pesadas-button primary" :to="`/pesadas/${dia.fecha}/rapida`">⚡ Pesar rápido</router-link>
                 <button class="pesadas-button" :aria-label="`Ver kilos por medida del ${fechaTexto(dia.fecha)}`" @click="fechaMedidas = dia.fecha">Kilos por medida</button>
-                <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
+                <button v-if="!esDespique" class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
               </div>
             </div>
             <router-link :to="`/pesadas/${dia.fecha}`">
@@ -46,11 +46,13 @@ import { PESADAS_PENDING_PREFIX, leerOperacionesPesadas, camposOperacionesPesada
 import { aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
 import PesadasMedidas from './PesadasMedidas.vue';
+import { ES_DESPIQUE } from '@/config/variante';
 
 export default {
   name: 'PesadasHistorial',
   components: { PesadasMedidas },
-  data: () => ({ hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), creando: '', eliminando: '', registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20, fechaMedidas: '' }),
+  // En la app de despique no se eliminan días ni se entra al catálogo de despicadoras.
+  data: () => ({ esDespique: ES_DESPIQUE, hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), creando: '', eliminando: '', registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20, fechaMedidas: '' }),
   computed: {
     jornadas() {
       const days = Object.fromEntries(this.registros.map(day => [day.fecha, day]));
@@ -98,7 +100,7 @@ export default {
       } finally { this.creando = ''; }
     },
     async eliminarDia(dia) {
-      if (this.eliminando || dia.pendiente || this.desdeCache) return;
+      if (ES_DESPIQUE || this.eliminando || dia.pendiente || this.desdeCache) return;
       if (!window.confirm(`¿Eliminar las pesadas del ${this.fechaTexto(dia.fecha)}? Se eliminarán las personas, kilos y pagos de esa jornada. Esta acción no se puede deshacer.`)) return;
       this.eliminando = dia.fecha;
       this.error = '';

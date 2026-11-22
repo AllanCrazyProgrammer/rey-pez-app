@@ -15,9 +15,13 @@ class IgnorarAvisoStyleVueLoader {
   }
 }
 const isAndroid = process.env.VUE_APP_TARGET === 'android';
+// App de despique (docs/APP_DESPIQUE.md): entrada propia con solo Pesadas, en su propia carpeta.
+const isDespique = process.env.VUE_APP_VARIANTE === 'despique';
 
 module.exports = {
-  outputDir: isElectron ? 'desktop-dist' : isAndroid ? 'android-dist' : 'dist',
+  outputDir: isDespique ? 'despique-dist' : isElectron ? 'desktop-dist' : isAndroid ? 'android-dist' : 'dist',
+  // chunks 'all': los nombres de chunks propios (npm.*) no entran con el filtro por defecto de pages.
+  ...(isDespique ? { pages: { index: { entry: 'src/despique/main.js', template: 'public/despique.html', title: 'Despique Rey Pez', chunks: 'all' } } } : {}),
   // Android (APK) usa la app completa: la entrada es src/main.js con el router en hash, igual que
   // escritorio. La entrada móvil de solo inventarios (src/mobile) ya no se empaqueta en el APK.
   // Configuración del servidor de desarrollo
@@ -55,7 +59,7 @@ module.exports = {
       new IgnorarAvisoStyleVueLoader(),
       // moment trae ~130 idiomas (~60 KB comprimidos en el arranque); la app solo usa español.
       new ContextReplacementPlugin(/moment[/\\]locale$/, /^\.\/es$/),
-      ...(process.env.NODE_ENV === 'production' && !isElectron && !isAndroid ? [new OfflinePlugin()] : [])
+      ...(process.env.NODE_ENV === 'production' && !isElectron && !isAndroid && !isDespique ? [new OfflinePlugin()] : [])
     ],
     optimization: {
       splitChunks: {
@@ -102,7 +106,7 @@ module.exports = {
     // Do not prefetch every module while the initial screen is opening.
     // The service worker owns offline preloading; desktop chunks are installed already.
     config.plugins.delete('prefetch');
-    if (isAndroid) {
+    if (isAndroid || isDespique) {
       config.plugins.delete('prefetch-index');
       // Android genera su index.html desde public/android.html; no copiar public/index.html encima
       // (Vue CLI 4 lo sobrescribía en silencio; webpack 5 lo marca como conflicto).

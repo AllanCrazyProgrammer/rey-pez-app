@@ -21,6 +21,16 @@
         "8091"
       ],
       "port": 8091
+    },
+    {
+      "name": "rey-pez-despique",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/servir-dist.cjs",
+        "despique-dist",
+        "8092"
+      ],
+      "port": 8092
     }
   ]
 }
