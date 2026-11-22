@@ -12,6 +12,14 @@ const tipos = { '.js': 'application/javascript', '.css': 'text/css', '.html': 't
 http.createServer((req, res) => {
   let archivo = path.join(raiz, decodeURIComponent(req.url.split('?')[0]));
   if (!archivo.startsWith(raiz) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) archivo = path.join(raiz, 'index.html');
-  res.writeHead(200, { 'Content-Type': tipos[path.extname(archivo)] || 'application/octet-stream' });
-  fs.createReadStream(archivo).pipe(res);
+  // Si se está recompilando, la carpeta queda vacía un momento: responder 503 en vez de tronar.
+  const flujo = fs.createReadStream(archivo);
+  flujo.on('open', () => {
+    res.writeHead(200, { 'Content-Type': tipos[path.extname(archivo)] || 'application/octet-stream' });
+    flujo.pipe(res);
+  });
+  flujo.on('error', () => {
+    if (!res.headersSent) res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Compilando… recarga en unos segundos.');
+  });
 }).listen(puerto, () => console.log(`Sirviendo ${raiz} en http://localhost:${puerto}`));

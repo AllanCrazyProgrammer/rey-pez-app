@@ -135,7 +135,7 @@
 /* El nombre más largo determina el ancho, con un límite para pantallas pequeñas. */
 .pesadas-grid .name-cell { width: 1%; min-width: 0; }
 .pesadas-grid .name-input { width: max-content; }
-.pesadas-grid .name-editor { position: relative; display: block; min-width: 0; max-width: min(420px, 45vw); }
+.pesadas-grid .name-editor { position: relative; display: block; min-width: 0; max-width: min(240px, 32vw); }
 .pesadas-grid .name-width { display: block; padding: 10px 12px; white-space: pre; font-weight: 700; visibility: hidden; overflow: hidden; }
 .pesadas-grid .name-input .name-editor input { position: absolute; inset: 0; width: 100%; min-width: 0; }
 
@@ -155,7 +155,7 @@
    columnas y el desplazamiento horizontal sea con un dedo. */
 @media (max-width: 760px) {
   .pesadas-day-page .pesadas-toolbar { gap: 8px; margin-bottom: 8px; }
-  .pesadas-grid .name-editor { max-width: min(200px, 38vw); }
+  .pesadas-grid .name-editor { max-width: min(150px, 30vw); }
   .pesadas-grid .name-width { padding: 8px 10px; min-height: 56px; line-height: 40px; }
   .pesadas-grid tbody { font-size: 20px; }
   .pesadas-grid tbody th, .pesadas-grid tbody td { height: 56px; }
@@ -282,3 +282,65 @@
 @media (max-width: 760px) {
   .pesadas-rapida-total strong { font-size: 44px; }
 }
+
+/* Pesada a granel (después de "Terminé de pesar"): taras + kilos con tara por medida. */
+.pesadas-granel-page { max-width: 900px; }
+.pesadas-granel-config { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.pesadas-granel-kgtara { display: flex; align-items: center; gap: 12px; margin: 0; font-weight: 700; }
+.pesadas-granel-kgtara input { width: 90px; }
+.pesadas-granel-page input { border: 1px solid #cec7e0; border-radius: 10px; background: #fff; color: #25233c; min-height: 52px; padding: 10px 12px; font: inherit; font-size: 20px; font-weight: 700; text-align: right; }
+.pesadas-granel-page input.pesadas-granel-error { border-color: #c4572b; background: #fff4ee; }
+.pesadas-granel-medida-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.pesadas-granel-medida-heading h2, .pesadas-granel-general h2 { margin: 0; font-size: 24px; font-weight: 800; }
+.pesadas-granel-medida-heading span { color: #69637b; font-size: 14px; }
+.pesadas-granel-encabezados, .pesadas-granel-fila { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 110px; gap: 10px; align-items: center; }
+.pesadas-granel-encabezados { margin-bottom: 6px; color: #69637b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.pesadas-granel-encabezados span:last-child, .pesadas-granel-neto { text-align: right; }
+.pesadas-granel-fila + .pesadas-granel-fila { margin-top: 8px; }
+.pesadas-granel-fila input { width: 100%; }
+.pesadas-granel-neto { color: #165a52; font-weight: 700; font-size: 16px; }
+.pesadas-granel-botones { display: flex; gap: 10px; margin: 14px 0; }
+.pesadas-granel-botones .pesadas-button { flex: 1; min-height: 50px; font-size: 16px; }
+.pesadas-granel-total { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding-top: 14px; border-top: 1px solid #eeeaf4; }
+.pesadas-granel-total span { display: flex; flex-direction: column; gap: 2px; }
+.pesadas-granel-total small { color: #69637b; font-size: 12px; }
+.pesadas-granel-total strong { font-size: 18px; }
+.pesadas-granel-total-neto strong { color: #583d92; font-size: 22px; }
+.pesadas-granel-general h2 { margin-bottom: 12px; }
+.pesadas-granel-acciones { display: flex; gap: 12px; margin-bottom: 32px; }
+.pesadas-granel-acciones .pesadas-button { min-height: 56px; font-size: 17px; }
+.pesadas-granel-acciones .pesadas-button.primary { flex: 2; }
+.pesadas-granel-acciones .pesadas-button:not(.primary) { flex: 1; }
+@media (max-width: 480px) {
+  .pesadas-granel-page { width: calc(100% - 20px); margin-top: 16px; }
+  .pesadas-granel-page .pesadas-card { padding: 16px; }
+  .pesadas-granel-encabezados, .pesadas-granel-fila { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 76px; gap: 8px; }
+  .pesadas-granel-neto { font-size: 14px; }
+  .pesadas-granel-total { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Resumen de la pesada a granel en la hoja del día. */
+
+/* Hoja del día: pesada a granel en cards (medida arriba, kilos abajo). */
+.pesadas-granel-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.pesadas-granel-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid #eeeaf4; border-radius: 14px; background: #faf8fd; }
+.pesadas-granel-card span { color: #69637b; font-size: 14px; font-weight: 700; }
+.pesadas-granel-card strong { font-size: 24px; font-weight: 800; color: #2d2440; }
+.pesadas-granel-card { font: inherit; text-align: left; cursor: pointer; }
+.pesadas-granel-card.abierto { border-color: #6c4bd1; background: #f1ecfc; box-shadow: 0 0 0 2px rgba(108, 75, 209, .2); }
+.pesadas-granel-desglose { margin-top: 14px; padding: 14px 16px; border: 1px solid #eeeaf4; border-radius: 14px; }
+.pesadas-granel-desglose h3 { margin: 0 0 8px; font-size: 16px; font-weight: 800; }
+.pesadas-granel-desglose table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.pesadas-granel-desglose th, .pesadas-granel-desglose td { padding: 8px 6px; border-bottom: 1px solid #eeeaf4; text-align: right; }
+.pesadas-granel-desglose th:first-child, .pesadas-granel-desglose td:first-child { text-align: left; }
+.pesadas-granel-desglose thead th { color: #69637b; font-size: 12px; text-transform: uppercase; }
+.pesadas-granel-desglose tbody tr:last-child td { border-bottom: 0; }
+.pesadas-granel-resumen .pesadas-granel-editar { display: flex; align-items: center; justify-content: center; margin-top: 16px; min-height: 48px; padding: 10px 16px; border-radius: 9px; background: #583d92; color: #fff; font-size: 15px; font-weight: 700; text-decoration: none; }
+.pesadas-granel-resumen .pesadas-granel-editar:hover { background: #453073; color: #fff; }
+/* Hoja del día: deshacer / rehacer juntos al inicio de la barra de botones. */
+.pesadas-historial-botones { display: inline-flex; gap: 6px; }
+
+/* Menú de la fila: eliminar en rojo y su pregunta de confirmación. */
+.pesadas-row-menu .pesadas-row-menu-eliminar { color: #a62f2f; }
+.pesadas-row-menu .pesadas-row-menu-eliminar:hover, .pesadas-row-menu .pesadas-row-menu-eliminar:focus-visible { background: #ffede9; }
+.pesadas-row-menu-pregunta { margin: 4px 8px 6px; max-width: 240px; color: #2d2340; font-size: 15px; font-weight: 600; line-height: 1.35; }

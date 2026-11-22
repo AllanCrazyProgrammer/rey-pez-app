@@ -15,6 +15,7 @@ test('el router de despique solo importa el login y las pantallas de Pesadas per
   assert.deepEqual(vistas, [
     '@/views/Login.vue',
     '@/views/Pesadas/PesadasDia.vue',
+    '@/views/Pesadas/PesadasGranel.vue',
     '@/views/Pesadas/PesadasHistorial.vue',
     '@/views/Pesadas/PesadasRapida.vue'
   ]);
@@ -63,6 +64,14 @@ test('el historial oculta eliminar día y el catálogo en la app de despique', (
   assert.match(vista, /v-if="!esDespique" class="pesadas-button" to="\/despicadoras"/);
   assert.match(vista, /v-if="!esDespique" class="pesadas-button pesadas-delete-day"/);
   assert.match(vista, /if \(ES_DESPIQUE \|\|/);
+});
+
+test('la hoja del día oculta + Despicadora, Resumen / imprimir y Sacar cuentas en la app de despique', () => {
+  const vista = leer('src/views/Pesadas/PesadasDia.vue');
+  assert.match(vista, /v-if="!esDespique" class="pesadas-button primary" @click="agregarPersona\(\)"/);
+  assert.match(vista, /v-if="!esDespique" class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen"/);
+  assert.match(vista, /v-if="!esDespique" class="pesadas-button pesadas-cuentas-button"/);
+  assert.match(vista, /esDespique: ES_DESPIQUE/);
 });
 
 const dist = path.join(root, 'despique-dist');

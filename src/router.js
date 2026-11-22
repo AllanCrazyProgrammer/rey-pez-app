@@ -75,6 +75,13 @@ const routes = [
     component: () => import('@/views/Pesadas/PesadasHistorial.vue')
   },
   {
+    // Pesada a granel: después de "Terminé de pesar" en modo rápido. Antes de /pesadas/:fecha.
+    path: '/pesadas/:fecha/granel',
+    name: 'PesadasGranel',
+    component: () => import('@/views/Pesadas/PesadasGranel.vue'),
+    props: true
+  },
+  {
     // Modo rápido (zoom in): una pesada a la vez. Antes de /pesadas/:fecha.
     path: '/pesadas/:fecha/rapida',
     name: 'PesadasRapida',

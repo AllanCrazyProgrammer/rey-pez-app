@@ -9,8 +9,29 @@ mismo código: usa las mismas pantallas de Pesadas que la app completa, pero **s
 |---|---|---|
 | Inicio de sesión | `/login` | Cuenta de Firebase Auth (ver abajo). |
 | Días de pesadas | `/pesadas` | Crear día, ⚡ Pesar rápido, Kilos por medida. **Sin** "Eliminar día" ni "Despicadoras". |
-| Pesar rápido | `/pesadas/:fecha/rapida` | La función principal. Puede dar de alta despicadoras nuevas desde aquí. |
-| Hoja del día | `/pesadas/:fecha` | Hoja completa con pagos, resumen/imprimir y Sacar cuentas. |
+| Pesar rápido | `/pesadas/:fecha/rapida` | La función principal. Puede dar de alta despicadoras nuevas desde aquí. Un traste "Otro" queda guardado como botón del día. |
+| Pesada a granel | `/pesadas/:fecha/granel` | Sigue a "Terminé de pesar" solo con la medida que se estaba pesando (`?medida=`), con botón Saltar. Taras + kilos con tara; 2 kg por tara por default; el neto se calcula mientras se escribe. |
+| Hoja del día | `/pesadas/:fecha` | Hoja con la tabla de kilos. **Sin** "+ Despicadora", "Resumen / imprimir", "Sacar cuentas", los cuadros de pago ni la alerta de pagos negativos. |
+
+En Pesar rápido y Pesada a granel la barra de arriba no hace nada (sin "Salir" ni ir al
+inicio), para no salirse por error.
+
+Hoja del día (estos cambios aplican también a la app completa, salvo donde dice "despique"):
+- El botón **Pesada a granel** abre una ventana con un card por medida (kilos netos); al tocar
+  uno se ve el desglose con la hora (12 h), taras y kilos, y un botón para editar. La hora de
+  cada renglón se guarda al escribir sus kilos (`hora`, ms).
+- **Deshacer / Rehacer** de todo lo cambiado en la hoja en este dispositivo
+  (`src/utils/historialCambios.js`, `tests/historial-cambios.test.cjs`).
+- **Eliminar fila**: clic derecho o dejar presionado el nombre → menú → confirmación en el
+  mismo menú (no `window.confirm`). Ya no hay ×; el nombre es más angosto.
+- Scroll (`src/utils/scrollContenido.js`): al llegar arriba o abajo de la tabla, el mismo gesto
+  sigue moviendo la página. En despique, además, la tabla mide la pantalla menos la barra y el
+  pie, al bajar se acomoda pegada debajo de la barra, y solo quedan fijas las filas Columna y
+  Medida (Precio / kg se va con el scroll).
+
+Lógica pura de granel: `src/utils/pesadasGranel.js` (`tests/pesadas-granel.test.cjs`).
+Datos en el día (`pesadasDiarias/<fecha>`): `trastesDia.t6 = 0.6`, `granelKgPorTara`,
+`granel.<columnaId>.<filaId> = { taras, kilos, orden, hora }`.
 
 Cualquier otra ruta regresa a `/pesadas`. Las demás áreas de Rey Pez (embarques, cuentas,
 préstamos, catálogo de despicadoras, etc.) **no se compilan** dentro de esta app: no hay forma
@@ -31,6 +52,9 @@ de llegar a ellas. `tests/app-despique.test.cjs` lo comprueba sobre el router y 
 ## Comandos
 
 ```bash
+npm run despique:local            # prueba en tu Mac con datos de ejemplo, SIN la base real
+                                  # (emuladores de Firebase; usuario prueba / prueba123;
+                                  # http://localhost:8095; necesita Java 21+)
 npm run build:despique:web        # solo la web de despique (despique-dist/)
 npm run android:despique:apk      # APK de prueba local (necesita el SDK de Android)
 npm run android:despique:open     # abrir android-despique/ en Android Studio

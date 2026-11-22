@@ -14,6 +14,8 @@ export const rutasDespique = [
   { path: '/pesadas', name: 'PesadasHistorial', component: () => import('@/views/Pesadas/PesadasHistorial.vue') },
   // Modo rápido antes de /pesadas/:fecha, igual que en el router principal.
   { path: '/pesadas/:fecha/rapida', name: 'PesadasRapida', component: () => import('@/views/Pesadas/PesadasRapida.vue'), props: true },
+  // Pesada a granel: sigue a "Terminé de pesar" (se puede saltar).
+  { path: '/pesadas/:fecha/granel', name: 'PesadasGranel', component: () => import('@/views/Pesadas/PesadasGranel.vue'), props: true },
   { path: '/pesadas/:fecha', name: 'PesadasDia', component: () => import('@/views/Pesadas/PesadasDia.vue'), props: true },
   { path: '*', redirect: '/pesadas' }
 ];

@@ -13,25 +13,62 @@
     </section>
     <template v-else>
       <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
-        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div><small>Pago a despicadoras</small><strong>${{ pago(resumen.pagosRedondeados) }}</strong></div><div><small>Pago promedio</small><strong>${{ pago(resumen.pagoPromedioRedondeado) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></div>
+        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div v-if="!esDespique"><small>Pago a despicadoras</small><strong>${{ pago(resumen.pagosRedondeados) }}</strong></div><div v-if="!esDespique"><small>Pago promedio</small><strong>${{ pago(resumen.pagoPromedioRedondeado) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></div>
       </section>
       <section class="pesadas-card pesadas-sheet-card">
         <div class="pesadas-toolbar">
+          <!-- Deshacer / rehacer lo que se cambió en esta hoja (en este dispositivo, desde que se abrió). -->
+          <span class="pesadas-historial-botones">
+            <button class="pesadas-button" type="button" :disabled="!pasos.atras" title="Deshacer el último cambio" @click="deshacer">↶ Deshacer</button>
+            <button class="pesadas-button" type="button" :disabled="!pasos.adelante" title="Rehacer" @click="rehacer">↷ Rehacer</button>
+          </span>
           <button class="pesadas-button" @click="busquedaAbierta = true">Buscar despicadora</button>
           <router-link class="pesadas-button primary" :to="`/pesadas/${fecha}/rapida`">⚡ Pesar rápido</router-link>
-          <button class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
-          <button class="pesadas-button pesadas-cuentas-button" :disabled="!puedeImprimir" @click="abrirCuentas"><span class="cuentas-bracket" aria-hidden="true">[</span><span class="cuentas-symbol" aria-hidden="true">$</span> Sacar cuentas <span class="cuentas-bracket" aria-hidden="true">]</span></button>
-          <span class="pesadas-hint">Kg y precios: máximo 1 decimal</span>
+          <button class="pesadas-button" @click="granelVisible = true">Pesada a granel</button>
+          <button v-if="!esDespique" class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button v-if="!esDespique" class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
+          <!-- La app de despique no imprime ni saca cuentas. -->
+          <button v-if="!esDespique" class="pesadas-button pesadas-cuentas-button" :disabled="!puedeImprimir" @click="abrirCuentas"><span class="cuentas-bracket" aria-hidden="true">[</span><span class="cuentas-symbol" aria-hidden="true">$</span> Sacar cuentas <span class="cuentas-bracket" aria-hidden="true">]</span></button>
+          <span v-if="!esDespique" class="pesadas-hint">Kg y precios: máximo 1 decimal</span>
         </div>
         <p v-if="errorCarga || estado.error" class="pesadas-alert" role="alert">{{ errorCarga || estado.error }}</p>
         <p v-if="estado.storageError" class="pesadas-alert" role="alert">El respaldo local no está disponible. Mantén esta hoja abierta hasta confirmar el guardado.</p>
         <p v-if="erroresLista.length" class="pesadas-alert" role="alert">{{ erroresLista[0] }} Los campos marcados no se han guardado.</p>
-        <p v-if="pagosNegativos" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
+        <p v-if="pagosNegativos && !esDespique" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
         <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :totales-columnas="resumen.kilosPorColumna" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @flecha="flechaCelda" @eliminar-persona="eliminarPersona" @insertar-persona="insertarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
         <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ pago(resumen.pagosRedondeados) }}</strong><strong>A pagar promedio: ${{ pago(resumen.pagoPromedioRedondeado) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></strong></footer>
       </section>
     </template>
+    <!-- Pesada a granel (después de pesar a cada señora): un card por medida con sus kilos netos;
+         al tocar uno se ve su desglose con la hora de cada pesada. -->
+    <b-modal v-model="granelVisible" title="Pesada a granel" hide-footer @hidden="granelAbierto = ''">
+      <div class="pesadas-granel-resumen">
+        <p v-if="!granel.medidas.length" class="pesadas-empty">Todavía no hay pesada a granel este día.</p>
+        <div class="pesadas-granel-cards">
+          <button v-for="medida in granel.medidas" :key="medida.id" type="button" class="pesadas-granel-card"
+            :class="{ abierto: granelAbierto === medida.id }" :aria-expanded="String(granelAbierto === medida.id)"
+            @click="granelAbierto = granelAbierto === medida.id ? '' : medida.id">
+            <span>{{ medida.medida }}</span>
+            <strong>{{ numero(medida.neto) }} kg</strong>
+          </button>
+        </div>
+        <!-- Desglose de la medida tocada: cada pesada con su hora. -->
+        <div v-if="granelDesglose" class="pesadas-granel-desglose" :aria-label="`Desglose a granel de ${granelDesglose.medida}`">
+          <h3>{{ granelDesglose.medida }}</h3>
+          <table>
+            <thead><tr><th>Hora</th><th>Taras</th><th>Kilos</th></tr></thead>
+            <tbody>
+              <tr v-for="fila in granelDesglose.detalle" :key="fila.id">
+                <td>{{ hora12(fila.hora) }}</td><td>{{ fila.taras }}</td><td>{{ fila.kilos == null ? '—' : `${numero(fila.kilos)} kg` }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <router-link class="pesadas-button primary pesadas-granel-editar" :to="`/pesadas/${fecha}/granel`">
+          {{ granel.medidas.length ? 'Editar pesada a granel' : 'Capturar pesada a granel' }}
+        </router-link>
+      </div>
+    </b-modal>
     <b-modal v-model="busquedaAbierta" title="Buscar despicadora" hide-footer @shown="$refs.buscarNombre.focus()" @hidden="terminoBusqueda = ''">
       <label for="buscar-despicadora">Nombre de la despicadora</label>
       <input id="buscar-despicadora" ref="buscarNombre" v-model="terminoBusqueda" class="form-control" type="search" autocomplete="off" placeholder="Escribe un nombre…" @keydown.enter.prevent="coincidencias.length === 1 && seleccionarPersona(coincidencias[0])">
@@ -57,6 +94,9 @@ import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/components/Pesadas/Cuentas.vue';
 import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
+import { formatoHora12, resumenGranel } from '@/utils/pesadasGranel';
+import { crearHistorial, valorEnRuta } from '@/utils/historialCambios';
+import { ES_DESPIQUE } from '@/config/variante';
 import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, ordenInsercionPesadas, resumenPesadas } from '@/utils/pesadas';
 import PesadasTabla from './PesadasTabla.vue';
 import PesadasResumen from './PesadasResumen.vue';
@@ -66,7 +106,7 @@ export default {
   name: 'PesadasDia',
   components: { PesadasTabla, PesadasResumen, BModal, Cuentas },
   props: { fecha: { type: String, required: true } },
-  data: () => ({ datosGuardados: {}, estado: { pending: false, saving: false, error: '', storageError: false },
+  data: () => ({ esDespique: ES_DESPIQUE, datosGuardados: {}, granelAbierto: '', granelVisible: false, pasos: { atras: 0, adelante: 0 }, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     borradores: {}, errores: {}, preview: null, busquedaAbierta: false, terminoBusqueda: '', cuentasAbiertas: false, cuentasDatos: '', restaurando: false, filaInicialId: 'inicial' }),
   computed: {
@@ -90,6 +130,8 @@ export default {
       return this.personas.filter(persona => persona.nombre.trim() && normalizar(persona.nombre).includes(termino));
     },
     resumen() { return resumenPesadas(this.datos); },
+    granelDesglose() { return this.granel.medidas.find(medida => medida.id === this.granelAbierto) || null; },
+    granel() { return resumenGranel(this.datosGuardados, this.columnas, this.resumen.kilosPorColumna); },
     totales() { return Object.fromEntries(this.resumen.personas.map(row => [row.id, row])); },
     erroresLista() { return Object.values(this.errores); },
     pagosNegativos() { return this.resumen.personas.some(row => row.pago < 0); },
@@ -125,6 +167,7 @@ export default {
   },
   methods: {
     numero: formatoPesada,
+    hora12: formatoHora12,
     pago: formatoPagoPesada,
     seleccionarPersona(persona) {
       // Wait until the modal releases focus before moving into the sheet.
@@ -155,6 +198,9 @@ export default {
     },
     iniciar() {
       this.desconectar();
+      if (!this._historial) this._historial = crearHistorial();
+      this._historial.limpiar();
+      this.contarPasos();
       this.datosGuardados = {};
       this.borradores = {};
       this.errores = {};
@@ -198,8 +244,11 @@ export default {
         this.$router.push(`/pesadas/${event.target.value}`).catch(() => { event.target.value = this.fecha; });
       } else event.target.value = this.fecha;
     },
-    guardarCampos(fields) {
+    // Todo cambio de la hoja pasa por aquí y queda en el historial para deshacer (salvo los que
+    // aplica el propio deshacer/rehacer). `agrupar`: lo tecleado en una celda es un solo paso.
+    guardarCampos(fields, { agrupar = null, sinHistorial = false } = {}) {
       if (this.datosGuardados.eliminado) return;
+      if (!sinHistorial && this._historial && this._historial.registrar(fields, ruta => valorEnRuta(this.datos, ruta), agrupar)) this.contarPasos();
       const additions = {};
       if (!this.datosGuardados.creadoEn) additions.creadoEn = new Date().toISOString();
       Object.entries(this.datos.columnas || {}).forEach(([id, col]) => {
@@ -215,14 +264,26 @@ export default {
       try {
         const parsed = tipo === 'texto' ? value.trim() : decimalPesada(value, tipo === 'kilos', tipo === 'kilos');
         this.$delete(this.errores, path);
-        this.guardarCampos({ [path]: parsed });
+        this.guardarCampos({ [path]: parsed }, { agrupar: path });
       } catch (error) { this.$set(this.errores, path, error.message); }
     },
     confirmar(path) {
+      if (this._historial) this._historial.cerrar();
       if (this.errores[path]) return;
       this.$delete(this.borradores, path);
       this._outbox.flush();
     },
+    contarPasos() { this.pasos = { atras: this._historial.atras, adelante: this._historial.adelante }; },
+    aplicarHistorial(campos) {
+      if (!campos) return;
+      const rutas = Object.keys(campos);
+      this.limpiarBorradores(path => rutas.includes(path));
+      this.guardarCampos(campos, { sinHistorial: true });
+      this._outbox.flush();
+      this.contarPasos();
+    },
+    deshacer() { this.aplicarHistorial(this._historial.deshacer()); },
+    rehacer() { this.aplicarHistorial(this._historial.rehacer()); },
     async enfocar(ref) { await this.$nextTick(); if (this.$refs.tabla) this.$refs.tabla.enfocar(ref); },
     agregarPersona(forceNew = false) {
       const empty = !forceNew && this.personas.find(row => !row.nombre.trim());
@@ -309,9 +370,10 @@ export default {
     limpiarBorradores(matches) {
       Object.keys(this.borradores).filter(matches).forEach(path => { this.$delete(this.borradores, path); this.$delete(this.errores, path); });
     },
-    eliminarPersona(row) {
-      const hasData = row.nombre.trim() || this.columnas.some(col => this.datos.pesos?.[row.id]?.[col.id] != null);
-      if (hasData && !window.confirm(`¿Eliminar la fila de ${row.nombre || 'esta despicadora'} y sus pesadas de este día?`)) return;
+    // Desde el menú de la fila (clic derecho / dejar presionado), que ya pidió confirmación.
+    eliminarPersona(row, confirmado = false) {
+      const quien = row.nombre.trim() ? ` de ${row.nombre.trim()}` : '';
+      if (!confirmado && !window.confirm(`¿Eliminar toda la fila${quien}? Se quitan el nombre y sus pesadas de este día. Puedes regresarla con Deshacer.`)) return;
       this.filaInicialId = nanoid();
       this.limpiarBorradores(path => path.startsWith(`personas.${row.id}.`) || path.startsWith(`pesos.${row.id}.`));
       this.guardarCampos({ [`personas.${row.id}.eliminado`]: true });
