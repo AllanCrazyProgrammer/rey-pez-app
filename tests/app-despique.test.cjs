@@ -83,3 +83,20 @@ test('el build de despique no contiene otras áreas de la app', { skip: !fs.exis
     assert.ok(!js.includes(ajeno), `el build trae "${ajeno}"`);
   }
 });
+
+test('despique avisa cuando hay versión nueva y cuando ya se actualizó', () => {
+  const app = leer('src/despique/AppDespique.vue');
+  assert.match(app, /<AppUpdateNotice v-if="actualizaciones\.fuente"[^>]*nombre="Despique"/);
+  const fuente = leer('src/despique/actualizacion.js');
+  assert.match(fuente, /actualizaciones\.fuente = fuente;/);
+  assert.match(leer('src/despique/main.js'), /yaSeActualizo\(/);
+  const cuerpo = fuente.match(/export function yaSeActualizo[\s\S]*?\n}\n/)[0].replace('export ', '');
+  const yaSeActualizo = new Function('CLAVE_PAQUETE', `${cuerpo}; return yaSeActualizo;`)('k');
+  const almacen = (inicial) => { const m = new Map(inicial ? [['k', inicial]] : []); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
+  assert.equal(yaSeActualizo(200, almacen(null)), false, 'instalación nueva: sin aviso');
+  assert.equal(yaSeActualizo(200, almacen('100')), true, 'paquete más nuevo: avisa');
+  assert.equal(yaSeActualizo(200, almacen('200')), false, 'mismo paquete: sin aviso');
+  const a = almacen('100');
+  yaSeActualizo(200, a);
+  assert.equal(yaSeActualizo(200, a), false, 'avisa una sola vez');
+});

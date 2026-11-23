@@ -18,6 +18,9 @@
     <div class="despique-contenido">
       <router-view />
     </div>
+    <!-- Aviso de versión nueva ya descargada: se aplica sola al cerrar o volver a abrir la app. -->
+    <AppUpdateNotice v-if="actualizaciones.fuente" :fuente="actualizaciones.fuente" nombre="Despique"
+      url-descargas="https://github.com/AllanCrazyProgrammer/rey-pez-app/releases?q=despique" />
     <transition-group name="despique-toast" tag="div" class="despique-toasts">
       <div v-for="n in notificaciones" :key="n.id" :class="['despique-toast', `despique-toast--${n.type}`]">
         <span>{{ n.message }}</span>
@@ -30,12 +33,16 @@
 <script>
 import { useAuthStore } from '../stores/auth';
 import { useUIStore } from '../stores/ui';
+import AppUpdateNotice from '../components/layout/AppUpdateNotice.vue';
+import { actualizaciones } from './actualizacion';
 
 // Pantallas donde la barra de arriba no hace nada (se sale de ellas con sus propios botones).
 const RUTAS_BARRA_BLOQUEADA = ['PesadasRapida', 'PesadasGranel'];
 
 export default {
   name: 'AppDespique',
+  components: { AppUpdateNotice },
+  data: () => ({ actualizaciones }),
   computed: {
     esLogin() { return this.$route.path === '/login'; },
     barraBloqueada() { return RUTAS_BARRA_BLOQUEADA.includes(this.$route.name); },

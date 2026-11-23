@@ -12,7 +12,8 @@ import '@fortawesome/fontawesome-free/css/all.css';
 import AppDespique from './AppDespique.vue';
 import router from './router';
 import { useAuthStore } from '../stores/auth';
-import { iniciarActualizacionesDespique } from './actualizacion';
+import { iniciarActualizacionesDespique, yaSeActualizo } from './actualizacion';
+import { useUIStore } from '../stores/ui';
 
 [ModalPlugin, ToastPlugin, LayoutPlugin, ButtonPlugin, FormGroupPlugin, FormInputPlugin, FormTextareaPlugin]
   .forEach(plugin => Vue.use(plugin));
@@ -37,6 +38,9 @@ new Vue({
 // La APK se actualiza sola con su propio paquete (solo Pesadas), revisando con wifi.
 // Ver src/despique/actualizacion.js.
 if (Capacitor.isNativePlatform()) {
+  if (yaSeActualizo(Number(process.env.VUE_APP_PAQUETE_NUMERO) || 0)) {
+    useUIStore(pinia).notify('Despique se actualizó a la versión nueva.', 'success', 6000);
+  }
   iniciarActualizacionesDespique().catch(error => {
     console.warn('No se pudo iniciar el actualizador:', error);
     // Al menos avisar que esta versión arrancó bien, para que el plugin no regrese a otra.
