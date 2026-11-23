@@ -58,12 +58,25 @@ function propsIncluyen(props, ...nombres) {
   return nombres.some(nombre => props.includes(nombre));
 }
 
+// Android entrega todos los servicios, también los genéricos del sistema (1800 Generic Access,
+// 1801 Generic Attribute). Chrome no los deja ver, y ahí la báscula funciona: se escuchan solo los
+// servicios conocidos de básculas, como en web. Si la báscula no trae ninguno conocido, se escucha
+// todo menos los genéricos.
+const SERVICIOS_GENERICOS = ['00001800-0000-1000-8000-00805f9b34fb', '00001801-0000-1000-8000-00805f9b34fb'];
+
+export function serviciosAEscuchar(servicios) {
+  const conocidos = serviciosCapacitor();
+  const deBascula = servicios.filter(s => conocidos.includes(String(s.uuid).toLowerCase()));
+  if (deBascula.length) return deBascula;
+  return servicios.filter(s => !SERVICIOS_GENERICOS.includes(String(s.uuid).toLowerCase()));
+}
+
 export async function abrirEnlaceCapacitor(deviceId, onDatos, onDesconectar, ble = BleClient) {
   await ble.connect(deviceId, () => onDesconectar && onDesconectar(deviceId));
   try {
     const servicios = serviciosDesdeBle(await ble.getServices(deviceId));
     let suscritas = 0;
-    for (const servicio of servicios) {
+    for (const servicio of serviciosAEscuchar(servicios)) {
       for (const caracteristica of servicio.caracteristicas) {
         if (!propsIncluyen(caracteristica.props, 'notify', 'indicate')) continue;
         try {

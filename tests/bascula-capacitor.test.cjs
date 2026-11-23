@@ -115,3 +115,14 @@ test('capacitor: sin característica notify, no deja la conexión a medias', asy
   );
   assert.ok(ble.llamadas.some(l => Array.isArray(l) && l[0] === 'disconnect'));
 });
+
+test('capacitor: escucha solo servicios de báscula, no los genéricos de Android', async () => {
+  const { serviciosAEscuchar } = await modulo;
+  const generico = { uuid: '00001801-0000-1000-8000-00805f9b34fb', caracteristicas: [] };
+  const acceso = { uuid: '00001800-0000-1000-8000-00805f9b34fb', caracteristicas: [] };
+  const ffe0 = { uuid: '0000ffe0-0000-1000-8000-00805f9b34fb', caracteristicas: [] };
+  const raro = { uuid: '0000abcd-0000-1000-8000-00805f9b34fb', caracteristicas: [] };
+  assert.deepEqual(serviciosAEscuchar([acceso, generico, ffe0, raro]), [ffe0]);
+  // Sin servicios conocidos: todo menos los genéricos.
+  assert.deepEqual(serviciosAEscuchar([acceso, generico, raro]), [raro]);
+});

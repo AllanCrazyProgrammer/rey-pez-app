@@ -16,7 +16,8 @@
     <span class="bascula-flotante__valor" :class="{ 'bascula-flotante__valor--apagado': !vigente }">
       <i class="fas fa-weight-scale" aria-hidden="true"></i>
       <template v-if="vigente">{{ textoKilos }} kg</template>
-      <template v-else>Sin lectura</template>
+      <template v-else-if="!bascula.paquetes">Sin datos de la báscula</template>
+      <template v-else>Llega «{{ bascula.ultimoCrudo }}»</template>
     </span>
     <button
       type="button"

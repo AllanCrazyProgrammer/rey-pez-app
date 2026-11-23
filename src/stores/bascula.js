@@ -56,6 +56,11 @@ export const useBasculaStore = defineStore('bascula', {
     estable: null,
     trama: '',
     ultimaLecturaMs: 0,
+    // Diagnóstico: cuántos paquetes llegaron desde que se conectó y el último tal cual llegó
+    // (aunque no traiga un peso legible). Sirve para saber si "Sin lectura" es que no llega nada
+    // o que llega algo que el parser no entiende.
+    paquetes: 0,
+    ultimoCrudo: '',
   }),
 
   getters: {
@@ -107,6 +112,8 @@ export const useBasculaStore = defineStore('bascula', {
 
     async conectarCapacitor() {
       lector = crearLectorPeso();
+      this.paquetes = 0;
+      this.ultimoCrudo = '';
       const alRecibir = datos => this.alRecibir(datos);
       if (deviceIdCapacitor) {
         try {
@@ -144,6 +151,8 @@ export const useBasculaStore = defineStore('bascula', {
     async abrirEnlace(device) {
       olvidarEnlace();
       lector = crearLectorPeso();
+      this.paquetes = 0;
+      this.ultimoCrudo = '';
       try {
         const server = await device.gatt.connect();
         const servicios = await descubrir(server);
@@ -165,6 +174,8 @@ export const useBasculaStore = defineStore('bascula', {
     },
 
     alRecibir(datos) {
+      this.paquetes += 1;
+      this.ultimoCrudo = String(datos.texto || datos.hex || '').slice(0, 24);
       const lectura = lector.procesar(datos.texto, true);
       if (!lectura) return;
       this.kilos = lectura.peso.kilos;
