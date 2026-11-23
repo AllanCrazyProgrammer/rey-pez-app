@@ -39,7 +39,15 @@
 
 <script>
 import { useBasculaStore } from '@/stores/bascula';
-import { campoVisible, devolverTeclado, esCampoKilos, posicionarFlotante, quitarTeclado } from '@/utils/basculaFlotante';
+import {
+  campoVisible,
+  decimalesDeCampo,
+  devolverTeclado,
+  esCampoKilos,
+  posicionarFlotante,
+  quitarTeclado,
+  redondearKilos,
+} from '@/utils/basculaFlotante';
 
 // Si la báscula deja de mandar datos más de esto, la lectura ya no se considera vigente.
 const VIGENCIA_MS = 4000;
@@ -53,6 +61,8 @@ export default {
       posicion: { left: 0, top: 0 },
       lado: 'derecha',
       ahora: Date.now(),
+      // Un decimal para Ozuna, Lorena y Joselito; dos para los demás (lo dice el campo de kilos).
+      decimales: 2,
     };
   },
   computed: {
@@ -66,10 +76,13 @@ export default {
       return this.bascula.kilos !== null && this.ahora - this.bascula.ultimaLecturaMs < VIGENCIA_MS;
     },
     puedeRegistrar() {
-      return this.vigente && this.bascula.kilos > 0;
+      return this.vigente && this.kilosRedondeados > 0;
+    },
+    kilosRedondeados() {
+      return this.bascula.kilos === null ? null : redondearKilos(this.bascula.kilos, this.decimales);
     },
     textoKilos() {
-      return this.bascula.kilos === null ? '' : this.bascula.kilos.toFixed(2);
+      return this.kilosRedondeados === null ? '' : this.kilosRedondeados.toFixed(this.decimales);
     },
   },
   watch: {
@@ -127,6 +140,7 @@ export default {
       if (esCampoKilos(destino)) {
         if (this.bascula.conectada) quitarTeclado(destino);
         this.campo = destino;
+        this.decimales = decimalesDeCampo(destino);
         this.activo = true;
         this.reposicionar();
       } else if (!this.$el.contains(destino)) {
@@ -167,7 +181,7 @@ export default {
     registrar() {
       const campo = this.campo;
       if (!campo || !this.puedeRegistrar || !esCampoKilos(campo)) return;
-      const kilos = this.bascula.kilos;
+      const kilos = this.kilosRedondeados;
       // Igual que si se tecleara: el v-model, la presencia de colaboradores y los sonidos
       // reaccionan al evento "input".
       campo.value = String(kilos);

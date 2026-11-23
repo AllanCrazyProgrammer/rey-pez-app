@@ -294,6 +294,7 @@
                         @bascula-registrado="actualizarProducto"
                         @keydown.tab="handleKiloTab($event, kiloIndex)"
                         data-pesada
+                        :data-bascula-decimales="decimalesBascula"
                         @keydown="handlePesadaEnter($event, 'kilo')"
                         @keyup="handlePesadaEnter($event, 'kilo')"
                         @beforeinput="handlePesadaEnter($event, 'kilo')"
@@ -344,6 +345,7 @@
 <script>
 import { claveReferenciaProducto, referenciaPedidoProducto, estadoPedido, totalTarasReportadas } from '@/utils/embarquePedidoEstado';
 import { calcularTotalesPesadas } from '@/utils/embarquePesadas';
+import { decimalesPorCliente } from '@/utils/basculaFlotante';
 import campoColaborativo from '@/directives/campoColaborativo';
 import { insertarFilaProducto, eliminarFilaProducto } from '@/utils/embarqueColaboracion';
 import PedidoReferencia from './PedidoReferencia.vue';
@@ -448,6 +450,11 @@ export default {
         mostrarTodasLasMedidasDisponibles() {
             return this.medidasConfiguracion.length > 0 &&
                 (!this.producto.medida || (this.medidasConfiguradas.length === 0 && this.sugerenciasMedidas.length === 0));
+        },
+
+        // Decimales del peso de la báscula para este cliente (BasculaPesoFlotante lo lee del campo).
+        decimalesBascula() {
+            return decimalesPorCliente(this.nombreCliente);
         },
 
         // Detectar si es un cliente agregado (no predefinido)

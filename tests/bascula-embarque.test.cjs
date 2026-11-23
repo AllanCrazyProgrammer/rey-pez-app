@@ -114,3 +114,18 @@ test('teclado: con la báscula se esconde y al salir vuelve como estaba', async 
   devolverTeclado(decimal);
   assert.deepEqual(Object.fromEntries(decimal.attrs), { inputmode: 'decimal' });
 });
+
+test('decimales: un decimal para Ozuna, Lorena y Joselito; dos para los demás', async () => {
+  const { decimalesPorCliente, decimalesDeCampo, redondearKilos } = await flotante;
+  for (const nombre of ['Ozuna', 'Lorena', 'Veronica', 'Joselito', ' joselito ']) assert.equal(decimalesPorCliente(nombre), 1, nombre);
+  for (const nombre of ['Catarro', 'Otilio', 'Elizabeth', 'Cliente Nuevo', '', undefined]) assert.equal(decimalesPorCliente(nombre), 2, String(nombre));
+  const campo = valor => ({ getAttribute: () => valor });
+  assert.equal(decimalesDeCampo(campo('1')), 1);
+  assert.equal(decimalesDeCampo(campo('2')), 2);
+  assert.equal(decimalesDeCampo(campo(null)), 2);
+  assert.equal(decimalesDeCampo(null), 2);
+  assert.equal(redondearKilos(1.95, 1), 2);
+  assert.equal(redondearKilos(1.94, 1), 1.9);
+  assert.equal(redondearKilos(12.345, 2), 12.35);
+  assert.equal(redondearKilos(1.9, 2), 1.9);
+});

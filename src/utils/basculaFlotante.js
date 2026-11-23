@@ -67,3 +67,23 @@ export function devolverTeclado(campo) {
   if (previo) campo.setAttribute('inputmode', previo);
   else campo.removeAttribute('inputmode');
 }
+
+// Decimales del peso de la báscula según el cliente de la medida: Ozuna, Lorena (Verónica) y
+// Joselito pesan con un decimal; Catarro, Otilio y los clientes agregados, con dos.
+const CLIENTES_UN_DECIMAL = ['ozuna', 'lorena', 'veronica', 'verónica', 'joselito'];
+
+export function decimalesPorCliente(nombreCliente) {
+  return CLIENTES_UN_DECIMAL.includes(String(nombreCliente || '').trim().toLowerCase()) ? 1 : 2;
+}
+
+// Lo que dice el campo (data-bascula-decimales); si no dice nada, dos decimales.
+export function decimalesDeCampo(campo) {
+  const valor = campo && campo.getAttribute && Number(campo.getAttribute('data-bascula-decimales'));
+  return valor === 1 || valor === 2 ? valor : 2;
+}
+
+// Redondea al decimal que toca (1.95 -> 2.0 con un decimal, sin el error de toFixed con flotantes).
+export function redondearKilos(kilos, decimales) {
+  const factor = 10 ** decimales;
+  return Math.round((kilos + Math.sign(kilos) * Number.EPSILON) * factor) / factor;
+}
