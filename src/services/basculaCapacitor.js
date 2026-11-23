@@ -7,7 +7,8 @@
 // Solo BLE, no Bluetooth clásico / serie.
 import { BleClient, dataViewToNumbers, numberToUUID } from '@capacitor-community/bluetooth-le';
 import { Capacitor } from '@capacitor/core';
-import { SERVICIOS_CONOCIDOS, bytesAHex, bytesATexto } from '@/services/bascula';
+import { SERVICIOS_CONOCIDOS } from '@/services/bascula';
+import { bytesAHex, bytesATexto } from '@/utils/bascula';
 
 export function capacitorDisponible() {
   return typeof Capacitor !== 'undefined'
