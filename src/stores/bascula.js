@@ -61,6 +61,8 @@ export const useBasculaStore = defineStore('bascula', {
     // o que llega algo que el parser no entiende.
     paquetes: 0,
     ultimoCrudo: '',
+    // APK: servicios/características que se escuchan al conectar y una lectura directa.
+    diagnostico: '',
   }),
 
   getters: {
@@ -79,7 +81,8 @@ export const useBasculaStore = defineStore('bascula', {
       try {
         if (capacitorDisponible()) {
           await this.conectarCapacitor();
-          ui.notify(`Báscula conectada: ${this.nombre}`, 'success');
+          // En la APK no hay consola a la mano: el aviso dice qué escucha, por si no llega el peso.
+          ui.notify(`Báscula conectada: ${this.nombre} · ${this.diagnostico}`, 'success', 15000);
           return;
         }
         if (dispositivo) {
@@ -117,7 +120,8 @@ export const useBasculaStore = defineStore('bascula', {
       const alRecibir = datos => this.alRecibir(datos);
       if (deviceIdCapacitor) {
         try {
-          await abrirEnlaceCapacitor(deviceIdCapacitor, alRecibir, avisarPerdida);
+          const { resumen } = await abrirEnlaceCapacitor(deviceIdCapacitor, alRecibir, avisarPerdida);
+          this.diagnostico = resumen;
           conexionCapacitor = {
             deviceId: deviceIdCapacitor,
             desconectar: async () => {
@@ -140,6 +144,7 @@ export const useBasculaStore = defineStore('bascula', {
       const conexion = await conectarBasculaCapacitor(alRecibir, avisarPerdida);
       conexionCapacitor = conexion;
       deviceIdCapacitor = conexion.deviceId;
+      this.diagnostico = conexion.resumen || '';
       this.transporte = 'capacitor';
       this.nombre = conexion.nombre;
       this.kilos = null;

@@ -71,26 +71,65 @@ export function serviciosAEscuchar(servicios) {
   return servicios.filter(s => !SERVICIOS_GENERICOS.includes(String(s.uuid).toLowerCase()));
 }
 
+// UUID corto para mostrar: 0000ffe1-0000-1000-8000-00805f9b34fb -> ffe1.
+export function uuidCorto(uuid) {
+  const texto = String(uuid || '').toLowerCase();
+  const base = texto.match(/^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/);
+  return base ? base[1] : texto.slice(0, 8);
+}
+
+// Resumen de lo que pasó al conectar, para verlo en la APK (no hay consola a la mano):
+// servicios encontrados, características escuchadas, fallas y una lectura directa.
+export function resumenDiagnostico({ servicios = [], escuchadas = [], fallas = [], lecturas = [] }) {
+  const partes = [
+    `servicios: ${servicios.map(s => uuidCorto(s.uuid)).join(', ') || 'ninguno'}`,
+    `escucha: ${escuchadas.map(uuidCorto).join(', ') || 'nada'}`,
+  ];
+  if (fallas.length) partes.push(`fallas: ${fallas.map(f => `${uuidCorto(f.uuid)} (${f.error})`).join(', ')}`);
+  if (lecturas.length) {
+    partes.push(`lectura: ${lecturas.map(l => `${uuidCorto(l.uuid)}=${l.error ? `error ${l.error}` : `«${l.texto}» [${l.hex}]`}`).join(', ')}`);
+  }
+  return partes.join(' · ');
+}
+
 export async function abrirEnlaceCapacitor(deviceId, onDatos, onDesconectar, ble = BleClient) {
   await ble.connect(deviceId, () => onDesconectar && onDesconectar(deviceId));
   try {
     const servicios = serviciosDesdeBle(await ble.getServices(deviceId));
-    let suscritas = 0;
-    for (const servicio of serviciosAEscuchar(servicios)) {
+    const aEscuchar = serviciosAEscuchar(servicios);
+    const escuchadas = [];
+    const fallas = [];
+    for (const servicio of aEscuchar) {
       for (const caracteristica of servicio.caracteristicas) {
         if (!propsIncluyen(caracteristica.props, 'notify', 'indicate')) continue;
         try {
           await ble.startNotifications(deviceId, servicio.uuid, caracteristica.uuid, value => {
             onDatos({ uuid: caracteristica.uuid, ...datosDesdeDataView(value) });
           });
-          suscritas++;
+          escuchadas.push(caracteristica.uuid);
         } catch (e) {
+          fallas.push({ uuid: caracteristica.uuid, error: (e && e.message) || String(e) });
           console.warn('No se pudo escuchar', caracteristica.uuid, e);
         }
       }
     }
-    if (!suscritas) throw new Error('la báscula no manda el peso por Bluetooth');
-    return { servicios, suscritas };
+    if (!escuchadas.length) throw new Error('la báscula no manda el peso por Bluetooth');
+    // Una lectura directa de lo que se pueda leer: dice si el peso está ahí aunque no lleguen avisos.
+    const lecturas = [];
+    for (const servicio of aEscuchar) {
+      for (const caracteristica of servicio.caracteristicas) {
+        if (!propsIncluyen(caracteristica.props, 'read') || lecturas.length >= 4) continue;
+        try {
+          const value = await ble.read(deviceId, servicio.uuid, caracteristica.uuid, { timeout: 2000 });
+          lecturas.push({ uuid: caracteristica.uuid, ...datosDesdeDataView(value) });
+        } catch (e) {
+          lecturas.push({ uuid: caracteristica.uuid, error: (e && e.message) || String(e) });
+        }
+      }
+    }
+    const resumen = resumenDiagnostico({ servicios, escuchadas, fallas, lecturas });
+    console.info('[bascula] conectada:', resumen);
+    return { servicios, suscritas: escuchadas.length, escuchadas, fallas, lecturas, resumen };
   } catch (e) {
     try { await ble.disconnect(deviceId); } catch (_ignorado) { /* ya estaba desconectada */ }
     throw e;
@@ -109,11 +148,12 @@ export async function conectarBasculaCapacitor(onDatos, onDesconectar, ble = Ble
     await ble.requestEnable();
   }
   const device = await ble.requestDevice({ services: serviciosCapacitor() });
-  const { servicios } = await abrirEnlaceCapacitor(device.deviceId, onDatos, onDesconectar, ble);
+  const { servicios, resumen } = await abrirEnlaceCapacitor(device.deviceId, onDatos, onDesconectar, ble);
   return {
     deviceId: device.deviceId,
     nombre: device.name || 'Báscula',
     servicios,
+    resumen,
     async desconectar() {
       try { await ble.disconnect(device.deviceId); } catch (_ignorado) { /* ya estaba desconectada */ }
     },

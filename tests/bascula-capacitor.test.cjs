@@ -126,3 +126,11 @@ test('capacitor: escucha solo servicios de báscula, no los genéricos de Androi
   // Sin servicios conocidos: todo menos los genéricos.
   assert.deepEqual(serviciosAEscuchar([acceso, generico, raro]), [raro]);
 });
+
+test('capacitor: el resumen dice qué escucha, qué falló y qué se leyó', async () => {
+  const { abrirEnlaceCapacitor } = await modulo;
+  const ble = bleFalso();
+  ble.read = async () => dataView('=09.1000');
+  const { resumen } = await abrirEnlaceCapacitor('AA:BB', () => {}, () => {}, ble);
+  assert.equal(resumen, 'servicios: ffe0 · escucha: ffe1 · lectura: ffe1=«=09.1000» [3d 30 39 2e 31 30 30 30]');
+});
