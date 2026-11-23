@@ -3,7 +3,7 @@
 // así que cada pesada registrada en modo rápido SUMA al valor que ya lleva esa
 // despicadora en esa medida, nunca lo sobrescribe.
 
-import { decimalPesada } from './pesadas';
+import { decimalPesada, elementosPesadas } from './pesadas';
 
 export const TRASTES_PREDEFINIDOS = [0.1, 0.2, 0.3, 0.4];
 export const CLAVE_TRASTE_LOCAL = 'pesadas-traste';
@@ -183,4 +183,17 @@ export function parsearKilosBrutos(valor) {
   const numero = decimalPesada(normalizarDecimal(valor), false, false);
   if (numero == null || numero <= 0) throw new Error('Escribe los kilos de la pesada.');
   return numero;
+}
+
+// Pesadas que se pierden al eliminar una medida: despicadoras (no eliminadas) con kilos en esa
+// columna y renglones de su pesada a granel. Si no hay ninguna, se borra sin preguntar.
+export function pesadasDeMedida(datos, columnaId) {
+  const pesos = (datos && datos.pesos) || {};
+  const despicadoras = elementosPesadas((datos && datos.personas) || {})
+    .filter(persona => {
+      const valor = pesos[persona.id] && pesos[persona.id][columnaId];
+      return valor != null && valor !== '';
+    }).length;
+  const granel = elementosPesadas(((datos && datos.granel) || {})[columnaId] || {}).length;
+  return { despicadoras, granel, total: despicadoras + granel };
 }

@@ -10,8 +10,11 @@
       <section class="pesadas-card pesadas-rapida-card" aria-label="Registro rápido de pesada">
         <div class="pesadas-rapida-medidas" role="group" aria-label="Medida de esta pesada">
           <span class="pesadas-rapida-label">Medida</span>
+          <!-- Dejar presionado (o clic derecho) una medida: menú con "Eliminar medida". -->
           <div v-for="columna in columnas" :key="columna.id"
-            class="pesadas-rapida-chip" :class="{ activo: columna.id === medidaId }">
+            class="pesadas-rapida-chip" :class="{ activo: columna.id === medidaId }"
+            @contextmenu="abrirMenuMedida($event, columna)" @touchstart="iniciarPulsacionMedida($event, columna)"
+            @touchmove="moverPulsacionMedida" @touchend="terminarPulsacionMedida" @touchcancel="cancelarPulsacionMedida">
             <input v-if="editandoColumna && editandoColumna.id === columna.id && editandoColumna.campo === 'medida'"
               ref="editorColumna" v-model="editandoColumna.valor" type="text" autocomplete="off"
               aria-label="Editar medida" @keydown.enter.prevent="confirmarEdicionColumna"
@@ -122,6 +125,28 @@
         Terminé de pesar <span aria-hidden="true">→</span>
       </router-link>
 
+      <div v-if="menuMedida" ref="menuMedida" class="pesadas-row-menu" role="menu"
+        :aria-label="`Opciones de la medida ${menuMedida.medida}`" :style="{ left: `${menuMedida.x}px`, top: `${menuMedida.y}px` }"
+        @contextmenu.prevent>
+        <button ref="menuMedidaEliminar" type="button" role="menuitem" class="pesadas-row-menu-eliminar" @click="pedirEliminarMedida">🗑 Eliminar medida</button>
+      </div>
+
+      <!-- Solo si la medida ya tiene pesadas: avisar que se borran. Sin pesadas se borra directo. -->
+      <b-modal v-model="eliminarMedidaVisible" title="Eliminar medida" hide-footer centered @hidden="medidaPorEliminar = null">
+        <template v-if="medidaPorEliminar">
+          <p>La medida <strong>{{ medidaPorEliminar.medida }}</strong> tiene pesadas registradas hoy:
+            <template v-if="medidaPorEliminar.pesadas.despicadoras">{{ medidaPorEliminar.pesadas.despicadoras }} {{ medidaPorEliminar.pesadas.despicadoras === 1 ? 'despicadora' : 'despicadoras' }}</template>
+            <template v-if="medidaPorEliminar.pesadas.despicadoras && medidaPorEliminar.pesadas.granel"> y </template>
+            <template v-if="medidaPorEliminar.pesadas.granel">{{ medidaPorEliminar.pesadas.granel }} a granel</template>.
+          </p>
+          <p>Si la eliminas, <strong>se borran esas pesadas</strong> de este día.</p>
+          <div class="pesadas-rapida-alerta-acciones">
+            <button class="pesadas-button" type="button" @click="eliminarMedidaVisible = false">Cancelar</button>
+            <button class="pesadas-button pesadas-button-peligro" type="button" @click="confirmarEliminarMedida">Eliminar medida y pesadas</button>
+          </div>
+        </template>
+      </b-modal>
+
       <!-- Despique: al empezar, si la báscula no está conectada se pregunta si conectarla. -->
       <b-modal v-model="avisoBascula" title="Báscula sin conectar" hide-footer centered>
         <p>La báscula no está conectada. ¿Quieres conectarla para pesar?</p>
@@ -155,7 +180,7 @@ import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { guardarDespicadora, observarDespicadoras } from '@/services/despicadoras.service';
 import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, excedeLimiteMedidaLimpio, formatearTrasteManual, normalizarTextoPesada,
   parsearKilosBrutos, parsearPrecioColumna, parsearTraste, siguienteMedida, sumarPesada,
-  sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
+  pesadasDeMedida, sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import { claveTrasteDia, trastesDelDia } from '@/utils/pesadasGranel';
 import { ES_DESPIQUE } from '@/config/variante';
@@ -175,6 +200,7 @@ export default {
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
     trasteManualActivo: false, medidaId: '', seleccionMedidaInicialHecha: false, editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
     medidasPorDefecto: [], avisoBascula: false, ahoraBascula: Date.now(),
+    menuMedida: null, medidaPorEliminar: null, eliminarMedidaVisible: false,
     alertaKilos: null,
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
@@ -311,6 +337,8 @@ export default {
   beforeRouteLeave(to, from, next) { if (this._outbox) this._outbox.flush(); next(); },
   beforeDestroy() {
     clearInterval(this._relojBascula);
+    this.cancelarPulsacionMedida();
+    this.cerrarMenuMedida();
     this.desconectar();
     if (this._unsubscribeDespicadoras) this._unsubscribeDespicadoras();
     if (this._unsubscribeMedidas) this._unsubscribeMedidas();
@@ -403,6 +431,96 @@ export default {
       this._outbox.flush();
     },
     cancelarEdicionColumna() { this.editandoColumna = null; },
+    // ---- Eliminar medida: dejar presionado (celular) o clic derecho (computadora) ----
+    abrirMenuMedida(event, columna) {
+      event.preventDefault();
+      if (Date.now() - (this._pulsacionMedidaAbrio || 0) < 800) return; // Android también manda contextmenu.
+      let { clientX: x, clientY: y } = event;
+      if (!x && !y) { const rect = event.currentTarget.getBoundingClientRect(); x = rect.left + 16; y = rect.bottom; }
+      this.mostrarMenuMedida(columna, x, y);
+    },
+    async mostrarMenuMedida(columna, x, y) {
+      this.cerrarMenuMedida();
+      this.menuMedida = { id: columna.id, medida: columna.medida || 'Sin medida', x, y };
+      document.addEventListener('mousedown', this.clickFueraMenuMedida, true);
+      document.addEventListener('touchstart', this.clickFueraMenuMedida, true);
+      document.addEventListener('keydown', this.teclaMenuMedida, true);
+      window.addEventListener('scroll', this.cerrarMenuMedida, true);
+      window.addEventListener('resize', this.cerrarMenuMedida);
+      await this.$nextTick();
+      const el = this.$refs.menuMedida;
+      if (!el || !this.menuMedida) return;
+      const rect = el.getBoundingClientRect();
+      const margen = 8;
+      this.menuMedida.x = Math.max(margen, Math.min(x, window.innerWidth - rect.width - margen));
+      this.menuMedida.y = Math.max(margen, y + rect.height + margen > window.innerHeight ? y - rect.height : y);
+      if (this.$refs.menuMedidaEliminar) this.$refs.menuMedidaEliminar.focus({ preventScroll: true });
+    },
+    cerrarMenuMedida() {
+      if (!this.menuMedida) return;
+      this.menuMedida = null;
+      document.removeEventListener('mousedown', this.clickFueraMenuMedida, true);
+      document.removeEventListener('touchstart', this.clickFueraMenuMedida, true);
+      document.removeEventListener('keydown', this.teclaMenuMedida, true);
+      window.removeEventListener('scroll', this.cerrarMenuMedida, true);
+      window.removeEventListener('resize', this.cerrarMenuMedida);
+    },
+    clickFueraMenuMedida(event) { if (this.$refs.menuMedida && !this.$refs.menuMedida.contains(event.target)) this.cerrarMenuMedida(); },
+    teclaMenuMedida(event) {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.cerrarMenuMedida(); }
+      if (event.key === 'Tab') this.cerrarMenuMedida();
+    },
+    iniciarPulsacionMedida(event, columna) {
+      this.cancelarPulsacionMedida();
+      if (event.touches.length !== 1) return;
+      const { clientX: x, clientY: y } = event.touches[0];
+      this._pulsacionMedida = { x, y, abierto: false, timer: setTimeout(() => {
+        this._pulsacionMedida.abierto = true;
+        this._pulsacionMedidaAbrio = Date.now();
+        if (navigator.vibrate) navigator.vibrate(15);
+        this.mostrarMenuMedida(columna, x, y);
+      }, 550) };
+    },
+    moverPulsacionMedida(event) {
+      const p = this._pulsacionMedida;
+      if (!p || p.abierto) return;
+      const t = event.touches[0];
+      if (Math.abs(t.clientX - p.x) > 10 || Math.abs(t.clientY - p.y) > 10) this.cancelarPulsacionMedida();
+    },
+    terminarPulsacionMedida(event) {
+      // Tras dejar presionado, el toque no debe seleccionar ni abrir la edición de la medida.
+      if (this._pulsacionMedida && this._pulsacionMedida.abierto && event.cancelable) event.preventDefault();
+      this.cancelarPulsacionMedida();
+    },
+    cancelarPulsacionMedida() {
+      if (this._pulsacionMedida) clearTimeout(this._pulsacionMedida.timer);
+      this._pulsacionMedida = null;
+    },
+    pedirEliminarMedida() {
+      const menu = this.menuMedida;
+      this.cerrarMenuMedida();
+      const columna = menu && this.columnas.find(col => col.id === menu.id);
+      if (!columna) return;
+      const pesadas = pesadasDeMedida(this.datos, columna.id);
+      if (!pesadas.total) { this.eliminarMedida(columna.id); return; }
+      this.medidaPorEliminar = { id: columna.id, medida: columna.medida || 'Sin medida', pesadas };
+      this.eliminarMedidaVisible = true;
+    },
+    confirmarEliminarMedida() {
+      const medida = this.medidaPorEliminar;
+      this.eliminarMedidaVisible = false;
+      if (medida) this.eliminarMedida(medida.id);
+    },
+    // Igual que eliminar la columna en la hoja del día: se marca eliminada (sus pesadas dejan de contar).
+    eliminarMedida(id) {
+      if (this.editandoColumna && this.editandoColumna.id === id) this.editandoColumna = null;
+      this.guardarCampos({ [`columnas.${id}.eliminado`]: true });
+      this._outbox.flush();
+      if (this.medidaId === id) {
+        const restante = this.columnas.find(col => col.id !== id);
+        this.medidaId = restante ? restante.id : '';
+      }
+    },
     elegirTraste(valor) {
       this.trasteManualActivo = false;
       this.trasteManual = '';

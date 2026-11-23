@@ -174,3 +174,11 @@ test('pesar rápido: con la báscula conectada, elegir despicadora no abre el te
   const store = leer('src/stores/bascula.js');
   assert.ok(!/notify\([^)]*diagnostico/.test(store), 'el aviso de conexión no trae el diagnóstico');
 });
+
+test('pesar rápido: dejar presionado una medida ofrece eliminarla; avisa solo si tiene pesadas', () => {
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  assert.match(rapida, /@touchstart="iniciarPulsacionMedida\(\$event, columna\)"/);
+  assert.match(rapida, /🗑 Eliminar medida/);
+  assert.match(rapida, /if \(!pesadas\.total\) \{ this\.eliminarMedida\(columna\.id\); return; \}/);
+  assert.match(rapida, /se borran esas pesadas/);
+});

@@ -172,3 +172,16 @@ test('sugerencias incluyen a quien pesó hoy aunque no esté registrada', async 
   assert.deepEqual(todas.map(item => item.nombre), ['Nayeli', 'Pedro', 'María José', 'Sandra']);
   assert.equal(todas.find(item => item.nombre === 'Nayeli').apodo, 'Nay');
 });
+
+test('pesadas de una medida: cuenta despicadoras con kilos y renglones a granel', async () => {
+  const { pesadasDeMedida } = await helpers;
+  const datos = {
+    personas: { a: { nombre: 'Nayeli', orden: 1 }, b: { nombre: 'Sandra', orden: 2 }, c: { nombre: 'Borrada', orden: 3, eliminado: true } },
+    pesos: { a: { m1: 12.4, m2: 3 }, b: { m1: 0 }, c: { m1: 5 } },
+    granel: { m1: { g1: { taras: 2, kilos: 30, orden: 1 }, g2: { taras: 1, kilos: 10, orden: 2, eliminado: true } } },
+  };
+  assert.deepEqual(pesadasDeMedida(datos, 'm1'), { despicadoras: 2, granel: 1, total: 3 });
+  assert.deepEqual(pesadasDeMedida(datos, 'm2'), { despicadoras: 1, granel: 0, total: 1 });
+  assert.deepEqual(pesadasDeMedida(datos, 'nueva'), { despicadoras: 0, granel: 0, total: 0 });
+  assert.deepEqual(pesadasDeMedida({}, 'm1'), { despicadoras: 0, granel: 0, total: 0 });
+});
