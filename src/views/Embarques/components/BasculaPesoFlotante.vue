@@ -29,6 +29,11 @@
       <i class="fas fa-check" aria-hidden="true"></i>
       {{ registrado ? 'Puesto' : 'Registrar' }}
     </button>
+    <!-- APK: sin peso, se muestra qué escucha la conexión (servicios, características, lectura
+         directa) para saber por qué no llega. Va debajo, sin mover la pastilla. -->
+    <small v-if="!vigente && bascula.diagnostico" class="bascula-flotante__diagnostico">
+      {{ bascula.diagnostico }}
+    </small>
   </div>
 </template>
 
@@ -162,6 +167,24 @@ export default {
 </script>
 
 <style scoped>
+.bascula-flotante__diagnostico {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(300px, calc(100vw - 24px));
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+  color: #e8eef9;
+  border: 1px solid #4ade80;
+  border-radius: 8px;
+  background: rgba(8, 20, 38, .97);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .bascula-flotante {
   position: fixed;
   z-index: 2000;
