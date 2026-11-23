@@ -48,3 +48,22 @@ export function esCampoKilos(elemento) {
     !elemento.readOnly
   );
 }
+
+// Con la báscula conectada, el campo de kilos no abre el teclado del teléfono: el peso se pone con
+// "Registrar". inputmode="none" lo esconde sin bloquear el campo (se puede seguir escribiendo con
+// un teclado físico). Se guarda el valor anterior para devolverlo tal cual.
+const PREVIO = 'data-bascula-inputmode';
+
+export function quitarTeclado(campo) {
+  if (!campo || campo.hasAttribute(PREVIO)) return;
+  campo.setAttribute(PREVIO, campo.getAttribute('inputmode') || '');
+  campo.setAttribute('inputmode', 'none');
+}
+
+export function devolverTeclado(campo) {
+  if (!campo || !campo.hasAttribute(PREVIO)) return;
+  const previo = campo.getAttribute(PREVIO);
+  campo.removeAttribute(PREVIO);
+  if (previo) campo.setAttribute('inputmode', previo);
+  else campo.removeAttribute('inputmode');
+}

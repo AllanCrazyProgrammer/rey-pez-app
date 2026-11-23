@@ -88,3 +88,29 @@ test('flotante: solo aplica a campos de kilos habilitados', async () => {
   assert.equal(esCampoKilos(campo({ matches: () => false })), false);
   assert.equal(esCampoKilos(null), false);
 });
+
+test('teclado: con la báscula se esconde y al salir vuelve como estaba', async () => {
+  const { quitarTeclado, devolverTeclado } = await flotante;
+  const campoFalso = (atributos = {}) => {
+    const attrs = new Map(Object.entries(atributos));
+    return {
+      attrs,
+      hasAttribute: n => attrs.has(n),
+      getAttribute: n => (attrs.has(n) ? attrs.get(n) : null),
+      setAttribute: (n, v) => attrs.set(n, String(v)),
+      removeAttribute: n => attrs.delete(n),
+    };
+  };
+  const sinModo = campoFalso();
+  quitarTeclado(sinModo);
+  quitarTeclado(sinModo); // dos veces no pierde el valor original
+  assert.equal(sinModo.getAttribute('inputmode'), 'none');
+  devolverTeclado(sinModo);
+  assert.deepEqual([...sinModo.attrs.keys()], []);
+
+  const decimal = campoFalso({ inputmode: 'decimal' });
+  quitarTeclado(decimal);
+  devolverTeclado(decimal);
+  devolverTeclado(decimal);
+  assert.deepEqual(Object.fromEntries(decimal.attrs), { inputmode: 'decimal' });
+});

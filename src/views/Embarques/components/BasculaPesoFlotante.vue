@@ -27,7 +27,7 @@
       @click="registrar"
     >
       <i class="fas fa-check" aria-hidden="true"></i>
-      {{ registrado ? 'Puesto' : 'Registrar' }}
+      Registrar
     </button>
     <!-- APK: sin peso, se muestra qué escucha la conexión (servicios, características, lectura
          directa) para saber por qué no llega. Va debajo, sin mover la pastilla. -->
@@ -39,7 +39,7 @@
 
 <script>
 import { useBasculaStore } from '@/stores/bascula';
-import { campoVisible, esCampoKilos, posicionarFlotante } from '@/utils/basculaFlotante';
+import { campoVisible, devolverTeclado, esCampoKilos, posicionarFlotante, quitarTeclado } from '@/utils/basculaFlotante';
 
 // Si la báscula deja de mandar datos más de esto, la lectura ya no se considera vigente.
 const VIGENCIA_MS = 4000;
@@ -53,7 +53,6 @@ export default {
       posicion: { left: 0, top: 0 },
       lado: 'derecha',
       ahora: Date.now(),
-      registrado: false,
     };
   },
   computed: {
@@ -78,17 +77,24 @@ export default {
     mostrar(visible) {
       if (visible) this.$nextTick(this.reposicionar);
     },
+    // Si la báscula se conecta o desconecta con un campo enfocado, el teclado sigue esa regla.
+    'bascula.conectada'(conectada) {
+      if (!this.campo) return;
+      if (conectada) quitarTeclado(this.campo);
+      else devolverTeclado(this.campo);
+    },
   },
   created() {
     this.campo = null;
     this.cuadro = 0;
     this.reloj = null;
-    this.temporizadorRegistro = null;
   },
   mounted() {
     // Se cuelga del body: las tarjetas de medidas recortan lo que sobresale (overflow: hidden) y
     // un ancestro con transform cambiaría a qué se pega position: fixed.
     document.body.appendChild(this.$el);
+    // Antes del foco: así el teléfono ya no abre el teclado al tocar el campo.
+    document.addEventListener('pointerdown', this.alTocar, true);
     document.addEventListener('focusin', this.alEnfocar, true);
     document.addEventListener('focusout', this.alSalir, true);
     window.addEventListener('scroll', this.programarReposicion, true);
@@ -96,23 +102,32 @@ export default {
     this.reloj = setInterval(() => { this.ahora = Date.now(); }, 1000);
   },
   beforeDestroy() {
+    document.removeEventListener('pointerdown', this.alTocar, true);
     document.removeEventListener('focusin', this.alEnfocar, true);
     document.removeEventListener('focusout', this.alSalir, true);
     window.removeEventListener('scroll', this.programarReposicion, true);
     window.removeEventListener('resize', this.programarReposicion);
     clearInterval(this.reloj);
-    clearTimeout(this.temporizadorRegistro);
+    devolverTeclado(this.campo);
     if (this.cuadro) cancelAnimationFrame(this.cuadro);
     // Vue solo quita del DOM la raíz del padre; este elemento ya no está dentro de ella.
     if (this.$el.parentNode) this.$el.parentNode.removeChild(this.$el);
   },
   methods: {
+    alTocar(evento) {
+      const destino = evento.target;
+      if (!this.bascula.conectada || !esCampoKilos(destino)) return;
+      // Volver a tocar el campo que ya está seleccionado = escribir a mano: regresa el teclado
+      // (el toque lo abre). El peso flotante sigue ahí por si se quiere registrar.
+      if (destino === document.activeElement) devolverTeclado(destino);
+      else quitarTeclado(destino);
+    },
     alEnfocar(evento) {
       const destino = evento.target;
       if (esCampoKilos(destino)) {
+        if (this.bascula.conectada) quitarTeclado(destino);
         this.campo = destino;
         this.activo = true;
-        this.registrado = false;
         this.reposicionar();
       } else if (!this.$el.contains(destino)) {
         this.ocultar();
@@ -123,6 +138,7 @@ export default {
       if (evento.target === this.campo) this.ocultar();
     },
     ocultar() {
+      devolverTeclado(this.campo);
       this.activo = false;
       this.campo = null;
     },
@@ -158,9 +174,8 @@ export default {
       campo.dispatchEvent(new Event('input', { bubbles: true }));
       // ProductoItem lo escucha para avisar al embarque, como al salir del campo.
       campo.dispatchEvent(new CustomEvent('bascula-registrado', { detail: { kilos } }));
-      this.registrado = true;
-      clearTimeout(this.temporizadorRegistro);
-      this.temporizadorRegistro = setTimeout(() => { this.registrado = false; }, 1500);
+      // Ya quedó puesto: se suelta el campo (y con él se esconde el peso flotante).
+      campo.blur();
     },
   },
 };
