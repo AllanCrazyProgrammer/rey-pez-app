@@ -258,6 +258,13 @@
 .pesadas-rapida-kilos { flex: 1 1 260px; }
 .pesadas-rapida-kilos input { width: 100%; border: 2px solid #cec7e0; border-radius: 12px; background: #fff; color: #25233c; padding: 16px 20px; font-size: 40px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 .pesadas-rapida-kilos input:focus { border-color: #583d92; outline: none; box-shadow: 0 0 0 3px #583d9233; }
+.pesadas-rapida-kilos-campo { display: flex; align-items: stretch; gap: 10px; }
+.pesadas-rapida-kilos-campo input { flex: 1 1 auto; min-width: 0; }
+.pesadas-rapida-bascula { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 118px; padding: 8px 12px; border: 2px solid #22c55e; border-radius: 12px; background: #ecfdf3; color: #14532d; font-weight: 800; cursor: pointer; }
+.pesadas-rapida-bascula-peso { font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pesadas-rapida-bascula-accion { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #22c55e; color: #fff; font-size: 15px; }
+.pesadas-rapida-bascula:hover:not(:disabled) { background: #dcfce7; }
+.pesadas-rapida-bascula:disabled { opacity: .55; cursor: not-allowed; filter: grayscale(.4); }
 .pesadas-rapida-traste { flex: 1 1 300px; }
 .pesadas-rapida-trastes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .pesadas-rapida-traste-btn { border: 2px solid #cec7e0; background: #fff; color: #453575; border-radius: 12px; min-width: 72px; min-height: 64px; padding: 10px 14px; font-size: 24px; font-weight: 800; cursor: pointer; font-variant-numeric: tabular-nums; }

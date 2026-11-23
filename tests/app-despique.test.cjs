@@ -138,3 +138,21 @@ test('despique no muestra pagos en el resumen ni en el pie de la hoja', () => {
   const tarjeta = dia.match(/<div v-if="esDespique" class="pesadas-best-card">[\s\S]*?<\/div>/)[0];
   assert.ok(!/pago|\$\{\{/i.test(tarjeta), 'la tarjeta de más kilos no muestra pago');
 });
+
+test('despique: botón Conectar báscula en la hoja del día y aviso con Omitir al empezar Pesar rápido', () => {
+  const dia = leer('src/views/Pesadas/PesadasDia.vue');
+  assert.match(dia, /<BotonBascula v-if="esDespique" \/>/);
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  assert.match(rapida, /ES_DESPIQUE && bascula\.soportada && !bascula\.conectada/);
+  assert.match(rapida, /@click="avisoBascula = false">Omitir<\/button>/);
+  assert.match(rapida, /@click="conectarBasculaDesdeAviso">Conectar báscula<\/button>/);
+  const boton = leer('src/components/Bascula/BotonBascula.vue');
+  assert.match(boton, /useBasculaStore/);
+});
+
+test('pesar rápido: con la báscula conectada, Registrar a un lado de los kilos pone el peso a un decimal', () => {
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  assert.match(rapida, /<button v-if="bascula\.conectada" type="button" class="pesadas-rapida-bascula"/);
+  assert.match(rapida, /return redondearKilos\(kilos, 1\);/);
+  assert.match(rapida, /this\.kilosTexto = this\.pesoBascula\.toFixed\(1\);/);
+});

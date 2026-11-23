@@ -23,6 +23,8 @@
             <button class="pesadas-button" type="button" :disabled="!pasos.adelante" title="Rehacer" @click="rehacer">↷ Rehacer</button>
           </span>
           <button class="pesadas-button" @click="busquedaAbierta = true">Buscar despicadora</button>
+          <!-- Despique: conectar la báscula aquí; sigue conectada al pasar a Pesar rápido. -->
+          <BotonBascula v-if="esDespique" />
           <router-link class="pesadas-button primary" :to="`/pesadas/${fecha}/rapida`">⚡ Pesar rápido</router-link>
           <button class="pesadas-button" @click="granelVisible = true">Pesada a granel</button>
           <button v-if="!esDespique" class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button v-if="!esDespique" class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
@@ -108,6 +110,7 @@
 import { nanoid } from 'nanoid';
 import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/components/Pesadas/Cuentas.vue';
+import BotonBascula from '@/components/Bascula/BotonBascula.vue';
 import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { formatoHora12, formatoRendimiento, parsearKilosGranel, resumenGranel } from '@/utils/pesadasGranel';
@@ -120,7 +123,7 @@ import './pesadas.css';
 
 export default {
   name: 'PesadasDia',
-  components: { PesadasTabla, PesadasResumen, BModal, Cuentas },
+  components: { PesadasTabla, PesadasResumen, BModal, Cuentas, BotonBascula },
   props: { fecha: { type: String, required: true } },
   data: () => ({ esDespique: ES_DESPIQUE, datosGuardados: {}, granelAbierto: '', granelVisible: false, errorCrudo: '', pasos: { atras: 0, adelante: 0 }, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,

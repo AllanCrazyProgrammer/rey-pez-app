@@ -59,9 +59,18 @@
         <div class="pesadas-rapida-kilos-row">
           <div class="pesadas-rapida-kilos">
             <label class="pesadas-rapida-label" for="pesadas-rapida-kilos">Kilos en la báscula</label>
-            <!-- La báscula NVK llenará este input al final (mismo store que embarques). -->
-            <input id="pesadas-rapida-kilos" ref="kilos" v-model="kilosTexto" type="text" inputmode="decimal"
-              autocomplete="off" placeholder="0.0" @keydown.enter.prevent="enterKilos">
+            <div class="pesadas-rapida-kilos-campo">
+              <input id="pesadas-rapida-kilos" ref="kilos" v-model="kilosTexto" type="text" inputmode="decimal"
+                autocomplete="off" placeholder="0.0" @keydown.enter.prevent="enterKilos">
+              <!-- Báscula conectada (mismo store que embarques): su peso, redondeado a un decimal, y
+                   Registrar para ponerlo en los kilos. Quitar el peso de la báscula no lo borra. -->
+              <button v-if="bascula.conectada" type="button" class="pesadas-rapida-bascula"
+                :disabled="!puedeRegistrarBascula" :title="puedeRegistrarBascula ? 'Poner este peso en los kilos' : 'Pon algo en la báscula para registrar'"
+                @click="registrarPesoBascula">
+                <span class="pesadas-rapida-bascula-peso"><i class="fas fa-weight-scale" aria-hidden="true"></i> {{ textoPesoBascula }}</span>
+                <span class="pesadas-rapida-bascula-accion"><i class="fas fa-check" aria-hidden="true"></i> Registrar</span>
+              </button>
+            </div>
           </div>
           <div class="pesadas-rapida-traste">
             <span class="pesadas-rapida-label">Traste (se resta)</span>
@@ -110,6 +119,15 @@
         Terminé de pesar <span aria-hidden="true">→</span>
       </router-link>
 
+      <!-- Despique: al empezar, si la báscula no está conectada se pregunta si conectarla. -->
+      <b-modal v-model="avisoBascula" title="Báscula sin conectar" hide-footer centered>
+        <p>La báscula no está conectada. ¿Quieres conectarla para pesar?</p>
+        <div class="pesadas-rapida-alerta-acciones">
+          <button class="pesadas-button" type="button" @click="avisoBascula = false">Omitir</button>
+          <button class="pesadas-button primary" type="button" @click="conectarBasculaDesdeAviso">Conectar báscula</button>
+        </div>
+      </b-modal>
+
       <!-- Medida de limpio con más de 30 kg en una sola pesada: confirmar o corregir. -->
       <b-modal v-model="alertaKilosVisible" title="Pesada mayor a 30 kg" hide-footer>
         <template v-if="alertaKilos">
@@ -137,6 +155,12 @@ import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, excedeLimiteMedidaLimpio, forma
   sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import { claveTrasteDia, trastesDelDia } from '@/utils/pesadasGranel';
+import { ES_DESPIQUE } from '@/config/variante';
+import { useBasculaStore } from '@/stores/bascula';
+import { redondearKilos } from '@/utils/basculaFlotante';
+
+// Si la báscula deja de mandar datos más de esto, su peso ya no se puede registrar.
+const VIGENCIA_BASCULA_MS = 4000;
 import './pesadas.css';
 
 export default {
@@ -147,10 +171,19 @@ export default {
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
     trasteManualActivo: false, medidaId: '', seleccionMedidaInicialHecha: false, editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
-    medidasPorDefecto: [],
+    medidasPorDefecto: [], avisoBascula: false, ahoraBascula: Date.now(),
     alertaKilos: null,
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
+    bascula() { return useBasculaStore(); },
+    // Peso de la báscula redondeado a un decimal, si la lectura sigue vigente.
+    pesoBascula() {
+      const { kilos, ultimaLecturaMs } = this.bascula;
+      if (kilos === null || this.ahoraBascula - ultimaLecturaMs >= VIGENCIA_BASCULA_MS) return null;
+      return redondearKilos(kilos, 1);
+    },
+    puedeRegistrarBascula() { return this.pesoBascula !== null && this.pesoBascula > 0; },
+    textoPesoBascula() { return this.pesoBascula === null ? 'Sin lectura' : `${this.pesoBascula.toFixed(1)} kg`; },
     fechaValida() { return fechaPesadasValida(this.fecha); },
     // Predefinidos + los trastes "Otro" que ya se usaron este día (se guardan al registrar).
     trastes() { return trastesDelDia(this.datosGuardados, TRASTES_PREDEFINIDOS); },
@@ -259,6 +292,10 @@ export default {
     }
   },
   mounted() {
+    // App de despique: si la báscula no está conectada, se pregunta (con opción de omitir).
+    const bascula = useBasculaStore();
+    if (ES_DESPIQUE && bascula.soportada && !bascula.conectada && !bascula.conectando) this.avisoBascula = true;
+    this._relojBascula = setInterval(() => { this.ahoraBascula = Date.now(); }, 500);
     this.cargarTraste();
     this.iniciar();
     this._unsubscribeDespicadoras = observarDespicadoras(dias => { this.despicadoras = dias; }, () => { this.error = 'No se pudo cargar el catálogo de despicadoras.'; });
@@ -270,6 +307,7 @@ export default {
   },
   beforeRouteLeave(to, from, next) { if (this._outbox) this._outbox.flush(); next(); },
   beforeDestroy() {
+    clearInterval(this._relojBascula);
     this.desconectar();
     if (this._unsubscribeDespicadoras) this._unsubscribeDespicadoras();
     if (this._unsubscribeMedidas) this._unsubscribeMedidas();
@@ -280,6 +318,11 @@ export default {
   },
   methods: {
     numero: formatoPesada,
+    // Se cierra el aviso y se conecta en el mismo toque (Web Bluetooth lo exige para abrir la lista).
+    conectarBasculaDesdeAviso() {
+      this.avisoBascula = false;
+      useBasculaStore().conectar();
+    },
     cargarTraste() {
       try {
         const guardado = JSON.parse(localStorage.getItem(CLAVE_TRASTE_LOCAL) || 'null');
@@ -461,6 +504,11 @@ export default {
     // Únicamente el botón "Registrar pesada" registra.
     enterKilos() {
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    },
+    // Pone el peso de la báscula (un decimal) en los kilos; "Registrar pesada" sigue siendo el que registra.
+    registrarPesoBascula() {
+      if (!this.puedeRegistrarBascula) return;
+      this.kilosTexto = this.pesoBascula.toFixed(1);
     },
     registrar() {
       if (this.registrando || !this.medidaId) return;
