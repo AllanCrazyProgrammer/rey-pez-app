@@ -1,6 +1,7 @@
 // Router de la app de despique (docs/APP_DESPIQUE.md). Es la ÚNICA lista de pantallas que entra
-// a esa APK: login, días de pesadas, modo rápido y hoja del día. Las demás áreas de Rey Pez no se
-// importan aquí, así que ni siquiera se compilan dentro de la app (no hay forma de llegar a ellas).
+// a esa APK: login, días de pesadas, modo rápido, pesada a granel, hoja del día y ajustes
+// (medidas por defecto). Las demás áreas de Rey Pez no se importan aquí, así que ni siquiera se
+// compilan dentro de la app (no hay forma de llegar a ellas).
 // Cualquier otra ruta regresa a la lista de días.
 import Vue from 'vue';
 import Router from 'vue-router';
@@ -16,6 +17,8 @@ export const rutasDespique = [
   { path: '/pesadas/:fecha/rapida', name: 'PesadasRapida', component: () => import('@/views/Pesadas/PesadasRapida.vue'), props: true },
   // Pesada a granel: sigue a "Terminé de pesar" (se puede saltar).
   { path: '/pesadas/:fecha/granel', name: 'PesadasGranel', component: () => import('@/views/Pesadas/PesadasGranel.vue'), props: true },
+  // Ajustes de pesadas (engrane del historial): medidas por defecto de Pesar rápido. Antes de /pesadas/:fecha.
+  { path: '/pesadas/ajustes', name: 'PesadasAjustes', component: () => import('@/views/Pesadas/PesadasAjustes.vue') },
   { path: '/pesadas/:fecha', name: 'PesadasDia', component: () => import('@/views/Pesadas/PesadasDia.vue'), props: true },
   { path: '*', redirect: '/pesadas' }
 ];

@@ -89,6 +89,12 @@ const routes = [
     props: true
   },
   {
+    // Ajustes de pesadas (engrane del historial): medidas por defecto de Pesar rápido. Antes de /pesadas/:fecha.
+    path: '/pesadas/ajustes',
+    name: 'PesadasAjustes',
+    component: () => import('@/views/Pesadas/PesadasAjustes.vue')
+  },
+  {
     path: '/pesadas/:fecha',
     name: 'PesadasDia',
     component: () => import('@/views/Pesadas/PesadasDia.vue'),

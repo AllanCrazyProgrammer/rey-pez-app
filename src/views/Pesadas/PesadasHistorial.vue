@@ -2,8 +2,11 @@
   <main class="pesadas-page">
     <header class="pesadas-heading">
       <div><p class="pesadas-eyebrow">REGISTRO DIARIO</p><h1>Pesadas</h1><p>Las pesadas y los pagos de cada jornada, en su propia hoja.</p></div>
-      <button class="pesadas-button primary" :disabled="!!creando" @click="crearDia">Crear día de hoy <span aria-hidden="true">→</span></button>
-      <router-link v-if="!esDespique" class="pesadas-button" to="/despicadoras">Despicadoras</router-link>
+      <div class="pesadas-heading-acciones">
+        <button class="pesadas-button primary" :disabled="!!creando" @click="crearDia">Crear día de hoy <span aria-hidden="true">→</span></button>
+        <router-link v-if="!esDespique" class="pesadas-button" to="/despicadoras">Despicadoras</router-link>
+        <router-link class="pesadas-button pesadas-gear-button" to="/pesadas/ajustes" aria-label="Ajustes de pesadas"><span aria-hidden="true">⚙️</span></router-link>
+      </div>
     </header>
     <section class="pesadas-card">
       <form class="pesadas-toolbar" @submit.prevent="crearDia">

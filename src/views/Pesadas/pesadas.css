@@ -38,6 +38,16 @@
 .pesadas-history small { display: block; font-size: 12px; color: #736985; font-weight: normal; }
 .pesadas-history-metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; }
 .pesadas-history-metrics > strong { min-width: 155px; text-align: right; }
+/* Ajustes de pesadas: botón de engrane en el historial y editor de medidas. */
+.pesadas-heading-acciones { display: flex; align-items: center; gap: 12px; }
+.pesadas-gear-button { min-width: 42px; padding: 10px 12px; font-size: 18px; }
+.pesadas-ajustes-opcion { width: 100%; justify-content: space-between; min-height: 56px; text-align: left; }
+.pesadas-ajustes-opcion small { display: block; font-size: 12px; color: #736985; font-weight: normal; margin-top: 2px; }
+.pesadas-ajustes-lista { list-style: none; padding: 0; margin: 0; }
+.pesadas-ajustes-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 4px; border-top: 1px solid #eeeaf4; }
+.pesadas-ajustes-lista li:first-child { border-top: 0; }
+.pesadas-ajustes-acciones { display: flex; gap: 8px; }
+.pesadas-ajustes-acciones .pesadas-button { min-width: 42px; min-height: 38px; padding: 6px 10px; }
 .pesadas-summary-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
 .pesadas-summary-cards > div + div { border-left: 1px solid #e9e5f0; padding-left: 20px; }
 .pesadas-summary-cards small { display: block; color: #716780; font-size: 13px; margin-bottom: 6px; }

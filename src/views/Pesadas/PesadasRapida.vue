@@ -29,7 +29,7 @@
               ${{ columna.precio }}
             </button>
           </div>
-          <ul v-if="sugerenciasMedida.length" class="pesadas-rapida-sugerencias" role="listbox" aria-label="Medidas ya hechas">
+          <ul v-if="sugerenciasMedida.length" class="pesadas-rapida-sugerencias" role="listbox" aria-label="Medidas sugeridas">
             <li v-for="medida in sugerenciasMedida" :key="medida">
               <button type="button" @mousedown.prevent="elegirSugerenciaMedida(medida)">{{ medida }}</button>
             </li>
@@ -116,6 +116,7 @@
 <script>
 import { nanoid } from 'nanoid';
 import { conectarPesadas } from '@/services/pesadas.service';
+import { observarMedidasPesadas } from '@/services/medidasPesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { guardarDespicadora, observarDespicadoras } from '@/services/despicadoras.service';
 import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, formatearTrasteManual, normalizarTextoPesada,
@@ -132,6 +133,7 @@ export default {
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
     trasteManualActivo: false, medidaId: '', seleccionMedidaInicialHecha: false, editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
+    medidasPorDefecto: [],
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
@@ -201,7 +203,7 @@ export default {
     datosListos() { return !this.cargando || Object.keys(this.datosGuardados.columnas || {}).length > 0 || !!this.datosGuardados.fecha; },
     sugerenciasMedida() {
       if (!this.editandoColumna || this.editandoColumna.campo !== 'medida') return [];
-      return sugerenciasMedidaUtil(this.columnas, this.editandoColumna.id, this.editandoColumna.valor);
+      return sugerenciasMedidaUtil(this.columnas, this.editandoColumna.id, this.editandoColumna.valor, this.medidasPorDefecto);
     },
   },
   watch: {
@@ -240,6 +242,7 @@ export default {
     this.cargarTraste();
     this.iniciar();
     this._unsubscribeDespicadoras = observarDespicadoras(dias => { this.despicadoras = dias; }, () => { this.error = 'No se pudo cargar el catálogo de despicadoras.'; });
+    this._unsubscribeMedidas = observarMedidasPesadas(medidas => { this.medidasPorDefecto = medidas; }, () => { /* Sin medidas por defecto: solo se sugieren las ya hechas hoy. */ });
     window.addEventListener('online', this.actualizarConexion);
     window.addEventListener('offline', this.actualizarConexion);
     window.addEventListener('storage', this.actualizarStorage);
@@ -249,6 +252,7 @@ export default {
   beforeDestroy() {
     this.desconectar();
     if (this._unsubscribeDespicadoras) this._unsubscribeDespicadoras();
+    if (this._unsubscribeMedidas) this._unsubscribeMedidas();
     window.removeEventListener('online', this.actualizarConexion);
     window.removeEventListener('offline', this.actualizarConexion);
     window.removeEventListener('storage', this.actualizarStorage);

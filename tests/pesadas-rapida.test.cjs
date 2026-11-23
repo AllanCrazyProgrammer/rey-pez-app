@@ -100,6 +100,31 @@ test('sugerencias de medida: las ya hechas, similares a lo escrito', async () =>
   assert.deepEqual(sugerenciasMedida(columnas, 'd', '61'), []);
 });
 
+test('medidas por defecto: se limpian, sin vacías ni repetidas', async () => {
+  const { normalizarMedidasPorDefecto } = await helpers;
+  assert.deepEqual(normalizarMedidasPorDefecto([' 51/60 ', 'golfo', '', '  ', 'PIOJO', 'piojo', '51/60']), ['51/60', 'golfo', 'PIOJO']);
+  assert.deepEqual(normalizarMedidasPorDefecto([]), []);
+  assert.deepEqual(normalizarMedidasPorDefecto(null), []);
+});
+
+test('sugerencias de medida: primero las por defecto, luego las ya hechas hoy', async () => {
+  const { sugerenciasMedida } = await helpers;
+  const columnas = [
+    { id: 'a', medida: '41/50' },
+    { id: 'b', medida: '51/60' },
+    { id: 'd', medida: '' }
+  ];
+  const porDefecto = ['51/60', 'golfo', 'piojo'];
+  // Por defecto primero (en su orden), sin repetir la 51/60 ya hecha hoy.
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', '', porDefecto), ['51/60', 'golfo', 'piojo', '41/50']);
+  // El término filtra también las por defecto.
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', 'gol', porDefecto), ['golfo']);
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', '51', porDefecto), ['51/60']);
+  // Sin por defecto, igual que antes.
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', ''), ['41/50', '51/60']);
+  assert.deepEqual(sugerenciasMedida(columnas, 'd', '', []), ['41/50', '51/60']);
+});
+
 test('precio de columna: decimal positivo o cero, una décima', async () => {
   const { parsearPrecioColumna } = await helpers;
   assert.equal(parsearPrecioColumna('12.5'), 12.5);

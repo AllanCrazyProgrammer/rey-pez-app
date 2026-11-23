@@ -8,8 +8,9 @@ mismo código: usa las mismas pantallas de Pesadas que la app completa, pero **s
 | Pantalla | Ruta | Notas |
 |---|---|---|
 | Inicio de sesión | `/login` | Cuenta de Firebase Auth (ver abajo). |
-| Días de pesadas | `/pesadas` | Crear día, ⚡ Pesar rápido, Kilos por medida. **Sin** "Eliminar día" ni "Despicadoras". |
-| Pesar rápido | `/pesadas/:fecha/rapida` | La función principal. Puede dar de alta despicadoras nuevas desde aquí. Un traste "Otro" queda guardado como botón del día. |
+| Días de pesadas | `/pesadas` | Crear día, ⚡ Pesar rápido, Kilos por medida. **Sin** "Eliminar día" ni "Despicadoras". El engrane (⚙️) de la esquina superior abre Ajustes. |
+| Ajustes | `/pesadas/ajustes` | Botón **Medidas**: el colaborador escribe las medidas (ej. 51/60, golfo, piojo) y aparecen sugeridas por default en Pesar rápido. Se guardan en Firestore (`configuracion/medidasPesadas`) y valen en todos los dispositivos. |
+| Pesar rápido | `/pesadas/:fecha/rapida` | La función principal. Puede dar de alta despicadoras nuevas desde aquí. Un traste "Otro" queda guardado como botón del día. Al escribir la medida se sugieren primero las de Ajustes y luego las ya hechas hoy. |
 | Pesada a granel | `/pesadas/:fecha/granel` | Sigue a "Terminé de pesar" solo con la medida que se estaba pesando (`?medida=`), con botón Saltar. Taras + kilos con tara; 2 kg por tara por default; el neto se calcula mientras se escribe. |
 | Hoja del día | `/pesadas/:fecha` | Hoja con la tabla de kilos. **Sin** "+ Despicadora", "Resumen / imprimir", "Sacar cuentas", los cuadros de pago ni la alerta de pagos negativos. |
 

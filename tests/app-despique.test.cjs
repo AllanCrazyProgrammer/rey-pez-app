@@ -14,6 +14,7 @@ test('el router de despique solo importa el login y las pantallas de Pesadas per
   const vistas = importados.filter(ruta => ruta.endsWith('.vue')).sort();
   assert.deepEqual(vistas, [
     '@/views/Login.vue',
+    '@/views/Pesadas/PesadasAjustes.vue',
     '@/views/Pesadas/PesadasDia.vue',
     '@/views/Pesadas/PesadasGranel.vue',
     '@/views/Pesadas/PesadasHistorial.vue',
@@ -57,6 +58,23 @@ test('los proyectos Android tienen applicationId distinto (se instalan uno junto
   assert.match(leer('android-despique/app/build.gradle'), /applicationId "com\.reypez\.despique"/);
   assert.match(leer('android/app/build.gradle'), /applicationId "com\.reypez\.app"/);
   assert.match(leer('android-despique/app/src/main/res/values/strings.xml'), /<string name="app_name">Despique<\/string>/);
+});
+
+test('el historial tiene botón de engrane a ajustes y la ruta existe antes de /pesadas/:fecha', () => {
+  const historial = leer('src/views/Pesadas/PesadasHistorial.vue');
+  assert.match(historial, /to="\/pesadas\/ajustes" aria-label="Ajustes de pesadas"/);
+  const router = leer('src/despique/router.js');
+  assert.match(router, /path: '\/pesadas\/ajustes', name: 'PesadasAjustes'/);
+  assert.ok(router.indexOf("'/pesadas/ajustes'") < router.indexOf("'/pesadas/:fecha'"), 'ajustes va antes de /pesadas/:fecha');
+  const principal = leer('src/router.js');
+  assert.match(principal, /path: '\/pesadas\/ajustes',\n    name: 'PesadasAjustes'/);
+  assert.ok(principal.indexOf("'/pesadas/ajustes'") < principal.indexOf("'/pesadas/:fecha'"), 'ajustes va antes de /pesadas/:fecha en el router principal');
+  const ajustes = leer('src/views/Pesadas/PesadasAjustes.vue');
+  assert.match(ajustes, /Medidas/);
+  assert.match(ajustes, /observarMedidasPesadas|guardarMedidasPesadas/);
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  assert.match(rapida, /medidasPorDefecto/);
+  assert.match(rapida, /sugerenciasMedidaUtil\(this\.columnas, this\.editandoColumna\.id, this\.editandoColumna\.valor, this\.medidasPorDefecto\)/);
 });
 
 test('el historial oculta eliminar día y el catálogo en la app de despique', () => {

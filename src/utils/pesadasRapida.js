@@ -112,21 +112,48 @@ export function siguienteMedida(columnas, kilosPorColumna) {
   return columnas[ultimo + 1];
 }
 
-// Medidas ya hechas hoy, para sugerir al escribir el nombre de una nueva.
-// Excluye la columna que se está editando y no repite nombres.
-export function sugerenciasMedida(columnas, idExcluir, termino) {
-  const clave = normalizarTextoPesada(termino || '');
+// Medidas por defecto (Ajustes > Medidas): se limpian, se quitan vacías y no se
+// repiten (sin importar mayúsculas), en el orden en que se escribieron.
+export function normalizarMedidasPorDefecto(medidas) {
   const vistas = new Set();
-  return columnas
+  const resultado = [];
+  (medidas || []).forEach(medida => {
+    const texto = String(medida || '').trim();
+    if (!texto) return;
+    const clave = normalizarTextoPesada(texto);
+    if (vistas.has(clave)) return;
+    vistas.add(clave);
+    resultado.push(texto);
+  });
+  return resultado;
+}
+
+// Medidas para sugerir al escribir el nombre de una nueva columna: primero las
+// por defecto (Ajustes > Medidas) y luego las ya hechas hoy. Excluye la columna
+// que se está editando y no repite nombres.
+export function sugerenciasMedida(columnas, idExcluir, termino, porDefecto = []) {
+  const clave = normalizarTextoPesada(termino || '');
+  const coincide = texto => !clave || normalizarTextoPesada(texto).includes(clave);
+  const vistas = new Set();
+  const resultado = [];
+  normalizarMedidasPorDefecto(porDefecto).forEach(medida => {
+    if (!coincide(medida)) return;
+    const k = normalizarTextoPesada(medida);
+    if (vistas.has(k)) return;
+    vistas.add(k);
+    resultado.push(medida);
+  });
+  columnas
     .filter(col => col.id !== idExcluir && (col.medida || '').trim())
-    .filter(col => !clave || normalizarTextoPesada(col.medida).includes(clave))
-    .filter(col => {
-      const k = normalizarTextoPesada(col.medida);
-      if (vistas.has(k)) return false;
+    .filter(col => coincide(col.medida))
+    .forEach(col => {
+      const texto = col.medida.trim();
+      const k = normalizarTextoPesada(texto);
+      if (vistas.has(k)) return;
       vistas.add(k);
-      return true;
-    })
-    .map(col => col.medida.trim());
+      resultado.push(texto);
+    });
+  return resultado;
 }
 
 // Precio por kilo de una columna: decimal positivo o cero, máximo una décima.
