@@ -81,8 +81,9 @@ export const useBasculaStore = defineStore('bascula', {
       try {
         if (capacitorDisponible()) {
           await this.conectarCapacitor();
-          // En la APK no hay consola a la mano: el aviso dice qué escucha, por si no llega el peso.
-          ui.notify(`Báscula conectada: ${this.nombre} · ${this.diagnostico}`, 'success', 15000);
+          // El diagnóstico (servicios, lectura) ya no va en el aviso: solo sale bajo el peso
+          // flotante del embarque si no llega lectura.
+          ui.notify(`Báscula conectada: ${this.nombre}`, 'success');
           return;
         }
         if (dispositivo) {

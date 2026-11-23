@@ -483,7 +483,7 @@ export default {
       this.nombre = item.nombre;
       this.mostrarSugerencias = false;
       this.indiceActivo = -1;
-      if (this.$refs.kilos) this.$refs.kilos.focus();
+      this.pasarAKilos();
     },
     cerrarSugerencias() { setTimeout(() => { this.mostrarSugerencias = false; }, 150); },
     teclaNombre(event) {
@@ -496,7 +496,7 @@ export default {
       } else if (event.key === 'Enter') {
         event.preventDefault();
         if (this.indiceActivo >= 0 && this.coincidencias[this.indiceActivo]) this.elegirDespicadora(this.coincidencias[this.indiceActivo]);
-        else if (this.$refs.kilos) this.$refs.kilos.focus();
+        else this.pasarAKilos();
       }
     },
     async darDeAlta() {
@@ -506,8 +506,18 @@ export default {
       try {
         const ref = await guardarDespicadora({ nombre, apodo: '' });
         this.seleccionada = { id: ref.id, nombre, apodo: '' };
-        if (this.$refs.kilos) this.$refs.kilos.focus();
+        this.pasarAKilos();
       } catch (_error) { this.error = 'No se pudo dar de alta. Revisa la conexión e inténtalo de nuevo.'; }
+    },
+    // Ya con la despicadora: sin báscula se pasa a escribir los kilos; con la báscula conectada
+    // no se abre el teclado numérico (los kilos se ponen con su Registrar): solo se cierra el
+    // teclado del nombre. Tocar el campo de kilos sigue abriendo el teclado para escribir a mano.
+    pasarAKilos() {
+      if (this.bascula.conectada) {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        return;
+      }
+      if (this.$refs.kilos) this.$refs.kilos.focus();
     },
     // Enter en kilos SOLO oculta el teclado: no registra ni limpia nada.
     // Únicamente el botón "Registrar pesada" registra.

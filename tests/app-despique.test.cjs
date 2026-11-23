@@ -165,3 +165,12 @@ test('pesar rápido: botón + después de la última medida para agregar otra', 
   assert.match(rapida, /@click="agregarMedida">\+<\/button>/);
   assert.match(rapida, /agregarMedida\(\) \{[\s\S]*?columnas\.\$\{id\}\.precio`\]: 10/);
 });
+
+test('pesar rápido: con la báscula conectada, elegir despicadora no abre el teclado de kilos', () => {
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  assert.match(rapida, /pasarAKilos\(\) \{\s*if \(this\.bascula\.conectada\) \{[\s\S]*?blur\(\);\s*return;/);
+  // Enter en el nombre, elegir de la lista y dar de alta pasan por ahí.
+  assert.equal((rapida.match(/this\.pasarAKilos\(\)/g) || []).length, 3);
+  const store = leer('src/stores/bascula.js');
+  assert.ok(!/notify\([^)]*diagnostico/.test(store), 'el aviso de conexión no trae el diagnóstico');
+});
