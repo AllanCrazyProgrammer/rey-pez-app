@@ -41,7 +41,7 @@
     </template>
     <!-- Pesada a granel (después de pesar a cada señora): un card por medida con sus kilos netos;
          al tocar uno se ve su desglose con la hora de cada pesada. -->
-    <b-modal v-model="granelVisible" title="Pesada a granel" hide-footer @hidden="granelAbierto = ''">
+    <b-modal v-model="granelVisible" title="Pesada a granel" hide-footer @hidden="granelAbierto = ''; errorCrudo = ''">
       <div class="pesadas-granel-resumen">
         <p v-if="!granel.medidas.length" class="pesadas-empty">Todavía no hay pesada a granel este día.</p>
         <div class="pesadas-granel-cards">
@@ -55,7 +55,20 @@
         </div>
         <!-- Desglose de la medida tocada: cada pesada con su hora. -->
         <div v-if="granelDesglose" class="pesadas-granel-desglose" :aria-label="`Desglose a granel de ${granelDesglose.medida}`">
-          <h3>{{ granelDesglose.medida }}</h3>
+          <!-- A un lado de la medida: kilos en crudo (se capturan aquí) y el rendimiento. -->
+          <div class="pesadas-granel-desglose-cabeza">
+            <h3>{{ granelDesglose.medida }}</h3>
+            <label class="pesadas-granel-desglose-crudo">En crudo
+              <input :key="granelDesglose.id" :value="granelDesglose.crudo == null ? '' : String(granelDesglose.crudo)"
+                type="text" inputmode="decimal" autocomplete="off" placeholder="0.0"
+                :aria-label="`Kilos en crudo de ${granelDesglose.medida}`" :class="{ 'pesadas-granel-error': errorCrudo }"
+                @input="errorCrudo = ''" @change="guardarCrudo(granelDesglose.id, $event)" @keydown.enter.prevent="$event.target.blur()">
+              <span>kg</span>
+            </label>
+            <span class="pesadas-granel-desglose-rendimiento">Rendimiento
+              <strong>{{ granelDesglose.rendimiento == null ? '—' : `(${rendimientoTexto(granelDesglose.rendimiento)})` }}</strong></span>
+          </div>
+          <p v-if="errorCrudo" class="pesadas-granel-desglose-error" role="alert">{{ errorCrudo }}</p>
           <table>
             <thead><tr><th>Hora</th><th>Taras</th><th>Kilos</th></tr></thead>
             <tbody>
@@ -95,7 +108,7 @@ import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/components/Pesadas/Cuentas.vue';
 import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
-import { formatoHora12, formatoRendimiento, resumenGranel } from '@/utils/pesadasGranel';
+import { formatoHora12, formatoRendimiento, parsearKilosGranel, resumenGranel } from '@/utils/pesadasGranel';
 import { crearHistorial, valorEnRuta } from '@/utils/historialCambios';
 import { ES_DESPIQUE } from '@/config/variante';
 import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, ordenInsercionPesadas, resumenPesadas } from '@/utils/pesadas';
@@ -107,7 +120,7 @@ export default {
   name: 'PesadasDia',
   components: { PesadasTabla, PesadasResumen, BModal, Cuentas },
   props: { fecha: { type: String, required: true } },
-  data: () => ({ esDespique: ES_DESPIQUE, datosGuardados: {}, granelAbierto: '', granelVisible: false, pasos: { atras: 0, adelante: 0 }, estado: { pending: false, saving: false, error: '', storageError: false },
+  data: () => ({ esDespique: ES_DESPIQUE, datosGuardados: {}, granelAbierto: '', granelVisible: false, errorCrudo: '', pasos: { atras: 0, adelante: 0 }, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     borradores: {}, errores: {}, preview: null, busquedaAbierta: false, terminoBusqueda: '', cuentasAbiertas: false, cuentasDatos: '', restaurando: false, filaInicialId: 'inicial' }),
   computed: {
@@ -248,6 +261,14 @@ export default {
     },
     // Todo cambio de la hoja pasa por aquí y queda en el historial para deshacer (salvo los que
     // aplica el propio deshacer/rehacer). `agrupar`: lo tecleado en una celda es un solo paso.
+    // Kilos en crudo de una medida a granel (desglose del modal): vacío lo borra.
+    guardarCrudo(columnaId, event) {
+      let valor;
+      try { valor = parsearKilosGranel(event.target.value); }
+      catch (error) { this.errorCrudo = error.message; return; }
+      this.errorCrudo = '';
+      this.guardarCampos({ [`granelCrudo.${columnaId}`]: valor });
+    },
     guardarCampos(fields, { agrupar = null, sinHistorial = false } = {}) {
       if (this.datosGuardados.eliminado) return;
       if (!sinHistorial && this._historial && this._historial.registrar(fields, ruta => valorEnRuta(this.datos, ruta), agrupar)) this.contarPasos();

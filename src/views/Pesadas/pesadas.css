@@ -329,7 +329,15 @@
 .pesadas-granel-card { font: inherit; text-align: left; cursor: pointer; }
 .pesadas-granel-card.abierto { border-color: #6c4bd1; background: #f1ecfc; box-shadow: 0 0 0 2px rgba(108, 75, 209, .2); }
 .pesadas-granel-desglose { margin-top: 14px; padding: 14px 16px; border: 1px solid #eeeaf4; border-radius: 14px; }
-.pesadas-granel-desglose h3 { margin: 0 0 8px; font-size: 16px; font-weight: 800; }
+.pesadas-granel-desglose h3 { margin: 0; font-size: 16px; font-weight: 800; }
+.pesadas-granel-desglose-cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 8px; }
+.pesadas-granel-desglose-cabeza h3 { flex: 1 1 auto; }
+.pesadas-granel-desglose-crudo { display: flex; align-items: center; gap: 6px; margin: 0; color: #69637b; font-size: 13px; font-weight: 700; }
+.pesadas-granel-desglose-crudo input { width: 96px; min-height: 42px; padding: 6px 10px; border: 1px solid #cec7e0; border-radius: 9px; background: #fff; color: #2d2440; font-size: 17px; font-weight: 800; text-align: right; }
+.pesadas-granel-desglose-rendimiento { color: #69637b; font-size: 13px; font-weight: 700; }
+.pesadas-granel-desglose-rendimiento strong { color: #2d2440; font-size: 17px; }
+.pesadas-granel-desglose-crudo input.pesadas-granel-error { border-color: #c4572b; background: #fff4ee; }
+.pesadas-granel-desglose-error { margin: 0 0 8px; color: #b42318; font-size: 13px; font-weight: 600; }
 .pesadas-granel-desglose table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .pesadas-granel-desglose th, .pesadas-granel-desglose td { padding: 8px 6px; border-bottom: 1px solid #eeeaf4; text-align: right; }
 .pesadas-granel-desglose th:first-child, .pesadas-granel-desglose td:first-child { text-align: left; }
