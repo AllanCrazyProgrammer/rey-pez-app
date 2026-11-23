@@ -125,6 +125,22 @@ test('sugerencias de medida: primero las por defecto, luego las ya hechas hoy', 
   assert.deepEqual(sugerenciasMedida(columnas, 'd', '', []), ['41/50', '51/60']);
 });
 
+test('límite de medida de limpio: solo las de Ajustes, más de 30 kg en una sola pesada', async () => {
+  const { LIMITE_KILOS_MEDIDA_LIMPIO, esMedidaDeLimpio, excedeLimiteMedidaLimpio } = await helpers;
+  const porDefecto = ['51/60', 'golfo', 'piojo'];
+  assert.equal(LIMITE_KILOS_MEDIDA_LIMPIO, 30);
+  assert.equal(esMedidaDeLimpio('51/60', porDefecto), true);
+  assert.equal(esMedidaDeLimpio('GOLFO', porDefecto), true, 'sin importar mayúsculas');
+  assert.equal(esMedidaDeLimpio('macuil', porDefecto), false, 'las que no están en Ajustes no son de limpio');
+  assert.equal(esMedidaDeLimpio('', porDefecto), false);
+  assert.equal(esMedidaDeLimpio('51/60', []), false, 'sin medidas configuradas no hay límite');
+  assert.equal(excedeLimiteMedidaLimpio('51/60', 30, porDefecto), false, '30 exactos no exceden');
+  assert.equal(excedeLimiteMedidaLimpio('51/60', 30.1, porDefecto), true);
+  assert.equal(excedeLimiteMedidaLimpio('golfo', 45, porDefecto), true);
+  assert.equal(excedeLimiteMedidaLimpio('macuil', 104, porDefecto), false, 'macuil puede tener los kilos que sean');
+  assert.equal(excedeLimiteMedidaLimpio('descabezado', 99, porDefecto), false);
+});
+
 test('precio de columna: decimal positivo o cero, una décima', async () => {
   const { parsearPrecioColumna } = await helpers;
   assert.equal(parsearPrecioColumna('12.5'), 12.5);

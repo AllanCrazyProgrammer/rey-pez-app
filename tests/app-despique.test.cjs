@@ -60,6 +60,17 @@ test('los proyectos Android tienen applicationId distinto (se instalan uno junto
   assert.match(leer('android-despique/app/src/main/res/values/strings.xml'), /<string name="app_name">Despique<\/string>/);
 });
 
+test('pesar rápido: medida de limpio con más de 30 kg pide confirmar antes de registrar', () => {
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  assert.match(rapida, /excedeLimiteMedidaLimpio\(medidaNombre, neto, this\.medidasPorDefecto\)/);
+  assert.match(rapida, /this\.alertaKilos = \{ medida: medidaNombre, neto, nombre \}/);
+  assert.match(rapida, /<b-modal v-model="alertaKilosVisible" title="Pesada mayor a 30 kg" hide-footer>/);
+  assert.match(rapida, /@click="confirmarRegistroKilos">Confirmar<\/button>/);
+  assert.match(rapida, /@click="alertaKilos = null">Corregir<\/button>/);
+  assert.match(rapida, /components: \{ BModal \}/);
+  assert.match(rapida, /import \{ BModal \} from 'bootstrap-vue'/);
+});
+
 test('el historial tiene botón de engrane a ajustes y la ruta existe antes de /pesadas/:fecha', () => {
   const historial = leer('src/views/Pesadas/PesadasHistorial.vue');
   assert.match(historial, /to="\/pesadas\/ajustes" aria-label="Ajustes de pesadas"/);

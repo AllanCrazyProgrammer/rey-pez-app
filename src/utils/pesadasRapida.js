@@ -128,6 +128,23 @@ export function normalizarMedidasPorDefecto(medidas) {
   return resultado;
 }
 
+// Límite de una sola pesada para las medidas de limpio (Ajustes > Medidas).
+// Una pesada de limpio no suele pasar de 30 kg; más de eso pide confirmar
+// en Pesar rápido. Las medidas que NO están en la lista no tienen límite.
+export const LIMITE_KILOS_MEDIDA_LIMPIO = 30;
+
+// ¿Esta medida es una de las de limpio configuradas en Ajustes > Medidas?
+export function esMedidaDeLimpio(medida, porDefecto) {
+  const clave = normalizarTextoPesada(medida);
+  if (!clave) return false;
+  return (porDefecto || []).some(item => normalizarTextoPesada(item) === clave);
+}
+
+// ¿Esta pesada (neto de una sola pesada) excede el límite de medida de limpio?
+export function excedeLimiteMedidaLimpio(medida, neto, porDefecto) {
+  return esMedidaDeLimpio(medida, porDefecto) && Number(neto) > LIMITE_KILOS_MEDIDA_LIMPIO;
+}
+
 // Medidas para sugerir al escribir el nombre de una nueva columna: primero las
 // por defecto (Ajustes > Medidas) y luego las ya hechas hoy. Excluye la columna
 // que se está editando y no repite nombres.

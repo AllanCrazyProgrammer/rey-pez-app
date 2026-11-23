@@ -282,6 +282,7 @@
 
 /* Kilos en grande junto al botón Registrar (modo rápido). */
 .pesadas-rapida-total-row { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 12px; margin-top: 8px; }
+.pesadas-rapida-alerta-acciones { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; }
 .pesadas-rapida-total { flex: 1 1 auto; min-width: 0; background: #f4f1f8; border: 1px solid #e3ddf0; border-radius: 12px; padding: 10px 20px; }
 .pesadas-rapida-total small { display: block; color: #716780; font-size: 14px; font-weight: 700; }
 .pesadas-rapida-total-hoy { margin-top: 4px; }

@@ -109,17 +109,30 @@
       <router-link class="pesadas-button primary pesadas-rapida-terminar" :to="rutaGranel">
         Terminé de pesar <span aria-hidden="true">→</span>
       </router-link>
+
+      <!-- Medida de limpio con más de 30 kg en una sola pesada: confirmar o corregir. -->
+      <b-modal v-model="alertaKilosVisible" title="Pesada mayor a 30 kg" hide-footer>
+        <template v-if="alertaKilos">
+          <p>La pesada es de <strong>{{ numero(alertaKilos.neto) }} kg</strong> netos en la medida <strong>{{ alertaKilos.medida }}</strong>. Una pesada de limpio no suele pasar de 30 kg.</p>
+          <p>¿Confirmas que los kilos están bien?</p>
+          <div class="pesadas-rapida-alerta-acciones">
+            <button class="pesadas-button" type="button" @click="alertaKilos = null">Corregir</button>
+            <button class="pesadas-button primary" type="button" @click="confirmarRegistroKilos">Confirmar</button>
+          </div>
+        </template>
+      </b-modal>
     </template>
   </main>
 </template>
 
 <script>
 import { nanoid } from 'nanoid';
+import { BModal } from 'bootstrap-vue';
 import { conectarPesadas } from '@/services/pesadas.service';
 import { observarMedidasPesadas } from '@/services/medidasPesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { guardarDespicadora, observarDespicadoras } from '@/services/despicadoras.service';
-import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, formatearTrasteManual, normalizarTextoPesada,
+import { calcularNetoPesada, CLAVE_TRASTE_LOCAL, excedeLimiteMedidaLimpio, formatearTrasteManual, normalizarTextoPesada,
   parsearKilosBrutos, parsearPrecioColumna, parsearTraste, siguienteMedida, sumarPesada,
   sugerenciasMedida as sugerenciasMedidaUtil, sugerenciasPesada, TRASTES_PREDEFINIDOS } from '@/utils/pesadasRapida';
 import { elementosPesadas, fechaPesadasValida, formatoPesada, resumenPesadas } from '@/utils/pesadas';
@@ -128,12 +141,14 @@ import './pesadas.css';
 
 export default {
   name: 'PesadasRapida',
+  components: { BModal },
   props: { fecha: { type: String, required: true } },
   data: () => ({ datosGuardados: {}, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
     trasteManualActivo: false, medidaId: '', seleccionMedidaInicialHecha: false, editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
     medidasPorDefecto: [],
+    alertaKilos: null,
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
@@ -204,6 +219,11 @@ export default {
     sugerenciasMedida() {
       if (!this.editandoColumna || this.editandoColumna.campo !== 'medida') return [];
       return sugerenciasMedidaUtil(this.columnas, this.editandoColumna.id, this.editandoColumna.valor, this.medidasPorDefecto);
+    },
+    // Modal de alerta de kilos: se abre con los datos de la pesada pendiente y se cierra al vaciarlos.
+    alertaKilosVisible: {
+      get() { return !!this.alertaKilos; },
+      set(valor) { if (!valor) this.alertaKilos = null; }
     },
   },
   watch: {
@@ -453,20 +473,38 @@ export default {
       if (this.trasteEfectivo == null) { this.error = 'Revisa el traste: usa un número con máximo un decimal.'; return; }
       const neto = calcularNetoPesada(bruto, this.trasteEfectivo);
       if (neto == null || neto <= 0) { this.error = 'El neto debe ser mayor a cero: el traste no puede ser igual o mayor que los kilos.'; return; }
-      const personaId = this.personaActual ? this.personaActual.id : nanoid();
-      const actual = this.personaActual ? (this.datos.pesos?.[personaId]?.[this.medidaId] || 0) : 0;
-      const nuevo = sumarPesada(actual, neto);
-      const campos = { [`pesos.${personaId}.${this.medidaId}`]: nuevo };
-      // Un traste "Otro" queda guardado en el día como botón, porque seguramente se vuelve a usar.
-      const trasteNuevo = this.trasteManualActivo && this.trasteEfectivo > 0 && !this.trastes.includes(this.trasteEfectivo)
-        ? this.trasteEfectivo : null;
-      if (trasteNuevo != null) campos[`trastesDia.${claveTrasteDia(trasteNuevo)}`] = trasteNuevo;
-      if (!this.personaActual) {
-        campos[`personas.${personaId}.nombre`] = nombre;
-        campos[`personas.${personaId}.orden`] = `${Date.now()}-${personaId}`;
+      // Medida de limpio (Ajustes > Medidas) con más de 30 kg en una sola pesada:
+      // se pide confirmar antes de registrar. Las demás medidas no tienen límite.
+      const medidaNombre = this.medidaActual ? (this.medidaActual.medida || '') : '';
+      if (excedeLimiteMedidaLimpio(medidaNombre, neto, this.medidasPorDefecto)) {
+        this.alertaKilos = { medida: medidaNombre, neto, nombre };
+        return;
       }
+      this.aplicarRegistro(neto, nombre);
+    },
+    // Confirmar la pesada que excedió el límite de medida de limpio.
+    confirmarRegistroKilos() {
+      const pendiente = this.alertaKilos;
+      this.alertaKilos = null;
+      if (!pendiente) return;
+      this.aplicarRegistro(pendiente.neto, pendiente.nombre);
+    },
+    aplicarRegistro(neto, nombre) {
+      if (this.registrando || !this.medidaId) return;
       this.registrando = true;
       try {
+        const personaId = this.personaActual ? this.personaActual.id : nanoid();
+        const actual = this.personaActual ? (this.datos.pesos?.[personaId]?.[this.medidaId] || 0) : 0;
+        const nuevo = sumarPesada(actual, neto);
+        const campos = { [`pesos.${personaId}.${this.medidaId}`]: nuevo };
+        // Un traste "Otro" queda guardado en el día como botón, porque seguramente se vuelve a usar.
+        const trasteNuevo = this.trasteManualActivo && this.trasteEfectivo > 0 && !this.trastes.includes(this.trasteEfectivo)
+          ? this.trasteEfectivo : null;
+        if (trasteNuevo != null) campos[`trastesDia.${claveTrasteDia(trasteNuevo)}`] = trasteNuevo;
+        if (!this.personaActual) {
+          campos[`personas.${personaId}.nombre`] = nombre;
+          campos[`personas.${personaId}.orden`] = `${Date.now()}-${personaId}`;
+        }
         this.guardarCampos(campos);
         this._outbox.flush();
         const medida = this.medidaActual ? (this.medidaActual.medida || 'Sin medida') : '';
