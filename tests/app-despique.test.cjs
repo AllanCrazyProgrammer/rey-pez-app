@@ -156,3 +156,12 @@ test('pesar rápido: con la báscula conectada, Registrar a un lado de los kilos
   assert.match(rapida, /return redondearKilos\(kilos, 1\);/);
   assert.match(rapida, /this\.kilosTexto = this\.pesoBascula\.toFixed\(1\);/);
 });
+
+test('pesar rápido: botón + después de la última medida para agregar otra', () => {
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  const chips = rapida.indexOf('v-for="columna in columnas"');
+  const mas = rapida.indexOf('class="pesadas-rapida-chip-agregar"');
+  assert.ok(chips > 0 && mas > chips, 'el + va después de las medidas');
+  assert.match(rapida, /@click="agregarMedida">\+<\/button>/);
+  assert.match(rapida, /agregarMedida\(\) \{[\s\S]*?columnas\.\$\{id\}\.precio`\]: 10/);
+});

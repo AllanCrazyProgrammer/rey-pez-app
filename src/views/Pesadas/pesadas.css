@@ -246,6 +246,9 @@
 .pesadas-rapida-chip.activo .pesadas-rapida-chip-mitad.precio { border-left-color: #583d92; }
 .pesadas-rapida-chip input { flex: 1 1 0; min-width: 0; border: 0; background: #fff; color: #25233c; font-size: 15px; font-weight: 800; padding: 10px 10px; text-align: center; }
 .pesadas-rapida-chip input:focus { outline: 2px solid #583d92; outline-offset: -2px; }
+.pesadas-rapida-chip-agregar { flex: 0 0 auto; min-width: 56px; min-height: 56px; border: 2px dashed #a99bc9; border-radius: 12px; background: #fff; color: #583d92; font-size: 28px; font-weight: 800; line-height: 1; cursor: pointer; }
+.pesadas-rapida-chip-agregar:hover:not(:disabled) { background: #efeaf6; border-color: #583d92; }
+.pesadas-rapida-chip-agregar:disabled { opacity: .5; cursor: not-allowed; }
 .pesadas-rapida-nombre { position: relative; margin-bottom: 28px; }
 .pesadas-rapida-nombre input { width: 100%; border: 2px solid #cec7e0; border-radius: 12px; background: #fff; color: #25233c; padding: 16px 20px; font-size: 28px; font-weight: 700; }
 .pesadas-rapida-nombre input:focus { border-color: #583d92; outline: none; box-shadow: 0 0 0 3px #583d9233; }

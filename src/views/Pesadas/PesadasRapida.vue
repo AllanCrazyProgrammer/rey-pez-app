@@ -29,12 +29,15 @@
               ${{ columna.precio }}
             </button>
           </div>
+          <!-- Agregar una medida desde aquí, sin regresar a la hoja del día. -->
+          <button type="button" class="pesadas-rapida-chip-agregar" aria-label="Agregar medida" title="Agregar medida"
+            :disabled="!datosListos" @click="agregarMedida">+</button>
           <ul v-if="sugerenciasMedida.length" class="pesadas-rapida-sugerencias" role="listbox" aria-label="Medidas sugeridas">
             <li v-for="medida in sugerenciasMedida" :key="medida">
               <button type="button" @mousedown.prevent="elegirSugerenciaMedida(medida)">{{ medida }}</button>
             </li>
           </ul>
-          <span v-if="!columnas.length" class="pesadas-hint">Primero define las medidas en la hoja del día.</span>
+          <span v-if="!columnas.length" class="pesadas-hint">Toca + para agregar una medida.</span>
         </div>
 
         <div class="pesadas-rapida-nombre">
@@ -346,6 +349,12 @@ export default {
       if (siguiente) { this.medidaId = siguiente.id; return; }
       const hayRegistradas = this.columnas.some(col => (this.resumen.kilosPorColumna[col.id] || 0) > 0);
       if (!hayRegistradas) { if (this.columnas.length) this.medidaId = this.columnas[0].id; return; }
+      this.agregarMedida();
+    },
+    // Columna nueva al final (precio 10), seleccionada y con su nombre abierto para escribirlo
+    // (salen las medidas sugeridas). La usa el botón "+" y la entrada cuando ya todas tienen kilos.
+    agregarMedida() {
+      if (this.editandoColumna) this.confirmarEdicionColumna();
       const id = nanoid();
       this.guardarCampos({ [`columnas.${id}.medida`]: '', [`columnas.${id}.precio`]: 10, [`columnas.${id}.orden`]: `${Date.now()}-${id}` });
       this.medidaId = id;
