@@ -129,3 +129,14 @@ test('decimales: un decimal para Ozuna, Lorena y Joselito; dos para los demás',
   assert.equal(redondearKilos(12.345, 2), 12.35);
   assert.equal(redondearKilos(1.9, 2), 1.9);
 });
+
+test('Enter registra el peso de la báscula solo en web/escritorio y si no se tecleó a mano', async () => {
+  const { enterRegistraBascula } = await flotante;
+  const base = { tecla: 'Enter', puedeRegistrar: true };
+  assert.equal(enterRegistraBascula(base), true);
+  assert.equal(enterRegistraBascula({ ...base, nativo: true }), false, 'en la APK no');
+  assert.equal(enterRegistraBascula({ ...base, escritoAMano: true }), false, 'se tecleó un número');
+  assert.equal(enterRegistraBascula({ ...base, puedeRegistrar: false }), false, 'sin lectura');
+  assert.equal(enterRegistraBascula({ ...base, componiendo: true }), false);
+  assert.equal(enterRegistraBascula({ ...base, tecla: 'Tab' }), false);
+});

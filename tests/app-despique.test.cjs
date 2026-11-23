@@ -182,3 +182,9 @@ test('pesar rápido: dejar presionado una medida ofrece eliminarla; avisa solo s
   assert.match(rapida, /if \(!pesadas\.total\) \{ this\.eliminarMedida\(columna\.id\); return; \}/);
   assert.match(rapida, /se borran esas pesadas/);
 });
+
+test('pesar rápido: Enter en kilos pone el peso de la báscula (web/escritorio) si no se tecleó', () => {
+  const rapida = leer('src/views/Pesadas/PesadasRapida.vue');
+  assert.match(rapida, /@focus="kilosEscritosAMano = false" @input="kilosEscritosAMano = true"/);
+  assert.match(rapida, /nativo: Capacitor\.isNativePlatform\(\), puedeRegistrar: this\.puedeRegistrarBascula,\s*escritoAMano: this\.kilosEscritosAMano \}\)\) this\.registrarPesoBascula\(\);/);
+});

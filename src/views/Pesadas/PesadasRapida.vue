@@ -67,7 +67,8 @@
             <label class="pesadas-rapida-label" for="pesadas-rapida-kilos">Kilos en la báscula</label>
             <div class="pesadas-rapida-kilos-campo">
               <input id="pesadas-rapida-kilos" ref="kilos" v-model="kilosTexto" type="text" inputmode="decimal"
-                autocomplete="off" placeholder="0.0" @keydown.enter.prevent="enterKilos">
+                autocomplete="off" placeholder="0.0" @keydown.enter.prevent="enterKilos"
+                @focus="kilosEscritosAMano = false" @input="kilosEscritosAMano = true">
               <!-- Báscula conectada (mismo store que embarques): su peso, redondeado a un decimal, y
                    Registrar para ponerlo en los kilos. Quitar el peso de la báscula no lo borra. -->
               <button v-if="bascula.conectada" type="button" class="pesadas-rapida-bascula"
@@ -185,7 +186,8 @@ import { elementosPesadas, fechaPesadasValida, formatoPesada, resumenPesadas } f
 import { claveTrasteDia, trastesDelDia } from '@/utils/pesadasGranel';
 import { ES_DESPIQUE } from '@/config/variante';
 import { useBasculaStore } from '@/stores/bascula';
-import { redondearKilos } from '@/utils/basculaFlotante';
+import { Capacitor } from '@capacitor/core';
+import { enterRegistraBascula, redondearKilos } from '@/utils/basculaFlotante';
 
 // Si la báscula deja de mandar datos más de esto, su peso ya no se puede registrar.
 const VIGENCIA_BASCULA_MS = 4000;
@@ -200,7 +202,7 @@ export default {
     despicadoras: [], nombre: '', seleccionada: null, kilosTexto: '', traste: null, trasteManual: '',
     trasteManualActivo: false, medidaId: '', seleccionMedidaInicialHecha: false, editandoColumna: null, mostrarSugerencias: false, indiceActivo: -1,
     medidasPorDefecto: [], avisoBascula: false, ahoraBascula: Date.now(),
-    menuMedida: null, medidaPorEliminar: null, eliminarMedidaVisible: false,
+    menuMedida: null, medidaPorEliminar: null, eliminarMedidaVisible: false, kilosEscritosAMano: false,
     alertaKilos: null,
     error: '', registrando: false, ultimas: [], ultimoRegistro: null, filaInicialId: 'inicial' }),
   computed: {
@@ -637,9 +639,14 @@ export default {
       }
       if (this.$refs.kilos) this.$refs.kilos.focus();
     },
-    // Enter en kilos SOLO oculta el teclado: no registra ni limpia nada.
+    // Enter en kilos oculta el teclado: no registra la pesada ni limpia nada.
     // Únicamente el botón "Registrar pesada" registra.
-    enterKilos() {
+    enterKilos(event) {
+      // Web / escritorio con la báscula conectada: Enter pone su peso (como su Registrar), salvo
+      // que se hayan tecleado los kilos a mano. Después cierra el teclado, como siempre.
+      if (enterRegistraBascula({ tecla: 'Enter', componiendo: Boolean(event && event.isComposing),
+        nativo: Capacitor.isNativePlatform(), puedeRegistrar: this.puedeRegistrarBascula,
+        escritoAMano: this.kilosEscritosAMano })) this.registrarPesoBascula();
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     },
     // Pone el peso de la báscula (un decimal) en los kilos; "Registrar pesada" sigue siendo el que registra.

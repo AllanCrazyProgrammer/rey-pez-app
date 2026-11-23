@@ -87,3 +87,10 @@ export function redondearKilos(kilos, decimales) {
   const factor = 10 ** decimales;
   return Math.round((kilos + Math.sign(kilos) * Number.EPSILON) * factor) / factor;
 }
+
+// Web y escritorio (no la APK): Enter en un campo de kilos registra el peso de la báscula conectada,
+// igual que el botón Registrar. Solo si hay un peso que registrar y no se escribió a mano en el
+// campo desde que se seleccionó (si se tecleó un número, Enter hace lo de siempre).
+export function enterRegistraBascula({ tecla, componiendo = false, nativo = false, puedeRegistrar = false, escritoAMano = false }) {
+  return tecla === 'Enter' && !componiendo && !nativo && puedeRegistrar && !escritoAMano;
+}

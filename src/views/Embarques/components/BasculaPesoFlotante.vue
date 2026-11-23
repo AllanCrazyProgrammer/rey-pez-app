@@ -39,10 +39,12 @@
 
 <script>
 import { useBasculaStore } from '@/stores/bascula';
+import { Capacitor } from '@capacitor/core';
 import {
   campoVisible,
   decimalesDeCampo,
   devolverTeclado,
+  enterRegistraBascula,
   esCampoKilos,
   posicionarFlotante,
   quitarTeclado,
@@ -99,6 +101,7 @@ export default {
   },
   created() {
     this.campo = null;
+    this.escritoAMano = false; // se tecleó en el campo desde que se seleccionó
     this.cuadro = 0;
     this.reloj = null;
   },
@@ -110,6 +113,8 @@ export default {
     document.addEventListener('pointerdown', this.alTocar, true);
     document.addEventListener('focusin', this.alEnfocar, true);
     document.addEventListener('focusout', this.alSalir, true);
+    document.addEventListener('input', this.alEscribir, true);
+    document.addEventListener('keydown', this.alTeclear, true);
     window.addEventListener('scroll', this.programarReposicion, true);
     window.addEventListener('resize', this.programarReposicion);
     this.reloj = setInterval(() => { this.ahora = Date.now(); }, 1000);
@@ -118,6 +123,8 @@ export default {
     document.removeEventListener('pointerdown', this.alTocar, true);
     document.removeEventListener('focusin', this.alEnfocar, true);
     document.removeEventListener('focusout', this.alSalir, true);
+    document.removeEventListener('input', this.alEscribir, true);
+    document.removeEventListener('keydown', this.alTeclear, true);
     window.removeEventListener('scroll', this.programarReposicion, true);
     window.removeEventListener('resize', this.programarReposicion);
     clearInterval(this.reloj);
@@ -139,6 +146,7 @@ export default {
       const destino = evento.target;
       if (esCampoKilos(destino)) {
         if (this.bascula.conectada) quitarTeclado(destino);
+        if (destino !== this.campo) this.escritoAMano = false;
         this.campo = destino;
         this.decimales = decimalesDeCampo(destino);
         this.activo = true;
@@ -146,6 +154,26 @@ export default {
       } else if (!this.$el.contains(destino)) {
         this.ocultar();
       }
+    },
+    // Lo que teclea la persona (isTrusted); el "input" que manda registrar() no cuenta.
+    alEscribir(evento) {
+      if (evento.isTrusted && evento.target === this.campo) this.escritoAMano = true;
+    },
+    // Web / escritorio: Enter en el campo registra el peso, como el botón. Se corta antes de que
+    // llegue al campo para que no haga además lo de siempre (pasar al siguiente).
+    alTeclear(evento) {
+      if (!this.mostrar || evento.target !== this.campo) return;
+      const registra = enterRegistraBascula({
+        tecla: evento.key,
+        componiendo: evento.isComposing,
+        nativo: Capacitor.isNativePlatform(),
+        puedeRegistrar: this.puedeRegistrar,
+        escritoAMano: this.escritoAMano,
+      });
+      if (!registra) return;
+      evento.preventDefault();
+      evento.stopImmediatePropagation();
+      this.registrar();
     },
     alSalir(evento) {
       // Si el foco pasa a otro campo de kilos, su focusin lo vuelve a mostrar enseguida.
@@ -155,6 +183,7 @@ export default {
       devolverTeclado(this.campo);
       this.activo = false;
       this.campo = null;
+      this.escritoAMano = false;
     },
     programarReposicion() {
       if (this.cuadro || !this.campo) return;
