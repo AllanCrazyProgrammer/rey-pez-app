@@ -13,7 +13,7 @@
     </section>
     <template v-else>
       <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
-        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div v-if="!esDespique"><small>Pago a despicadoras</small><strong>${{ pago(resumen.pagosRedondeados) }}</strong></div><div v-if="!esDespique"><small>Pago promedio</small><strong>${{ pago(resumen.pagoPromedioRedondeado) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></div>
+        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div v-if="!esDespique"><small>Pago a despicadoras</small><strong>${{ pago(resumen.pagosRedondeados) }}</strong></div><div v-if="!esDespique"><small>Pago promedio</small><strong>${{ pago(resumen.pagoPromedioRedondeado) }}</strong></div><div v-if="esDespique" class="pesadas-best-card"><small>Más kilos</small><strong>{{ masKilos ? masKilos.nombre : '—' }}</strong><span v-if="masKilos">{{ numero(masKilos.kilos) }} kg</span></div><div v-else class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></div>
       </section>
       <section class="pesadas-card pesadas-sheet-card">
         <div class="pesadas-toolbar">
@@ -36,7 +36,9 @@
         <p v-if="pagosNegativos && !esDespique" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
         <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :totales-columnas="resumen.kilosPorColumna" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @flecha="flechaCelda" @eliminar-persona="eliminarPersona" @insertar-persona="insertarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
-        <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ pago(resumen.pagosRedondeados) }}</strong><strong>A pagar promedio: ${{ pago(resumen.pagoPromedioRedondeado) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></strong></footer>
+        <!-- Despique: sin pagos; solo despicadoras, quien lleva más kilos y el total de kilos. -->
+        <footer v-if="esDespique" class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Más kilos: {{ masKilos ? `${masKilos.nombre} · ${numero(masKilos.kilos)} kg` : '—' }}</strong><strong>Total: {{ numero(resumen.kilos) }} kg</strong></footer>
+        <footer v-else class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ pago(resumen.pagosRedondeados) }}</strong><strong>A pagar promedio: ${{ pago(resumen.pagoPromedioRedondeado) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></strong></footer>
       </section>
     </template>
     <!-- Pesada a granel (después de pesar a cada señora): un card por medida con sus kilos netos;
@@ -144,6 +146,9 @@ export default {
       return this.personas.filter(persona => persona.nombre.trim() && normalizar(persona.nombre).includes(termino));
     },
     resumen() { return resumenPesadas(this.datos); },
+    masKilos() {
+      return this.resumen.personas.reduce((mayor, persona) => (persona.kilos > 0 && (!mayor || persona.kilos > mayor.kilos) ? persona : mayor), null);
+    },
     granelDesglose() { return this.granel.medidas.find(medida => medida.id === this.granelAbierto) || null; },
     granel() { return resumenGranel(this.datosGuardados, this.columnas, this.resumen.kilosPorColumna); },
     totales() { return Object.fromEntries(this.resumen.personas.map(row => [row.id, row])); },

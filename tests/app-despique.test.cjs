@@ -100,3 +100,12 @@ test('despique avisa cuando hay versión nueva y cuando ya se actualizó', () =>
   yaSeActualizo(200, a);
   assert.equal(yaSeActualizo(200, a), false, 'avisa una sola vez');
 });
+
+test('despique no muestra pagos en el resumen ni en el pie de la hoja', () => {
+  const dia = leer('src/views/Pesadas/PesadasDia.vue');
+  assert.match(dia, /<footer v-if="esDespique" class="pesadas-sheet-footer">(?:(?!<\/footer>)[\s\S])*Más kilos(?:(?!<\/footer>)[\s\S])*Total: \{\{ numero\(resumen\.kilos\) \}\} kg<\/strong><\/footer>/);
+  const pie = dia.match(/<footer v-if="esDespique"[\s\S]*?<\/footer>/)[0];
+  assert.ok(!/pago|\$\{\{/i.test(pie), 'el pie de despique no habla de pagos');
+  const tarjeta = dia.match(/<div v-if="esDespique" class="pesadas-best-card">[\s\S]*?<\/div>/)[0];
+  assert.ok(!/pago|\$\{\{/i.test(tarjeta), 'la tarjeta de más kilos no muestra pago');
+});
