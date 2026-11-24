@@ -197,6 +197,7 @@ import {
   saldoAcumuladoAntesDeFecha,
   normalizarFechaOzuna as normalizarFechaSaldo
 } from '@/utils/ozunaCuentasSaldo';
+import { esAbonoAutomaticoOzuna } from '@/utils/ozunaCuentaNota';
 import StashModalV2 from '@/components/Pedidos/StashModalV2.vue';
 
 export default {
@@ -294,7 +295,11 @@ export default {
 
         const cuentasActualizadas = querySnapshot.docs.map((docSnap) => {
           const data = docSnap.data();
-          const totalAbonos = sumarMontos((data.abonos || []).map(a => a.monto));
+          // Indicador "Abono": solo lo capturado a mano; los abonos que el embarque
+          // calcula por taras vendidas siguen descontando del saldo, pero no se muestran aquí.
+          const totalAbonos = sumarMontos(
+            (data.abonos || []).filter(a => !esAbonoAutomaticoOzuna(a)).map(a => a.monto)
+          );
           const totalCobros = sumarMontos((data.cobros || []).map(c => c.monto));
           return {
             id: docSnap.id,

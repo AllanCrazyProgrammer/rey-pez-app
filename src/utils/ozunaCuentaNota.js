@@ -10,6 +10,9 @@ import { formatNumber } from './formatters';
 export const OZUNA_CLIENTE_ID = '4';
 const ABONO_AUTOMATICO = /^Venta de (limpio|crudo): /;
 
+/** Abono que el embarque calcula solo por las taras vendidas ("Venta de limpio/crudo: N taras × $100"). */
+export const esAbonoAutomaticoOzuna = (abono) => ABONO_AUTOMATICO.test((abono && abono.descripcion) || '');
+
 /**
  * Nota creada por un abono del asistente, todavía sin productos del embarque.
  * El embarque la completa; una nota con renglones capturados a mano no entra aquí.

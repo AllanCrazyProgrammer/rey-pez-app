@@ -286,6 +286,7 @@
                 </div>
                 <div class="grupo-total">${{ formatNumber(grupo.totalMonto) }}</div>
                 <button
+                  v-if="!grupo.tieneSoloLectura"
                   class="btn-eliminar-grupo"
                   type="button"
                   title="Eliminar todos los abonos de este grupo"
@@ -391,7 +392,7 @@
                             </button>
                           </template>
                           <button
-                            v-else
+                            v-else-if="!deposito.soloLectura"
                             @click.stop="iniciarEdicionDeposito(deposito)"
                             class="btn-editar-fecha"
                             type="button"
@@ -450,6 +451,7 @@
                                     <template v-else>
                                       <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
                                       <button
+                                        v-if="!abono.soloLectura"
                                         class="btn-editar-fecha"
                                         title="Editar fecha de registro"
                                         @click.stop="iniciarEdicionFechaHistorial(abono)"
@@ -466,6 +468,7 @@
                               <div class="abono-right">
                                 <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
                                 <button
+                                  v-if="!abono.soloLectura"
                                   @click.stop="eliminarAbonoIndividual(abono)"
                                   class="btn-eliminar-abono"
                                   title="Eliminar abono"
@@ -530,6 +533,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { collection, addDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, limit, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { formatearFecha, formatNumber } from '@/utils/formatters';
+import { esAbonoAutomaticoOzuna } from '@/utils/ozunaCuentaNota';
 
 export default {
   name: 'StashModalV2',
@@ -735,11 +739,13 @@ export default {
         fechaLabel: formatearFechaHistorialCabecera(grupo.fechaISO),
         totalMonto: grupo.totalMonto,
         cuentas: Array.from(grupo.cuentas.values()),
+        tieneSoloLectura: grupo.abonos.some(abono => abono.soloLectura),
         abonos: grupo.abonos.sort((a, b) => new Date(b.fechaAplicacion) - new Date(a.fechaAplicacion)),
         depositos: Array.from(grupo.depositos.values())
           .map(deposito => ({
             ...deposito,
             totalMonto: Math.round(deposito.totalMonto * 100) / 100,
+            soloLectura: deposito.aplicaciones.some(abono => abono.soloLectura),
             cuentas: Array.from(deposito.cuentas.values()),
             aplicaciones: deposito.aplicaciones.sort((a, b) => new Date(a.fechaCuenta) - new Date(b.fechaCuenta))
           }))
@@ -1001,20 +1007,24 @@ export default {
           
           if (cuentaData.abonos && cuentaData.abonos.length > 0) {
             cuentaData.abonos.forEach((abono, index) => {
-              // Ozuna: en el historial no se toman en cuenta los abonos
-              // agregados directo en la nota (sin stashItemId); solo los
-              // que vienen del Stash aparecen en el historial.
-              if (props.cliente === 'ozuna' && !abono.stashItemId) {
+              // Ozuna: sus abonos se registran directo en las notas, así que
+              // cuentan todos menos los que el embarque calcula solo por las
+              // taras vendidas ("Venta de limpio/crudo: N taras × $100").
+              if (props.cliente === 'ozuna' && esAbonoAutomaticoOzuna(abono)) {
                 return
               }
               const fechaBase =
                 abono.fechaOriginalStash ||
                 abono.fecha ||
                 abono.fechaAplicacion ||
+                abono.fechaRegistro ||
                 fechaCuenta ||
                 new Date().toISOString()
 
               const fechaAplicacion = normalizarFechaSeleccionada(fechaBase)
+              // Abono capturado en la nota (no vino del Stash): se ve en el
+              // historial pero se edita o borra desde la nota.
+              const soloLectura = props.cliente === 'ozuna' && !abono.stashItemId
 
               abonos.push({
                 uniqueId: `${cuentaId}_${index}_${abono.id || Date.now()}`,
@@ -1034,9 +1044,12 @@ export default {
                 stashItemId: abono.stashItemId || null,
                 esEfectivo: !!abono.esEfectivo,
                 esAplicacionIndividual: abono.esAplicacionIndividual || false,
-                origenDescripcion: abono.fechaOriginalStash
-                  ? `Stash (${formatearFecha(abono.fechaOriginalStash)})`
-                  : (abono.esAplicacionIndividual ? 'Aplicación individual' : 'Aplicación en cascada')
+                soloLectura,
+                origenDescripcion: soloLectura
+                  ? 'Registrado en la nota'
+                  : abono.fechaOriginalStash
+                    ? `Stash (${formatearFecha(abono.fechaOriginalStash)})`
+                    : (abono.esAplicacionIndividual ? 'Aplicación individual' : 'Aplicación en cascada')
               })
             })
           }

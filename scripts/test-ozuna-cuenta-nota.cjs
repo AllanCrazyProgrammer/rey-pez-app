@@ -143,3 +143,11 @@ test('cuenta editada a mano se imprime con el saldo anterior recalculado sin esc
   assert.equal(r.datos.totalSaldo, 900 + 2000);
   assert.equal(repo.escrituras.length, 0);
 });
+
+test('abono automático por taras se distingue de los capturados en la nota', () => {
+  assert.equal(m.esAbonoAutomaticoOzuna({ descripcion: 'Venta de limpio: 3 taras × $100', monto: 300 }), true);
+  assert.equal(m.esAbonoAutomaticoOzuna({ descripcion: 'Venta de crudo: 1 taras × $100', monto: 100 }), true);
+  assert.equal(m.esAbonoAutomaticoOzuna({ descripcion: 'Depósito BBVA', monto: 50000 }), false);
+  assert.equal(m.esAbonoAutomaticoOzuna({ monto: 100 }), false);
+  assert.equal(m.esAbonoAutomaticoOzuna(null), false);
+});
