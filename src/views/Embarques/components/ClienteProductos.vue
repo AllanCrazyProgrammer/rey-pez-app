@@ -4,7 +4,11 @@
             <div class="cliente-info">
                 <h3>
                     <span class="cliente-indicador"><i class="fas fa-user"></i></span>
-                    {{ nombreCliente || 'Cliente Desconocido' }}
+                    <span class="cliente-nombre" title="Clic derecho o mantén presionado para cambiar el nombre"
+                        @contextmenu.prevent="abrirMenuCliente($event)"
+                        @touchstart="iniciarPulsacionCliente($event)"
+                        @touchend="cancelarPulsacionCliente"
+                        @touchmove="cancelarPulsacionCliente">{{ nombreCliente || 'Cliente Desconocido' }}</span>
                     <button @click.stop="$emit('ver-pedido-cliente')" class="btn-pedido-mini"
                         title="Ver pedidos del cliente">
                         <i class="fas fa-clipboard-list"></i>
@@ -143,6 +147,14 @@
                 <button v-if="menuMedida.accion === 'completar'" type="button" class="menu-medida-boton" @click="marcarMedidaCompleta(menuMedida.opcion)">✓ Marcar como completo</button>
                 <button v-else-if="menuMedida.accion === 'quitar'" type="button" class="menu-medida-boton menu-medida-boton-quitar" @click="quitarMarcaCompleto(menuMedida.opcion)">↩ Quitar marca de completo</button>
                 <div v-else class="menu-medida-nada">{{ menuMedida.motivo }}</div>
+            </div>
+        </div>
+
+        <!-- Menú del cliente: clic derecho (escritorio) o pulsación larga (móvil) sobre el nombre. -->
+        <div v-if="menuCliente" class="menu-medida-fondo" @click="cerrarMenuCliente" @contextmenu.prevent="cerrarMenuCliente">
+            <div class="menu-medida" :style="{ left: menuCliente.x + 'px', top: menuCliente.y + 'px' }" @click.stop>
+                <div class="menu-medida-titulo">{{ nombreCliente }}</div>
+                <button type="button" class="menu-medida-boton" @click="pedirCambiarNombreCliente">✏️ Cambiar nombre</button>
             </div>
         </div>
 
@@ -322,10 +334,11 @@ export default {
         'crear-cuenta-ozuna',
         'crear-cuenta-otilio',
         'ver-pedido-cliente',
-        'abrir-modal-pdf-fecha'
+        'abrir-modal-pdf-fecha',
+        'renombrar-cliente'
     ],
 
-    data() { return { menuClienteAbierto: false, medidaMovilActiva: null, menuMedida: null, temporizadorPulsacionMedida: null, pulsacionLargaMedida: false }; },
+    data() { return { menuClienteAbierto: false, medidaMovilActiva: null, menuMedida: null, temporizadorPulsacionMedida: null, pulsacionLargaMedida: false, menuCliente: null, temporizadorPulsacionCliente: null, pulsacionLargaCliente: false }; },
     computed: {
         opcionesMedidasMovil() {
             const productos = this.productos.filter(p => p.id).map(p => ({
@@ -532,6 +545,43 @@ export default {
             this.cerrarMenuMedida();
         },
 
+        // Menú del cliente: clic derecho en escritorio, pulsación larga en
+        // móvil, sobre el nombre del cliente. Ofrece cambiar el nombre.
+        abrirMenuCliente(event) {
+            if (this.embarqueBloqueado) return;
+            const x = event.clientX != null ? event.clientX : 0;
+            const y = event.clientY != null ? event.clientY : 0;
+            this.menuCliente = {
+                x: Math.max(8, Math.min(x, window.innerWidth - 240)),
+                y: Math.max(8, Math.min(y, window.innerHeight - 110)),
+            };
+        },
+        cerrarMenuCliente() {
+            this.menuCliente = null;
+        },
+        iniciarPulsacionCliente(event) {
+            this.cancelarPulsacionCliente();
+            if (this.embarqueBloqueado) return;
+            const touch = event.touches && event.touches[0];
+            const x = touch ? touch.clientX : 0;
+            const y = touch ? touch.clientY : 0;
+            this.temporizadorPulsacionCliente = setTimeout(() => {
+                this.pulsacionLargaCliente = true;
+                if (navigator.vibrate) navigator.vibrate(15);
+                this.abrirMenuCliente({ clientX: x, clientY: y });
+            }, 600);
+        },
+        cancelarPulsacionCliente() {
+            if (this.temporizadorPulsacionCliente) {
+                clearTimeout(this.temporizadorPulsacionCliente);
+                this.temporizadorPulsacionCliente = null;
+            }
+        },
+        pedirCambiarNombreCliente() {
+            this.cerrarMenuCliente();
+            this.$emit('renombrar-cliente', this.clienteId);
+        },
+
         calcularKilosCrudos(item) { return calcularKilosCrudoItem(item); },
 
         formatearKilos(kilos) { return formatearKilos(kilos); },
@@ -632,6 +682,15 @@ export default {
     align-items: center;
     gap: 10px;
     font-size: 1.3rem;
+}
+
+/* Nombre del cliente: clic derecho o pulsación larga abre el menú para
+   cambiar el nombre. Sin selección de texto ni menú nativo al mantener. */
+.cliente-nombre {
+    cursor: context-menu;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .btn-pdf-mini,

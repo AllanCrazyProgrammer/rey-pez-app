@@ -168,6 +168,7 @@
           @crear-cuenta-otilio="crearCuentaOtilio"
           @crear-cuenta-veronica="crearCuentaVeronica"
           @ver-pedido-cliente="abrirModalPedidoCliente(clienteId)"
+          @renombrar-cliente="renombrarCliente"
         />
       </form>
     </div>

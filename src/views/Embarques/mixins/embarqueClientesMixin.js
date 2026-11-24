@@ -111,14 +111,18 @@ export const embarqueClientesMixin = {
         return 'Cliente Desconocido';
       }
 
-      const clienteEnLista = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
-      if (clienteEnLista && clienteEnLista.nombre) {
-        return clienteEnLista.nombre;
-      }
-
+      // El nombre guardado en los productos de ESTE embarque manda: es el
+      // que se actualiza al renombrar un cliente (clic derecho / pulsación
+      // larga sobre su nombre), incluidos los predefinidos, sin tocar la
+      // lista global de clientes.
       const productoConCliente = this.embarque.productos.find(p => p.clienteId.toString() === clienteId.toString());
       if (productoConCliente && productoConCliente.nombreCliente) {
         return productoConCliente.nombreCliente;
+      }
+
+      const clienteEnLista = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
+      if (clienteEnLista && clienteEnLista.nombre) {
+        return clienteEnLista.nombre;
       }
 
       const clientePersonalizado = this.clientesPersonalizados.find(c => c.id.toString() === clienteId.toString());
@@ -150,19 +154,39 @@ export const embarqueClientesMixin = {
       }));
     },
 
-    editarNombreCliente(clienteId) {
-      const cliente = this.clientesDisponibles.find(c => c.id === clienteId);
-      if (cliente && cliente.editable) {
-        const nuevoNombre = prompt('Ingrese el nuevo nombre del cliente:', cliente.nombre);
-        if (nuevoNombre !== null && nuevoNombre.trim() !== '') {
-          cliente.nombre = nuevoNombre.trim();
-          this.embarque.productos.forEach(producto => {
-            if (producto.clienteId === clienteId) {
-              producto.nombreCliente = nuevoNombre.trim();
-            }
-          });
+    // Cambiar el nombre de un cliente del embarque (menú por clic derecho en
+    // escritorio o pulsación larga en móvil sobre el nombre del cliente).
+    // Funciona con cualquier cliente del embarque: en los personalizados
+    // actualiza también la lista (y queda guardado para otros embarques); en
+    // los predefinidos el cambio es solo de este embarque, guardado en el
+    // nombreCliente de sus productos.
+    renombrarCliente(clienteId) {
+      if (this.embarqueBloqueado) return;
+      const nombreActual = this.obtenerNombreCliente(clienteId);
+      const nuevoNombre = prompt('Cambiar nombre del cliente:', nombreActual);
+      if (nuevoNombre === null) return;
+      const nombreLimpio = nuevoNombre.trim();
+      if (!nombreLimpio || nombreLimpio === nombreActual) return;
+
+      this.embarque.productos.forEach(producto => {
+        if (String(producto.clienteId) === String(clienteId)) {
+          this.$set(producto, 'nombreCliente', nombreLimpio);
         }
+      });
+
+      const clientePersonalizado = this.clientesPersonalizados.find(c => c.id.toString() === clienteId.toString());
+      if (clientePersonalizado) {
+        clientePersonalizado.nombre = nombreLimpio;
+        localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
       }
+
+      this.guardarCambiosEnTiempoReal();
+      this.$forceUpdate();
+      this.cambios.push(`Cliente ${nombreActual} renombrado a ${nombreLimpio}`);
+    },
+
+    editarNombreCliente(clienteId) {
+      this.renombrarCliente(clienteId);
     },
 
     async agregarNuevoCliente(cliente) {
