@@ -384,3 +384,12 @@
 .pesadas-granel-rendimiento strong { color: #2d2440; font-size: 20px; }
 .pesadas-granel-card .pesadas-granel-card-crudo { color: #69637b; font-size: 13px; font-weight: 600; }
 .pesadas-granel-card .pesadas-granel-card-crudo b { color: #453575; }
+
+/* Pantalla completa de la hoja del día (web / escritorio). Debajo de los modales (1050). */
+.pesadas-completa-button { margin-left: auto; }
+.pesadas-day-page .pesadas-sheet-card--completa { position: fixed; inset: 0; z-index: 1040; margin: 0; border-radius: 0; display: flex; flex-direction: column; padding-top: 10px; }
+.pesadas-day-page .pesadas-sheet-card--completa .pesadas-grid-scroll { flex: 1 1 auto; max-height: none; min-height: 0; }
+.pesadas-day-page .pesadas-sheet-card--completa .pesadas-sheet-footer { flex: none; }
+/* main crea su propio contexto (z-index: 1): se sube para quedar sobre la barra de la app (1000). */
+.pesadas-day-page.pesadas-day-page--completa { z-index: 1040; }
+body.pesadas-completa-activa { overflow: hidden; }

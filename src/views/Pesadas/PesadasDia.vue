@@ -1,5 +1,5 @@
 <template>
-  <main class="pesadas-page pesadas-day-page">
+  <main class="pesadas-page pesadas-day-page" :class="{ 'pesadas-day-page--completa': pantallaCompleta }">
     <header class="pesadas-heading">
       <div><router-link class="pesadas-back" to="/pesadas"><span class="pesadas-back-icon">←</span> Historial de pesadas</router-link><h1>Pesadas <span v-if="fechaValida">{{ fechaTexto }}</span></h1><p>Agrega un nombre y presiona Enter para continuar con la siguiente persona.</p></div>
       <div class="pesadas-day-controls"><label>Fecha <input :value="fecha" type="date" min="1900-01-01" aria-label="Cambiar fecha de pesadas" @change="cambiarFecha"></label><span class="pesadas-status" role="status" aria-live="polite">{{ estadoTexto }}</span></div>
@@ -15,7 +15,9 @@
       <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
         <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div v-if="!esDespique"><small>Pago a despicadoras</small><strong>${{ pago(resumen.pagosRedondeados) }}</strong></div><div v-if="!esDespique"><small>Pago promedio</small><strong>${{ pago(resumen.pagoPromedioRedondeado) }}</strong></div><div v-if="esDespique" class="pesadas-best-card"><small>Más kilos</small><strong>{{ masKilos ? masKilos.nombre : '—' }}</strong><span v-if="masKilos">{{ numero(masKilos.kilos) }} kg</span></div><div v-else class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></div>
       </section>
-      <section class="pesadas-card pesadas-sheet-card">
+      <!-- Pantalla completa (web y escritorio): la hoja tapa todo y el navegador pasa a pantalla
+           completa; "Regresar" (o Esc) la deja como estaba. -->
+      <section class="pesadas-card pesadas-sheet-card" :class="{ 'pesadas-sheet-card--completa': pantallaCompleta }">
         <div class="pesadas-toolbar">
           <!-- Deshacer / rehacer lo que se cambió en esta hoja (en este dispositivo, desde que se abrió). -->
           <span class="pesadas-historial-botones">
@@ -30,6 +32,7 @@
           <button v-if="!esDespique" class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button v-if="!esDespique" class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
           <!-- La app de despique no imprime ni saca cuentas. -->
           <button v-if="!esDespique" class="pesadas-button pesadas-cuentas-button" :disabled="!puedeImprimir" @click="abrirCuentas"><span class="cuentas-bracket" aria-hidden="true">[</span><span class="cuentas-symbol" aria-hidden="true">$</span> Sacar cuentas <span class="cuentas-bracket" aria-hidden="true">]</span></button>
+          <button v-if="puedePantallaCompleta" class="pesadas-button pesadas-completa-button" type="button" :title="pantallaCompleta ? 'Volver a la vista normal' : 'Ver la tabla en toda la pantalla'" data-pantalla-completa @click="alternarPantallaCompleta">{{ pantallaCompleta ? '↙ Regresar' : '⛶ Fullscreen' }}</button>
           <span v-if="!esDespique" class="pesadas-hint">Kg y precios: máximo 1 decimal</span>
         </div>
         <p v-if="errorCarga || estado.error" class="pesadas-alert" role="alert">{{ errorCarga || estado.error }}</p>
@@ -108,6 +111,7 @@
 
 <script>
 import { nanoid } from 'nanoid';
+import { Capacitor } from '@capacitor/core';
 import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/components/Pesadas/Cuentas.vue';
 import BotonBascula from '@/components/Bascula/BotonBascula.vue';
@@ -125,7 +129,7 @@ export default {
   name: 'PesadasDia',
   components: { PesadasTabla, PesadasResumen, BModal, Cuentas, BotonBascula },
   props: { fecha: { type: String, required: true } },
-  data: () => ({ esDespique: ES_DESPIQUE, datosGuardados: {}, granelAbierto: '', granelVisible: false, errorCrudo: '', pasos: { atras: 0, adelante: 0 }, estado: { pending: false, saving: false, error: '', storageError: false },
+  data: () => ({ esDespique: ES_DESPIQUE, puedePantallaCompleta: !Capacitor.isNativePlatform(), pantallaCompleta: false, datosGuardados: {}, granelAbierto: '', granelVisible: false, errorCrudo: '', pasos: { atras: 0, adelante: 0 }, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
     borradores: {}, errores: {}, preview: null, busquedaAbierta: false, terminoBusqueda: '', cuentasAbiertas: false, cuentasDatos: '', restaurando: false, filaInicialId: 'inicial' }),
   computed: {
@@ -176,6 +180,8 @@ export default {
     window.addEventListener('offline', this.actualizarConexion);
     window.addEventListener('storage', this.actualizarStorage);
     window.addEventListener('beforeunload', this.antesDeCerrar);
+    document.addEventListener('fullscreenchange', this.alCambiarFullscreen);
+    document.addEventListener('keydown', this.escPantallaCompleta, true);
   },
   beforeRouteLeave(to, from, next) { this.confirmarSalida(next); },
   beforeRouteUpdate(to, from, next) { this.confirmarSalida(next); },
@@ -186,8 +192,44 @@ export default {
     window.removeEventListener('storage', this.actualizarStorage);
     window.removeEventListener('beforeunload', this.antesDeCerrar);
     window.removeEventListener('wheel', this.bloquearRetrocesoHorizontal, true);
+    document.removeEventListener('fullscreenchange', this.alCambiarFullscreen);
+    document.removeEventListener('keydown', this.escPantallaCompleta, true);
+    this.salirPantallaCompleta();
   },
   methods: {
+    alternarPantallaCompleta() {
+      if (this.pantallaCompleta) this.salirPantallaCompleta();
+      else this.entrarPantallaCompleta();
+    },
+    entrarPantallaCompleta() {
+      this.pantallaCompleta = true;
+      document.body.classList.add('pesadas-completa-activa');
+      // Si el navegador no deja (o no soporta) pantalla completa, la hoja igual tapa la página.
+      const raiz = document.documentElement;
+      if (raiz.requestFullscreen && !document.fullscreenElement) raiz.requestFullscreen().catch(() => {});
+    },
+    salirPantallaCompleta() {
+      this.pantallaCompleta = false;
+      document.body.classList.remove('pesadas-completa-activa');
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    },
+    // Esc del navegador sale de su pantalla completa: la hoja también regresa, salvo que el Esc
+    // fuera para cerrar un modal (buscar, granel…); entonces la hoja se queda tapando la página.
+    alCambiarFullscreen() {
+      if (document.fullscreenElement || !this.pantallaCompleta) return;
+      if (this.hayModalAbierto()) return;
+      this.salirPantallaCompleta();
+    },
+    // Sin pantalla completa del navegador, Esc también regresa. Va en captura para ver el modal
+    // antes de que él mismo se cierre con ese Esc.
+    escPantallaCompleta(evento) {
+      if (evento.key !== 'Escape' || !this.pantallaCompleta || document.fullscreenElement) return;
+      if (this.hayModalAbierto()) return;
+      this.salirPantallaCompleta();
+    },
+    hayModalAbierto() {
+      return Boolean(document.querySelector('.modal.show') || this.preview);
+    },
     numero: formatoPesada,
     hora12: formatoHora12,
     rendimientoTexto: formatoRendimiento,
