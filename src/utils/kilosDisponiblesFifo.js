@@ -41,4 +41,16 @@ function mismoProveedor(a, b) {
   return String(a == null ? '' : a).trim().toLowerCase() === String(b == null ? '' : b).trim().toLowerCase()
 }
 
-module.exports = { kilosDisponiblesFifo, mismoProveedor }
+// Igual que mismoProveedor, pero para nombres de medida ("cam s/c" == "Cam s/c").
+// Las entradas de maquila se han guardado con mayúsculas distintas según el día,
+// y comparar exacto parte el stock en dos medidas.
+function mismaMedida(a, b) {
+  return String(a == null ? '' : a).trim().toLowerCase() === String(b == null ? '' : b).trim().toLowerCase()
+}
+
+// Normaliza un nombre de medida para usarlo como clave ("Cam s/c" -> "cam s/c").
+function claveMedida(nombre) {
+  return String(nombre == null ? '' : nombre).trim().toLowerCase()
+}
+
+module.exports = { kilosDisponiblesFifo, mismoProveedor, mismaMedida, claveMedida }

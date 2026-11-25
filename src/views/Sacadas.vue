@@ -473,7 +473,7 @@ import MedidasParaHoyCards from '@/components/Existencias/MedidasParaHoyCards.vu
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import { momentoInventario, inicioDiaInventario, finDiaInventario } from '@/utils/momentoInventario';
 import { formatNumber } from '@/utils/formatters';
-import { kilosDisponiblesFifo, mismoProveedor } from '@/utils/kilosDisponiblesFifo';
+import { kilosDisponiblesFifo, mismoProveedor, mismaMedida, claveMedida } from '@/utils/kilosDisponiblesFifo';
 import inventarioNavigation from '@/mobile/inventarioNavigation';
 
 export default {
@@ -1239,9 +1239,10 @@ export default {
 
       const sacadasOrdenadas = await this.obtenerSacadasOrdenadas();
 
-      // Comparar medida, precio y cuarto correctamente
+      // Comparar medida, precio y cuarto correctamente. La medida se compara
+      // sin mayúsculas: "cam s/c" y "Cam s/c" son el mismo lote.
       const coincideMovimiento = (movimiento) => {
-        const medidaCoincide = mismoProveedor(movimiento.proveedor, proveedor) && movimiento.medida === medidaBase;
+        const medidaCoincide = mismoProveedor(movimiento.proveedor, proveedor) && mismaMedida(movimiento.medida, medidaBase);
         const precioCoincide = precio === null ?
           (movimiento.precio === null || movimiento.precio === undefined) :
           movimiento.precio === precio;
@@ -1694,13 +1695,17 @@ export default {
         return [];
       }
 
-      const existenciasPorMedida = new Map(); // medida -> { cuartos: Map }
+      const existenciasPorMedida = new Map(); // claveMedida -> { nombre, cuartos: Map }
       const acumularKilos = (medidaNombre, kilosDelta, cuartoFrio = '') => {
         if (!medidaNombre) return;
-        if (!existenciasPorMedida.has(medidaNombre)) {
-          existenciasPorMedida.set(medidaNombre, { cuartos: new Map() });
+        // Clave en minúsculas: "cam s/c" y "Cam s/c" son la misma medida y
+        // su stock se suma (antes se partía en dos y el formulario solo veía
+        // el lote con la capitalización del catálogo).
+        const clave = claveMedida(medidaNombre);
+        if (!existenciasPorMedida.has(clave)) {
+          existenciasPorMedida.set(clave, { nombre: String(medidaNombre).trim(), cuartos: new Map() });
         }
-        const data = existenciasPorMedida.get(medidaNombre);
+        const data = existenciasPorMedida.get(clave);
         const cuarto = this.normalizeCuarto(cuartoFrio);
         const kilosActuales = data.cuartos.get(cuarto) || 0;
         data.cuartos.set(cuarto, kilosActuales + (Number(kilosDelta) || 0));
@@ -1747,11 +1752,7 @@ export default {
         }
       });
 
-      const resultado = [];
-      medidasMaquila.forEach(medida => {
-        const registro = existenciasPorMedida.get(medida.nombre);
-        if (!registro) return;
-
+      const construirOpcion = (medida, registro) => {
         const cuartos = Array.from(registro.cuartos.entries())
           .filter(([, k]) => k > 0)
           .map(([nombreCuarto, k]) => ({
@@ -1760,14 +1761,35 @@ export default {
           }));
 
         const kilosTotales = cuartos.reduce((sum, c) => sum + c.kilos, 0);
-        if (kilosTotales > 0) {
-          resultado.push({
-            ...medida,
-            id: medida.id || medida.nombre,
-            cuartos,
-            kilos: kilosTotales
-          });
+        if (kilosTotales <= 0) return null;
+        return {
+          ...medida,
+          id: medida.id || medida.nombre,
+          nombre: medida.nombre,
+          cuartos,
+          kilos: kilosTotales
+        };
+      };
+
+      const resultado = [];
+      const clavesYaAgregadas = new Set();
+      medidasMaquila.forEach(medida => {
+        const registro = existenciasPorMedida.get(claveMedida(medida.nombre));
+        if (!registro) return;
+        const opcion = construirOpcion(medida, registro);
+        if (opcion) {
+          resultado.push(opcion);
+          clavesYaAgregadas.add(claveMedida(medida.nombre));
         }
+      });
+
+      // Medidas con stock en sacadas que no están en el catálogo de la
+      // maquila (ej. "piojo" y "granja s/c" de Joselito): también se ofrecen,
+      // si no el formulario las esconde aunque haya kilos.
+      existenciasPorMedida.forEach((registro, clave) => {
+        if (clavesYaAgregadas.has(clave)) return;
+        const opcion = construirOpcion({ nombre: registro.nombre }, registro);
+        if (opcion) resultado.push(opcion);
       });
 
       return resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
