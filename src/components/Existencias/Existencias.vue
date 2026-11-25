@@ -984,9 +984,15 @@ export default {
           }
         });
 
-      // Después agregar las maquilas
+      // Después agregar las maquilas. La búsqueda también revisa las medidas
+      // dentro de la tarjeta (antes solo comparaba el nombre del proveedor,
+      // así que buscar "piojo" escondía la tarjeta de Joselito aunque
+      // tuviera piojo de maquila).
       Object.entries(maquilas).forEach(([proveedor, medidas]) => {
-        if (!searchLower || proveedor.toLowerCase().includes(searchLower)) {
+        const coincideMedida = Object.values(medidas).some(item =>
+          (item.medida || '').toLowerCase().includes(searchLower)
+        );
+        if (!searchLower || proveedor.toLowerCase().includes(searchLower) || coincideMedida) {
           // Filtrar medidas con 0 kilos y ordenar por fecha
           if (Object.keys(medidas).length > 0) {
             // Calcular precio promedio para la maquila
