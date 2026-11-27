@@ -294,11 +294,13 @@
                   <span class="label">Costo medida:</span>
                   <div class="costo-final-container">
                     <span class="valor costo-medida">${{ formatearPrecio(gananciasCalculadas[medida].costoBase) }}</span>
-                    <span
-                      class="costo-fuente-badge"
+                    <button
+                      type="button"
+                      class="costo-fuente-badge costo-fuente-btn"
                       :class="'costo-fuente-' + (gananciasCalculadas[medida].costoFuente || 'ninguno')"
-                      :title="gananciasCalculadas[medida].costoFuenteTexto"
-                    >{{ gananciasCalculadas[medida].costoFuenteTexto }}</span>
+                      :title="`${gananciasCalculadas[medida].costoFuenteTexto} · tocar para cambiar el costo`"
+                      @click="abrirEdicionCosto(medida, 'limpio')"
+                    >{{ gananciasCalculadas[medida].costoFuente ? gananciasCalculadas[medida].costoFuenteTexto : 'Sin costo · agregar' }} ✏️</button>
                   </div>
                 </div>
                 <div class="ganancia-item">
@@ -458,11 +460,13 @@
                   <span class="label">Costo/kg:</span>
                   <div class="costo-final-container">
                     <span class="valor costo-base">${{ formatearPrecioConDecimales(gananciasCalculadasCrudos[talla].costoBase) }}</span>
-                    <span
-                      class="costo-fuente-badge"
+                    <button
+                      type="button"
+                      class="costo-fuente-badge costo-fuente-btn"
                       :class="'costo-fuente-' + (gananciasCalculadasCrudos[talla].costoFuente || 'ninguno')"
-                      :title="gananciasCalculadasCrudos[talla].costoFuenteTexto"
-                    >{{ gananciasCalculadasCrudos[talla].costoFuenteTexto }} + ${{ gananciasCalculadasCrudos[talla].sobrecostoKg }} crudo</span>
+                      :title="`${gananciasCalculadasCrudos[talla].costoFuenteTexto} + $${gananciasCalculadasCrudos[talla].sobrecostoKg} de crudo · tocar para cambiar el costo`"
+                      @click="abrirEdicionCosto(talla, 'crudo')"
+                    >{{ gananciasCalculadasCrudos[talla].costoFuente ? gananciasCalculadasCrudos[talla].costoFuenteTexto : 'Sin costo · agregar' }} + ${{ gananciasCalculadasCrudos[talla].sobrecostoKg }} ✏️</button>
                   </div>
                 </div>
                 <div class="ganancia-item">
@@ -722,6 +726,54 @@
 
     <div v-if="avisoPrecio" class="aviso-precio-guardado" role="status" @click="avisoPrecio = ''">{{ avisoPrecio }}</div>
 
+    <!-- Modal: costo de una medida desde la tarjeta de ganancia -->
+    <div v-if="edicionCosto" class="modal-overlay" @click.self="cerrarEdicionCosto">
+      <div class="modal-content modal-editar-precio" role="dialog" aria-modal="true" aria-labelledby="titulo-editar-costo">
+        <h3 id="titulo-editar-costo">Costo de {{ edicionCosto.clave }}</h3>
+        <p class="editar-precio-actual">
+          <template v-if="edicionCosto.costoActual">
+            Actual: <strong>${{ formatearPrecioVenta(edicionCosto.costoActual) }}</strong> · {{ edicionCosto.fuenteTexto }}
+          </template>
+          <template v-else>Sin costo registrado: la ganancia sale inflada.</template>
+        </p>
+        <p v-if="edicionCosto.clave !== edicionCosto.medida" class="editar-precio-nota editar-costo-nota-base">
+          {{ edicionCosto.medida }} usa el costo de {{ edicionCosto.clave }}.
+        </p>
+
+        <label class="editar-precio-label" for="nuevo-costo-medida">Costo por kg{{ edicionCosto.tipo === 'crudo' ? ' (sin los $3.50 de crudo)' : ' (en crudo, antes de rendimiento)' }}</label>
+        <input
+          id="nuevo-costo-medida"
+          ref="inputNuevoCosto"
+          v-model="edicionCosto.nuevoCosto"
+          type="number"
+          min="0"
+          step="0.5"
+          inputmode="decimal"
+          class="editar-precio-input"
+          placeholder="$ por kg"
+          @keydown.enter.prevent="guardarEdicionCosto"
+        >
+
+        <label class="recordar-costo" :class="{ deshabilitada: !enLinea }">
+          <input v-model="edicionCosto.recordar" type="checkbox" :disabled="!enLinea">
+          <span>
+            <strong>Recordar para los siguientes días</strong>
+            <small v-if="enLinea">Lo guarda en el catálogo de costos desde el {{ formatearFecha(edicionCosto.fecha) }}: este y los siguientes embarques con {{ edicionCosto.clave }} lo usan solos. Desmarcado: solo este embarque.</small>
+            <small v-else>Sin internet: se guarda solo en este embarque.</small>
+          </span>
+        </label>
+
+        <p v-if="edicionCosto.error" class="editar-precio-error" role="alert">{{ edicionCosto.error }}</p>
+
+        <div class="modal-buttons">
+          <button type="button" class="btn-guardar" :disabled="edicionCosto.guardando" @click="guardarEdicionCosto">
+            {{ edicionCosto.guardando ? 'Guardando…' : 'Guardar' }}
+          </button>
+          <button type="button" class="btn-cancelar" :disabled="edicionCosto.guardando" @click="cerrarEdicionCosto">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal de costos faltantes -->
     <div v-if="mostrarModalCostosFaltantes" class="modal-overlay">
       <div class="modal-content">
@@ -748,6 +800,13 @@
             <button type="button" @click="omitirCostoFaltante(medida)" class="btn-cancelar btn-chico">Omitir</button>
           </div>
         </div>
+        <label class="recordar-costo">
+          <input v-model="recordarCostosFaltantes" type="checkbox">
+          <span>
+            <strong>Recordar para los siguientes días</strong>
+            <small>Se guarda en el catálogo de costos: cuando vuelva a salir la medida ya no se pregunta.</small>
+          </span>
+        </label>
         <div class="modal-buttons">
           <button type="button" @click="omitirTodosCostosFaltantes" class="btn-cancelar">Omitir todas</button>
           <button type="button" @click="cerrarModalCostosFaltantes" class="btn-cancelar">Cerrar</button>
@@ -801,7 +860,8 @@ import {
   calcularGananciaCrudo,
   precioMaquilaPonderado,
   aplicarPrecioEnClientes,
-  categoriaProductoPrecio
+  categoriaProductoPrecio,
+  entradaCatalogoCosto
 } from '@/utils/gananciasRendimientos';
 import { normalizarNombreMedida, renombrarMedidaRendimientos } from '@/utils/renombrarMedidaRendimientos';
 import { formatoFechaPesadas } from '@/utils/pesadas';
@@ -868,6 +928,10 @@ export default {
       idsEmbarquesRelacionados: [],
       // Modal "Editar precio" de un cliente desde la tarjeta de ganancia.
       edicionPrecio: null,
+      // Modal "Costo de la medida" desde la tarjeta de ganancia.
+      edicionCosto: null,
+      // Aviso de costos faltantes: guardar también en el catálogo (siguientes días).
+      recordarCostosFaltantes: true,
       avisoPrecio: '',
       // Regla refri (solo ganancia): costo/precio de la medida base y
       // rendimiento del día anterior de la base. Cache del embarque
@@ -932,6 +996,9 @@ export default {
     // en vivo al prender/apagar checks o cambiar costos.
     totalGeneralGanancias() {
       return this.calcularTotalGeneralGanancias();
+    },
+    enLinea() {
+      return typeof navigator === 'undefined' ? true : navigator.onLine;
     },
     costoExtraEfectivo() {
       return normalizarCostoExtra(this.embarqueData?.costoExtra);
@@ -2178,11 +2245,12 @@ export default {
           }
         };
 
-        // Ordenar por fecha descendente
+        // Ordenar por fecha descendente; mismo día: captura más reciente primero
         historialCompleto.sort((a, b) => {
           const fechaA = toDate(a.fecha) || toDate(a.timestamp) || new Date(0);
           const fechaB = toDate(b.fecha) || toDate(b.timestamp) || new Date(0);
-          return fechaB - fechaA;
+          if (fechaB - fechaA !== 0) return fechaB - fechaA;
+          return (toDate(b.timestamp) || new Date(0)) - (toDate(a.timestamp) || new Date(0));
         });
 
         // Obtener fecha del embarque
@@ -2957,30 +3025,124 @@ export default {
       this.costosPromptMostrado = true;
     },
 
-    // Guarda el costo capturado en el prompt: persiste por la ruta
-    // existente y recalcula las ganancias con él.
+    // Guarda el costo capturado en el aviso de costos faltantes (con o sin
+    // "Recordar para los siguientes días") y recalcula las ganancias.
     async guardarCostoFaltante(medida) {
       const costo = Number(this.costosFaltantesInputs[medida]);
       if (!(costo > 0)) return;
-      if (!this.embarqueData.costosPorMedida) {
-        this.$set(this.embarqueData, 'costosPorMedida', {});
+      const esTallaCrudo = this.obtenerTallasCrudosUnicas().includes(medida);
+      try {
+        await this.guardarCostoMedida(medida, costo, {
+          recordar: this.recordarCostosFaltantes && navigator.onLine,
+          tipoCosto: esTallaCrudo ? 'crudo' : 'limpio'
+        });
+      } catch (error) {
+        console.error('[Rendimientos] No se pudo guardar el costo:', error);
+        if (typeof alert === 'function') alert('No se pudo guardar el costo. ' + (error?.message || ''));
+        return;
       }
-      this.$set(this.embarqueData.costosPorMedida, medida, costo);
-      // También como costo manual del embarque: así Gestión de Costos lo
-      // muestra igual y no lo borra al sincronizar con el catálogo.
-      if (!this.embarqueData.costosPorMedidaManuales) {
-        this.$set(this.embarqueData, 'costosPorMedidaManuales', {});
-      }
-      this.$set(this.embarqueData.costosPorMedidaManuales, medida, costo);
-      await this.persistirCamposRendimientos({
-        costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida),
-        costosPorMedidaManuales: this.deepClone(this.embarqueData.costosPorMedidaManuales)
-      });
       this.costosFaltantes = this.costosFaltantes.filter(m => m !== medida);
       this.$delete(this.costosFaltantesInputs, medida);
-      await this.calcularGanancias();
       if (this.costosFaltantes.length === 0) {
         this.mostrarModalCostosFaltantes = false;
+      }
+    },
+
+    // Guarda el costo base de una medida (o talla de crudo) del embarque.
+    // recordar: además lo registra en el catálogo historial_costos (como
+    // Gestión de Costos) para que los siguientes días lo encuentren solo; en
+    // este embarque se quita el manual para que mande el catálogo.
+    // Sin recordar: costo manual solo de este embarque.
+    async guardarCostoMedida(clave, costo, { recordar = false, tipoCosto = 'limpio' } = {}) {
+      if (!this.embarqueData) return;
+      const mismaClave = (texto) => String(texto || '').toLowerCase().trim() === String(clave).toLowerCase().trim();
+      const fecha = this.toLocalYMD(this.normalizarFecha(this.embarqueData.fecha) || new Date());
+
+      if (recordar) {
+        // Asegurar el catálogo para saber si la medida ya tenía entrada propia.
+        await this.asegurarCacheCostosGlobales();
+        const detalle = this.resolverCostoCatalogoSync(clave);
+        const entrada = entradaCatalogoCosto({ medida: clave, costo, fecha, tipoCosto, detalle });
+        await addDoc(collection(getFirestore(), 'historial_costos'), entrada);
+        this.costosGlobalesCache = null;
+      }
+
+      const guardados = { ...(this.embarqueData.costosPorMedida || {}) };
+      Object.keys(guardados).forEach(k => { if (mismaClave(k)) delete guardados[k]; });
+      guardados[clave] = costo;
+      const manuales = { ...(this.embarqueData.costosPorMedidaManuales || {}) };
+      Object.keys(manuales).forEach(k => { if (mismaClave(k)) delete manuales[k]; });
+      if (!recordar) manuales[clave] = costo;
+      const omitidos = { ...(this.embarqueData.costosOmitidos || {}) };
+      Object.keys(omitidos).forEach(k => { if (mismaClave(k)) delete omitidos[k]; });
+
+      this.$set(this.embarqueData, 'costosPorMedida', guardados);
+      this.$set(this.embarqueData, 'costosPorMedidaManuales', manuales);
+      this.$set(this.embarqueData, 'costosOmitidos', omitidos);
+      await this.persistirCamposRendimientos({
+        costosPorMedida: this.deepClone(guardados),
+        costosPorMedidaManuales: this.deepClone(manuales),
+        costosOmitidos: this.deepClone(omitidos)
+      });
+      this.costosCalculados = {};
+      await this.calcularGanancias();
+    },
+
+    abrirEdicionCosto(medida, tipo = 'limpio') {
+      const clave = tipo === 'limpio' ? (this.medidaBaseRefri(medida) || medida) : medida;
+      const resuelto = this.resolverCostoBaseSync(clave);
+      this.edicionCosto = {
+        medida,
+        clave,
+        tipo,
+        costoActual: resuelto ? resuelto.costo : null,
+        fuenteTexto: describirFuenteCosto(resuelto),
+        nuevoCosto: resuelto ? String(resuelto.costo) : '',
+        recordar: navigator.onLine,
+        fecha: this.toLocalYMD(this.normalizarFecha(this.embarqueData?.fecha) || new Date()),
+        guardando: false,
+        error: ''
+      };
+      this.$nextTick(() => {
+        const input = this.$refs.inputNuevoCosto;
+        if (input && typeof input.focus === 'function') {
+          input.focus();
+          if (typeof input.select === 'function') input.select();
+        }
+      });
+    },
+
+    cerrarEdicionCosto() {
+      if (this.edicionCosto && this.edicionCosto.guardando) return;
+      this.edicionCosto = null;
+    },
+
+    async guardarEdicionCosto() {
+      const edicion = this.edicionCosto;
+      if (!edicion || edicion.guardando) return;
+      const costo = Number(edicion.nuevoCosto);
+      if (!(costo > 0)) {
+        edicion.error = 'Escribe un costo mayor a 0.';
+        return;
+      }
+      edicion.guardando = true;
+      edicion.error = '';
+      try {
+        const recordar = Boolean(edicion.recordar) && navigator.onLine;
+        await this.guardarCostoMedida(edicion.clave, costo, {
+          recordar,
+          tipoCosto: edicion.tipo === 'crudo' ? 'crudo' : 'limpio'
+        });
+        this.avisoPrecio = recordar
+          ? `Costo $${this.formatearPrecioVenta(costo)} de ${edicion.clave} guardado; se recordará los siguientes días`
+          : `Costo $${this.formatearPrecioVenta(costo)} de ${edicion.clave} guardado solo en este embarque`;
+        clearTimeout(this._timerAvisoPrecio);
+        this._timerAvisoPrecio = setTimeout(() => { this.avisoPrecio = ''; }, 6000);
+        this.edicionCosto = null;
+      } catch (error) {
+        console.error('[Rendimientos] No se pudo guardar el costo:', error);
+        edicion.guardando = false;
+        edicion.error = 'No se pudo guardar el costo. ' + (error?.message || 'Intenta de nuevo.');
       }
     },
 
@@ -4928,19 +5090,21 @@ input {
 
 .costo-faltante-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
+/* El nombre ocupa su propio renglón: en celular no se corta ("P." en vez de "Piojo panga") */
 .costo-faltante-medida {
-  flex: 1;
+  flex: 1 0 100%;
   font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .costo-faltante-input {
+  flex: 1 1 110px;
+  min-width: 0;
   width: 110px;
   padding: 8px;
   border: 1px solid #ddd;
@@ -6337,6 +6501,42 @@ input {
 }
 .modal-editar-precio .editar-precio-nota { margin: 12px 0 0; font-size: .78rem; color: #8da0bd; }
 .modal-editar-precio .editar-precio-error { margin: 8px 0 0; color: #fca5a5; font-weight: 700; }
+button.costo-fuente-btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+button.costo-fuente-btn:hover,
+button.costo-fuente-btn:focus-visible { border-color: currentColor; outline: none; }
+.recordar-costo {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(56, 189, 248, .35);
+  border-radius: 12px;
+  background: rgba(56, 189, 248, .08);
+  cursor: pointer;
+}
+.recordar-costo span { display: flex; flex-direction: column; gap: 3px; }
+.recordar-costo strong { color: #f3f8ff; }
+.recordar-costo small { color: #9fb3cc; line-height: 1.35; }
+.recordar-costo.deshabilitada { opacity: .6; cursor: not-allowed; }
+.modal-content .recordar-costo input[type='checkbox'] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: none;
+  accent-color: #38bdf8;
+}
+.editar-costo-nota-base { margin-top: 0; }
+
 .aviso-precio-guardado {
   position: fixed;
   left: 50%;

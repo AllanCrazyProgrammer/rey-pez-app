@@ -684,11 +684,13 @@ export default {
             }
           };
 
-          // Ordenar por fecha descendente usando conversión robusta
+          // Ordenar por fecha descendente usando conversión robusta; mismo día:
+          // la captura más reciente primero (igual que Rendimientos).
           historialCompleto.sort((a, b) => {
             const fechaA = toDate(a.fecha) || toDate(a.timestamp) || new Date(0);
             const fechaB = toDate(b.fecha) || toDate(b.timestamp) || new Date(0);
-            return fechaB - fechaA;
+            if (fechaB - fechaA !== 0) return fechaB - fechaA;
+            return (toDate(b.timestamp) || new Date(0)) - (toDate(a.timestamp) || new Date(0));
           });
           
           // Obtener la fecha del embarque (soporta string | Date | Timestamp)

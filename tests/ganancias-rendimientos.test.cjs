@@ -204,3 +204,34 @@ test('origen de línea y categoría de catálogo', () => {
   assert.equal(g.categoriaProductoPrecio('Med-Gde c/c'), 'Camarón C/C')
   assert.equal(g.categoriaProductoPrecio('Piojo'), 'Otros')
 })
+
+test('costo recordado: medida nueva va al catálogo sin proveedor', () => {
+  const ahora = new Date(2026, 10, 27, 10)
+  const e = g.entradaCatalogoCosto({ medida: ' Piojo  Panga ', costo: '95', fecha: '2026-11-27', ahora })
+  assert.equal(e.medida, 'Piojo  Panga')
+  assert.equal(e.costoKey, 'piojo panga__sin-proveedor')
+  assert.equal(e.costoBase, 95)
+  assert.equal(e.tipoCosto, 'limpio')
+  assert.equal(e.nuevo, true)
+  assert.equal(e.archivado, false)
+  assert.equal(e.timestamp, ahora)
+  assert.equal(g.generarCostoKey('51 / 60 - Tirado', ' Tirado  Sur '), '51/60-tirado__tirado sur')
+})
+
+test('costo recordado: misma medida del catálogo actualiza su medida + proveedor', () => {
+  const detalle = { medidaEncontrada: '51/60 Tirado', proveedorNombre: 'Tirado', proveedorId: 'x', costo: 121 }
+  const e = g.entradaCatalogoCosto({ medida: '51/60 tirado', costo: 125, fecha: '2026-11-27', detalle })
+  assert.equal(e.medida, '51/60 Tirado')
+  assert.equal(e.proveedorNombre, 'Tirado')
+  assert.equal(e.costoKey, '51/60 tirado__tirado')
+  assert.equal(e.nuevo, false)
+})
+
+test('costo recordado: si venía de la talla base no cambia la talla base', () => {
+  const detalle = { medidaEncontrada: '51/60', proveedorNombre: 'Selecta', costo: 149 }
+  const e = g.entradaCatalogoCosto({ medida: '51/60 tirado', costo: 121, fecha: '2026-11-27', detalle, tipoCosto: 'crudo' })
+  assert.equal(e.medida, '51/60 tirado')
+  assert.equal(e.proveedorNombre, '')
+  assert.equal(e.costoKey, '51/60 tirado__sin-proveedor')
+  assert.equal(e.tipoCosto, 'crudo')
+})

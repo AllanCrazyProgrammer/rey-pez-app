@@ -99,7 +99,12 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
   (líneas `precioOrigen: 'manual'`), precio específico del cliente o nuevo general
   (registro en `precios` con la fecha del embarque). Escribe `clientes` de cada camión
   del día con `escribirCamposEmbarque` (salta embarques bloqueados). Qué líneas cambian:
-  `aplicarPrecioEnClientes`. Prueba con emulador: dev server con
+  `aplicarPrecioEnClientes`.
+- Costo desde Rendimientos (etiqueta del costo en la tarjeta o aviso "Faltan costos"):
+  "Recordar para los siguientes días" agrega un renglón a `historial_costos` con la fecha
+  del embarque (`entradaCatalogoCosto`) y quita el manual de ese embarque; desmarcado
+  queda como costo manual solo de ese embarque.
+- Prueba con emulador: dev server con
   `VUE_APP_FIRESTORE_EMULATOR=127.0.0.1:<puerto>` y proyecto `demo-reypez`.
 
 ## Saldos de cuentas (Cuentas México)

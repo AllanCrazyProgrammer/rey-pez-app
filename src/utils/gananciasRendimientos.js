@@ -379,3 +379,59 @@ export function categoriaProductoPrecio(nombre) {
   if (texto.includes('c/c')) return 'Camarón C/C';
   return 'Otros';
 }
+
+// ─── Costos capturados desde Rendimientos ────────────────────────────────
+// "Recordar para los siguientes días" guarda el costo en el catálogo
+// `historial_costos` (el mismo de Gestión de Costos). Así cualquier embarque
+// posterior con esa medida lo encuentra sin volver a preguntar.
+
+/** Misma normalización de medida que Gestión de Costos. */
+export function normalizarMedidaCosto(medida) {
+  if (!medida) return '';
+  return String(medida)
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s*-\s*/g, '-');
+}
+
+/** Clave medida + proveedor del catálogo (misma que Gestión de Costos). */
+export function generarCostoKey(medida, proveedorNombre = '') {
+  const proveedor = String(proveedorNombre || '').trim().toLowerCase().replace(/\s+/g, ' ') || 'sin-proveedor';
+  return `${normalizarMedidaCosto(medida)}__${proveedor}`;
+}
+
+/**
+ * Renglón nuevo de `historial_costos` para una medida del embarque.
+ * Si el costo actual vino del catálogo con ESA misma medida, actualiza esa
+ * entrada (misma medida + proveedor); si vino de otra medida (talla base o
+ * coincidencia parcial) o no había, crea la medida exacta sin proveedor, para
+ * no cambiar el costo de otras medidas.
+ * @param {object} p
+ * @param {string} p.medida medida del embarque (o talla de crudo)
+ * @param {number} p.costo costo por kg
+ * @param {string} p.fecha YYYY-MM-DD del embarque
+ * @param {'limpio'|'crudo'} p.tipoCosto
+ * @param {object|null} p.detalle resultado del catálogo que se usaba (si había)
+ * @param {Date} p.ahora momento de la captura
+ */
+export function entradaCatalogoCosto({ medida, costo, fecha, tipoCosto = 'limpio', detalle = null, ahora = new Date() }) {
+  const mismaMedida = detalle && detalle.medidaEncontrada &&
+    normalizarMedidaCosto(detalle.medidaEncontrada) === normalizarMedidaCosto(medida);
+  const medidaCatalogo = mismaMedida ? detalle.medidaEncontrada : String(medida).trim();
+  const proveedorNombre = mismaMedida ? (detalle.proveedorNombre || '') : '';
+  return {
+    medida: medidaCatalogo,
+    proveedorId: mismaMedida ? (detalle.proveedorId || '') : '',
+    proveedorNombre,
+    tipoCosto,
+    costoKey: generarCostoKey(medidaCatalogo, proveedorNombre),
+    costoBase: Number(costo),
+    archivado: false,
+    timestamp: ahora,
+    fecha,
+    nuevo: !mismaMedida,
+    observacion: 'Capturado en Rendimientos'
+  };
+}
