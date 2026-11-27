@@ -353,7 +353,7 @@
                       {{ iconoOrigenPrecio(detalle.origen) }}
                     </span>
                   </div>
-                  <p class="leyenda-origen-precio">✋ manual · 📌 del cliente · 🌐 general · 🚢 del embarque</p>
+                  <p class="leyenda-origen-precio">✋ manual · 📌 del cliente · 🌐 general</p>
                 </div>
                 <p v-if="gananciasCalculadas[medida].kilosSinPrecio > 0" class="aviso-sin-precio aviso-kilos-sin-precio">
                   ⚠️ {{ formatearNumero(gananciasCalculadas[medida].kilosSinPrecio) }} kg sin precio
@@ -4063,15 +4063,14 @@ export default {
     },
 
     iconoOrigenPrecio(origen) {
-      return { manual: '✋', especifico: '📌', general: '🌐', embarque: '🚢' }[origen] || '🌐';
+      return { manual: '✋', especifico: '📌', general: '🌐' }[origen] || '🌐';
     },
 
     describirOrigenPrecio(detalle) {
       const textos = {
         manual: 'Precio capturado a mano en el embarque',
         especifico: 'Precio específico del cliente',
-        general: 'Precio general',
-        embarque: 'Precio escrito en el embarque'
+        general: 'Precio general'
       };
       const base = textos[detalle.origen] || 'Precio general';
       const donde = detalle.desdeEmbarque ? ' (línea del embarque)' : ' (catálogo de precios)';

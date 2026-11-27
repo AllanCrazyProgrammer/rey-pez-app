@@ -108,7 +108,8 @@ export function precioVentaDeProducto(producto, { esMaquila = false } = {}) {
   const origenes = { manual: 'manual', especifico: 'especifico', general: 'general' };
   return {
     precio,
-    origen: origenes[producto.precioOrigen] || 'embarque',
+    // Sin origen registrado (embarques viejos) cuenta como precio general.
+    origen: origenes[producto.precioOrigen] || 'general',
     fecha: producto.precioFecha ? fechaYMD(producto.precioFecha) : '',
     clienteId: producto.precioClienteId || null,
     desdeEmbarque: true

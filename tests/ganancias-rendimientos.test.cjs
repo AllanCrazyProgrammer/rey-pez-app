@@ -56,6 +56,8 @@ test('precio de la línea del embarque (manual o específico); maquila no cuenta
     { precio: 210, origen: 'manual', fecha: '2026-11-20', clienteId: null, desdeEmbarque: true }
   )
   assert.equal(g.precioVentaDeProducto({ precio: '195', precioOrigen: 'especifico' }).origen, 'especifico')
+  // Sin origen registrado (embarques viejos): general.
+  assert.equal(g.precioVentaDeProducto({ precio: 200 }).origen, 'general')
   assert.equal(g.precioVentaDeProducto({ precio: 21 }, { esMaquila: true }), null)
   assert.equal(g.precioVentaDeProducto({ precio: 0 }), null)
   assert.equal(g.precioVentaDeProducto({}), null)
