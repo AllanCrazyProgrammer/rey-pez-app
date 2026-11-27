@@ -34,6 +34,21 @@
       </div>
     </div>
 
+    <!-- Total general de ganancias del día (fijo al hacer scroll) -->
+    <div v-if="embarqueData" class="ganancia-total-sticky">
+      <span class="ganancia-total-sticky-label">Ganancia total del día</span>
+      <span
+        class="ganancia-total-sticky-valor"
+        :class="{
+          'ganancia-positiva': totalGeneralGanancias > 0,
+          'ganancia-negativa': totalGeneralGanancias < 0
+        }"
+      >
+        ${{ formatearPrecio(totalGeneralGanancias) }}
+      </span>
+      <span class="ganancia-total-sticky-detalle">{{ resumenAnalisisGanancia }}</span>
+    </div>
+
     <div v-if="avisoError" class="aviso-conflicto aviso-error" role="alert">
       <p>{{ avisoError }}</p>
     </div>
@@ -705,6 +720,24 @@ export default {
         }
       }
       return compararDespiqueEmbarcado(this.pesadasModal.tienePesadas ? this.pesadasModal.grupos : [], embarcado);
+    },
+    // Total general de ganancias del día (limpios + crudos + maquila).
+    // Reutiliza el cálculo existente para que la barra fija se actualice
+    // en vivo al prender/apagar checks o cambiar costos.
+    totalGeneralGanancias() {
+      return this.calcularTotalGeneralGanancias();
+    },
+    resumenAnalisisGanancia() {
+      const limpios = (this.medidasUnicas || [])
+        .filter(medida => this.analizarGanancia[medida] && !this.medidaOculta[medida]).length;
+      const crudos = Object.values(this.analizarGananciaCrudos || {}).filter(Boolean).length;
+      const maquila = Object.entries(this.analizarMaquilaGanancia || {})
+        .filter(([medida, activo]) => activo && !this.medidaOculta[medida]).length;
+      const partes = [];
+      if (limpios) partes.push(`${limpios} ${limpios === 1 ? 'medida' : 'medidas'}`);
+      if (crudos) partes.push(`${crudos} ${crudos === 1 ? 'talla' : 'tallas'} de crudo`);
+      if (maquila) partes.push(`${maquila} maquila`);
+      return partes.length ? `Analizando: ${partes.join(' · ')}` : 'Sin medidas en análisis';
     }
   },
 
@@ -739,6 +772,7 @@ export default {
 
     if (navigator.onLine) await this.syncOfflineRendimientos();
     await this.cargarEmbarque();
+    await this.prellenarCostosDesdeEmbarqueAnterior();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
     await this.cargarResumenSacadasHoy();
@@ -762,6 +796,7 @@ export default {
 
     if (navigator.onLine) await this.syncOfflineRendimientos();
     await this.cargarEmbarque();
+    await this.prellenarCostosDesdeEmbarqueAnterior();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
     await this.cargarResumenSacadasHoy();
@@ -2212,8 +2247,199 @@ export default {
       }
     },
 
+    // Prende por default el análisis de ganancia en las medidas con kilos
+    // embarcados y precio de venta disponible (limpios, crudos y maquila).
+    // Solo toca las medidas sin decisión guardada (valor undefined): si el
+    // usuario apagó un check a mano, ese valor (false) se respeta.
+    // Es idempotente: se puede llamar en cada recálculo sin efectos nuevos.
+    aplicarDefaultsAnalisisGanancia() {
+      if (!this.embarqueData) return;
+      const fechaEmbarque = this.toLocalYMD(this.normalizarFecha(this.embarqueData.fecha) || new Date());
+      let cambios = false;
+
+      (this.medidasUnicas || []).forEach(medida => {
+        if (this.medidaOculta[medida]) return;
+
+        // Medida limpia: kilos embarcados > 0 y precio de venta disponible.
+        // Sin precio queda en false y conserva el aviso "sin precio" existente.
+        if (this.analizarGanancia[medida] === undefined) {
+          const tieneKilos = this.obtenerTotalEmbarcado(medida) > 0;
+          const tienePrecio = tieneKilos && !!this.obtenerPrecioVentaParaFecha(medida, fechaEmbarque, null);
+          if (tieneKilos && tienePrecio) {
+            this.$set(this.analizarGanancia, medida, true);
+            cambios = true;
+          }
+        }
+
+        // Maquila: medidas "Maquila Ozuna" con kilos embarcados.
+        if (this.analizarMaquilaGanancia[medida] === undefined) {
+          if (medida.toLowerCase().includes('maquila ozuna') && this.obtenerTotalEmbarcado(medida) > 0) {
+            this.$set(this.analizarMaquilaGanancia, medida, true);
+            cambios = true;
+          }
+        }
+      });
+
+      // Tallas de crudos: kilos de venta > 0 y precio disponible.
+      this.obtenerTallasCrudosUnicas().forEach(talla => {
+        if (this.analizarGananciaCrudos[talla] !== undefined) return;
+        const info = this.obtenerInfoTallaCrudo(talla, fechaEmbarque);
+        if (info.kilosVenta > 0 && info.tienePrecio) {
+          this.$set(this.analizarGananciaCrudos, talla, true);
+          cambios = true;
+        }
+      });
+
+      if (cambios) {
+        // Persistir con el mecanismo existente (con debounce, como el
+        // guardado al cambiar un check a mano).
+        this.programarGuardadoAnalisis();
+      }
+    },
+
+    // Kilos de venta y disponibilidad de precio de una talla de crudo,
+    // con la misma lógica que calcularGananciasPorTallaCrudo.
+    obtenerInfoTallaCrudo(talla, fechaEmbarque) {
+      let kilosVenta = 0;
+      let tienePrecio = false;
+      (this.embarqueData?.clientes || []).forEach(cliente => {
+        (cliente.crudos || []).forEach(crudo => {
+          (crudo.items || []).forEach(item => {
+            if (item.talla !== talla) return;
+            const esVenta = cliente.nombre === 'Ozuna' ? item.esVenta : true;
+            if (!esVenta) return;
+            kilosVenta += this.calcularKilosCrudosItem(item);
+            if (item.precio && item.precio > 0) {
+              tienePrecio = true;
+            } else if (!tienePrecio) {
+              const clienteId = this.obtenerClienteIdParaPrecios(cliente.nombre);
+              if (this.obtenerPrecioVentaParaFecha(talla, fechaEmbarque, clienteId)) {
+                tienePrecio = true;
+              }
+            }
+          });
+        });
+      });
+      return { kilosVenta, tienePrecio };
+    },
+
+    // Medidas y tallas de crudo del embarque sin costo en costosPorMedida
+    // (coincidencia exacta o insensible a mayúsculas/minúsculas).
+    obtenerMedidasSinCosto() {
+      const costos = this.embarqueData?.costosPorMedida || {};
+      const tieneCosto = (medida) => {
+        if (Number(costos[medida]) > 0) return true;
+        const lower = medida.toLowerCase().trim();
+        return Object.entries(costos).some(([clave, valor]) =>
+          clave.toLowerCase().trim() === lower && Number(valor) > 0);
+      };
+      const faltantes = [];
+      (this.medidasUnicas || []).forEach(medida => {
+        if (!tieneCosto(medida)) faltantes.push(medida);
+      });
+      this.obtenerTallasCrudosUnicas().forEach(talla => {
+        if (!tieneCosto(talla) && !faltantes.includes(talla)) faltantes.push(talla);
+      });
+      return faltantes;
+    },
+
+    // Costos por medida del embarque anterior más reciente que tenga costo
+    // para cada medida (un mapa medida -> costo). Solo embarques con fecha
+    // anterior a la del embarque actual.
+    async obtenerCostosEmbarquesAnteriores(fechaActualISO) {
+      const db = getFirestore();
+      const snapshot = await getDocs(collection(db, 'embarques'));
+      const anteriores = [];
+      snapshot.docs.forEach(docSnap => {
+        if (docSnap.id === this.$route.params.id) return;
+        const data = docSnap.data();
+        const fechaISO = this.obtenerFechaISODesdeValor(data.fecha);
+        if (!fechaISO || fechaISO >= fechaActualISO) return;
+        if (!data.costosPorMedida || Object.keys(data.costosPorMedida).length === 0) return;
+        anteriores.push({ fechaISO, costos: data.costosPorMedida });
+      });
+      // Más reciente primero: el primer costo encontrado por medida gana.
+      anteriores.sort((a, b) => (a.fechaISO < b.fechaISO ? 1 : a.fechaISO > b.fechaISO ? -1 : 0));
+      const mapa = {};
+      const vistosLower = new Set();
+      anteriores.forEach(({ costos }) => {
+        Object.entries(costos).forEach(([medida, valor]) => {
+          const costo = Number(valor);
+          if (!(costo > 0)) return;
+          const lower = medida.toLowerCase().trim();
+          if (!vistosLower.has(lower)) {
+            vistosLower.add(lower);
+            mapa[medida] = costo;
+          }
+        });
+      });
+      return mapa;
+    },
+
+    // Prellena costosPorMedida para las medidas sin costo: primero desde
+    // el embarque anterior más reciente que tenga costo para la medida y,
+    // si no hay, desde el catálogo global de costos (la misma búsqueda que
+    // encontrarCostoParaMedida). Nunca sobrescribe un costo existente.
+    // Persiste por la ruta existente (persistirCamposRendimientos).
+    async prellenarCostosDesdeEmbarqueAnterior() {
+      try {
+        if (!this.embarqueData || !navigator.onLine) return 0;
+        const fechaActualISO = this.toLocalYMD(this.normalizarFecha(this.embarqueData.fecha) || new Date());
+        const faltantes = this.obtenerMedidasSinCosto();
+        if (faltantes.length === 0) return 0;
+
+        const costosPrevios = await this.obtenerCostosEmbarquesAnteriores(fechaActualISO);
+        const costosNuevos = {};
+        for (const medida of faltantes) {
+          // 1. Embarque anterior más reciente (exacto o insensible a mayúsculas)
+          let costo = Number(costosPrevios[medida]) || 0;
+          if (costo <= 0) {
+            const lower = medida.toLowerCase().trim();
+            for (const [clave, valor] of Object.entries(costosPrevios)) {
+              if (clave.toLowerCase().trim() === lower) {
+                costo = Number(valor) || 0;
+                break;
+              }
+            }
+          }
+          // 2. Catálogo global de costos
+          if (costo <= 0) {
+            const encontrado = await this.encontrarCostoParaMedida(medida);
+            if (encontrado && Number(encontrado.costo) > 0) {
+              costo = Number(encontrado.costo);
+            }
+          }
+          if (costo > 0) {
+            costosNuevos[medida] = costo;
+            console.log(`💰 Costo prellenado para ${medida}: $${costo}`);
+          }
+        }
+
+        if (Object.keys(costosNuevos).length === 0) return 0;
+
+        await this.$nextTick();
+        if (!this.embarqueData.costosPorMedida) {
+          this.$set(this.embarqueData, 'costosPorMedida', {});
+        }
+        Object.entries(costosNuevos).forEach(([medida, costo]) => {
+          this.$set(this.embarqueData.costosPorMedida, medida, costo);
+        });
+        await this.persistirCamposRendimientos({
+          costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida)
+        });
+        return Object.keys(costosNuevos).length;
+      } catch (error) {
+        console.warn('[Rendimientos] No se pudieron prellenar costos desde el embarque anterior:', error);
+        return 0;
+      }
+    },
+
     async calcularGanancias() {
       if (!this.embarqueData) return;
+
+      // Prender por default el análisis de ganancia (solo medidas sin
+      // decisión guardada y con kilos + precio). Idempotente.
+      this.aplicarDefaultsAnalisisGanancia();
       
       // Normalizar la fecha del embarque
       const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData.fecha);
@@ -3757,6 +3983,43 @@ input {
   align-items: center;
   gap: 20px;
   margin-bottom: 20px;
+}
+
+/* Total general de ganancias del día: barra fija al hacer scroll */
+.ganancia-total-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #1a202c;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.ganancia-total-sticky-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #cbd5e0;
+}
+
+.ganancia-total-sticky-valor {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ganancia-total-sticky-detalle {
+  font-size: 0.85rem;
+  color: #a0aec0;
+  margin-left: auto;
 }
 
 .resumen-header-row {
