@@ -299,3 +299,83 @@ export function precioMaquilaPonderado(lineas) {
   });
   return kilos > 0 ? Math.round((total / kilos) * 100) / 100 : 0;
 }
+
+// ─── Edición de precio desde la tarjeta de ganancia ───────────────────────
+// Alcances del modal "Editar precio" (Rendimientos):
+//   'embarque' → solo las líneas de ese cliente en este embarque (manual ✋).
+//   'cliente'  → precio específico del cliente en Precios + sus líneas (📌).
+//   'general'  → precio general en Precios + líneas que van con el general (🌐).
+export const ALCANCES_EDICION_PRECIO = ['embarque', 'cliente', 'general'];
+
+const nombreClave = (nombre) => String(nombre || '').trim().toLowerCase();
+
+/** Origen de precio de una línea del embarque (null si no tiene precio). */
+export function origenPrecioLinea(producto) {
+  if (!(Number(producto?.precio) > 0)) return null;
+  return ['manual', 'especifico', 'general'].includes(producto.precioOrigen)
+    ? producto.precioOrigen
+    : 'general';
+}
+
+/** ¿La línea es venta limpia de esa medida? (mismo criterio que la ganancia) */
+export function esLineaVentaDeMedida(cliente, producto, medida) {
+  if (!producto || !producto.medida || producto.refrigerar) return false;
+  if (nombreClave(producto.medida) !== nombreClave(medida)) return false;
+  return cliente?.nombre !== 'Ozuna' || Boolean(producto.esVenta);
+}
+
+/**
+ * Aplica un precio a las líneas de una medida en los clientes de UN embarque.
+ * No muta: devuelve copias y cuántas líneas cambiaron.
+ * @param {Array} clientes clientes del documento del embarque
+ * @param {object} p
+ * @param {string} p.medida medida de la tarjeta (sin "Maquila Ozuna")
+ * @param {number} p.precio
+ * @param {'embarque'|'cliente'|'general'} p.alcance
+ * @param {string} p.cliente nombre del cliente que se editó
+ * @param {string} p.fecha YYYY-MM-DD del embarque
+ * @param {string|null} p.clienteId id de precios del cliente (alcance 'cliente')
+ * @param {boolean} p.quitarPropio alcance 'general': el cliente editado deja su precio propio
+ */
+export function aplicarPrecioEnClientes(clientes, { medida, precio, alcance, cliente, fecha, clienteId = null, quitarPropio = false }) {
+  const objetivo = nombreClave(cliente);
+  let cambiadas = 0;
+  const nuevos = (clientes || []).map(c => {
+    const esEditado = nombreClave(c?.nombre) === objetivo;
+    const productos = (c?.productos || []).map(producto => {
+      if (!esLineaVentaDeMedida(c, producto, medida)) return producto;
+      const origen = origenPrecioLinea(producto);
+      let cambio = null;
+      if (alcance === 'embarque' && esEditado) {
+        cambio = { precioOrigen: 'manual', precioMedidaBase: producto.medida };
+      } else if (alcance === 'cliente' && esEditado) {
+        cambio = { precioOrigen: 'especifico', precioClienteId: clienteId };
+      } else if (alcance === 'general') {
+        // Al general van las líneas que ya seguían el general (o no tenían
+        // precio) y las del cliente editado si deja su precio propio.
+        const sigueGeneral = origen === null || origen === 'general';
+        if (sigueGeneral || (esEditado && (quitarPropio || origen === 'manual'))) {
+          cambio = { precioOrigen: 'general', precioClienteId: null };
+        }
+      }
+      if (!cambio) return producto;
+      const actualizado = { ...producto, precio: Number(precio), precioFecha: fecha, ...cambio };
+      delete actualizado.precioBorradoManualmente;
+      if (alcance !== 'embarque') delete actualizado.precioMedidaBase;
+      const iguales = Number(producto.precio) === Number(precio) &&
+        producto.precioOrigen === actualizado.precioOrigen;
+      if (!iguales) cambiadas += 1;
+      return iguales ? producto : actualizado;
+    });
+    return { ...c, productos };
+  });
+  return { clientes: nuevos, cambiadas };
+}
+
+/** Categoría del catálogo de Precios (misma regla que el modal de Precios). */
+export function categoriaProductoPrecio(nombre) {
+  const texto = String(nombre || '').toLowerCase();
+  if (texto.includes('s/c') || /\d+\/\d+/.test(texto)) return 'Camarón S/C';
+  if (texto.includes('c/c')) return 'Camarón C/C';
+  return 'Otros';
+}

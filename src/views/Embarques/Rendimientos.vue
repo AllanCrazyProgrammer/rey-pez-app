@@ -331,14 +331,20 @@
                   </span>
                 </div>
                 <div
-                  v-if="gananciasCalculadas[medida].detallesPorCliente.length > 1 || gananciasCalculadas[medida].clientesConEspecifico.length"
+                  v-if="gananciasCalculadas[medida].detallesPorCliente.length"
                   class="detalles-clientes detalles-clientes-limpio"
                 >
-                  <h5>Precio por cliente:</h5>
+                  <h5>Precio por cliente<span v-if="puedeEditarPrecio(medida)" class="ayuda-editar-precio"> · toca para editar</span>:</h5>
                   <div
                     v-for="detalle in gananciasCalculadas[medida].detallesPorCliente"
                     :key="detalle.cliente + '-' + detalle.precioVenta + '-' + detalle.origen"
                     class="detalle-cliente"
+                    :class="{ 'detalle-cliente-editable': puedeEditarPrecio(medida) }"
+                    :role="puedeEditarPrecio(medida) ? 'button' : null"
+                    :tabindex="puedeEditarPrecio(medida) ? 0 : null"
+                    :aria-label="puedeEditarPrecio(medida) ? `Editar precio de ${detalle.cliente}` : null"
+                    @click="abrirEdicionPrecio(medida, detalle)"
+                    @keydown.enter.prevent="abrirEdicionPrecio(medida, detalle)"
                   >
                     <span class="cliente-nombre">{{ detalle.cliente }}:</span>
                     <span class="cliente-kilos">{{ formatearNumero(detalle.totalEmbarcado) }}kg</span>
@@ -356,8 +362,17 @@
                   <p class="leyenda-origen-precio">✋ manual · 📌 del cliente · 🌐 general</p>
                 </div>
                 <p v-if="gananciasCalculadas[medida].kilosSinPrecio > 0" class="aviso-sin-precio aviso-kilos-sin-precio">
-                  ⚠️ {{ formatearNumero(gananciasCalculadas[medida].kilosSinPrecio) }} kg sin precio
-                  ({{ gananciasCalculadas[medida].clientesSinPrecio.join(', ') }}) no entran en la ganancia
+                  ⚠️ {{ formatearNumero(gananciasCalculadas[medida].kilosSinPrecio) }} kg sin precio no entran en la ganancia:
+                  <template v-for="clienteSinPrecio in gananciasCalculadas[medida].clientesSinPrecio">
+                    <button
+                      v-if="puedeEditarPrecio(medida)"
+                      :key="'sp-' + clienteSinPrecio"
+                      type="button"
+                      class="btn-cliente-sin-precio"
+                      @click="abrirEdicionPrecio(medida, { cliente: clienteSinPrecio, precioVenta: null, origen: null })"
+                    >✏️ {{ clienteSinPrecio }}</button>
+                    <span v-else :key="'sp-' + clienteSinPrecio">{{ clienteSinPrecio }} </span>
+                  </template>
                 </p>
                 <div v-if="gananciasCalculadas[medida].fechaPrecio" class="ganancia-fecha">
                   <span class="fecha-precio">Precio del: {{ formatearFecha(gananciasCalculadas[medida].fechaPrecio) }}</span>
@@ -631,6 +646,82 @@
       </div>
     </div>
 
+    <!-- Modal: editar el precio de un cliente desde la tarjeta de ganancia -->
+    <div v-if="edicionPrecio" class="modal-overlay" @click.self="cerrarEdicionPrecio">
+      <div class="modal-content modal-editar-precio" role="dialog" aria-modal="true" aria-labelledby="titulo-editar-precio">
+        <h3 id="titulo-editar-precio">Precio de {{ edicionPrecio.cliente }} · {{ edicionPrecio.medida }}</h3>
+        <p class="editar-precio-actual">
+          <template v-if="edicionPrecio.precioActual">
+            Actual: <strong>${{ formatearPrecioVenta(edicionPrecio.precioActual) }}</strong>
+            {{ iconoOrigenPrecio(edicionPrecio.origen) }} {{ textoOrigenCorto(edicionPrecio.origen) }}
+          </template>
+          <template v-else>Sin precio en este embarque</template>
+        </p>
+
+        <label class="editar-precio-label" for="nuevo-precio-cliente">Nuevo precio por kg</label>
+        <input
+          id="nuevo-precio-cliente"
+          ref="inputNuevoPrecio"
+          v-model="edicionPrecio.nuevoPrecio"
+          type="number"
+          min="0"
+          step="0.5"
+          inputmode="decimal"
+          class="editar-precio-input"
+          placeholder="$ por kg"
+          @keydown.enter.prevent="guardarEdicionPrecio"
+        >
+
+        <p class="editar-precio-label">¿Dónde aplica?</p>
+        <div class="editar-precio-opciones" role="radiogroup">
+          <label class="editar-precio-opcion" :class="{ activa: edicionPrecio.alcance === 'embarque' }">
+            <input v-model="edicionPrecio.alcance" type="radio" value="embarque">
+            <span>
+              <strong>✋ Solo en este embarque</strong>
+              <small>Cambia las líneas de {{ edicionPrecio.cliente }} de {{ edicionPrecio.medida }} en este embarque. No toca la lista de precios.</small>
+            </span>
+          </label>
+          <label
+            class="editar-precio-opcion"
+            :class="{ activa: edicionPrecio.alcance === 'cliente', deshabilitada: !edicionPrecio.clienteId }"
+          >
+            <input v-model="edicionPrecio.alcance" type="radio" value="cliente" :disabled="!edicionPrecio.clienteId">
+            <span>
+              <strong>📌 Precio específico de {{ edicionPrecio.cliente }}</strong>
+              <small v-if="edicionPrecio.clienteId">Lo guarda en Precios como su precio propio desde el {{ formatearFecha(edicionPrecio.fecha) }}: aplica a este y a los siguientes embarques.</small>
+              <small v-else>{{ edicionPrecio.cliente }} no está en la lista de clientes de Precios.</small>
+            </span>
+          </label>
+          <label class="editar-precio-opcion" :class="{ activa: edicionPrecio.alcance === 'general' }">
+            <input v-model="edicionPrecio.alcance" type="radio" value="general">
+            <span>
+              <strong>🌐 Nuevo precio general</strong>
+              <small>Lo guarda en Precios como precio general de {{ edicionPrecio.medidaPrecio }} desde el {{ formatearFecha(edicionPrecio.fecha) }}. Cambia a todos los clientes que van con el general; los que tienen precio propio o manual lo conservan.</small>
+            </span>
+          </label>
+          <label
+            v-if="edicionPrecio.alcance === 'general' && edicionPrecio.origen === 'especifico' && edicionPrecio.clienteId"
+            class="editar-precio-quitar"
+          >
+            <input v-model="edicionPrecio.quitarPropio" type="checkbox">
+            Quitar el precio propio de {{ edicionPrecio.cliente }} (pasa al general)
+          </label>
+        </div>
+
+        <p class="editar-precio-nota">Las cuentas de clientes que ya se generaron no cambian solas.</p>
+        <p v-if="edicionPrecio.error" class="editar-precio-error" role="alert">{{ edicionPrecio.error }}</p>
+
+        <div class="modal-buttons">
+          <button type="button" class="btn-guardar" :disabled="edicionPrecio.guardando" @click="guardarEdicionPrecio">
+            {{ edicionPrecio.guardando ? 'Guardando…' : 'Guardar' }}
+          </button>
+          <button type="button" class="btn-cancelar" :disabled="edicionPrecio.guardando" @click="cerrarEdicionPrecio">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="avisoPrecio" class="aviso-precio-guardado" role="status" @click="avisoPrecio = ''">{{ avisoPrecio }}</div>
+
     <!-- Modal de costos faltantes -->
     <div v-if="mostrarModalCostosFaltantes" class="modal-overlay">
       <div class="modal-content">
@@ -680,7 +771,7 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit, addDoc, deleteDoc } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import {
   CAMPOS_RENDIMIENTOS,
@@ -696,7 +787,7 @@ import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import MedidasParaHoyCards from '@/components/Existencias/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { formatearFecha } from '@/utils/formatters';
-import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida } from '@/utils/preciosHistoricos';
+import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
 import { obtenerGrupoPreciosPorNombre } from '@/utils/preciosAliasCatalogo';
 import {
   SOBRECOSTO_CRUDO_KG,
@@ -708,7 +799,9 @@ import {
   normalizarCostoExtra,
   calcularCostoFinalKg,
   calcularGananciaCrudo,
-  precioMaquilaPonderado
+  precioMaquilaPonderado,
+  aplicarPrecioEnClientes,
+  categoriaProductoPrecio
 } from '@/utils/gananciasRendimientos';
 import { normalizarNombreMedida, renombrarMedidaRendimientos } from '@/utils/renombrarMedidaRendimientos';
 import { formatoFechaPesadas } from '@/utils/pesadas';
@@ -771,6 +864,11 @@ export default {
       precioMaquila: {},
       costosCalculados: {}, // Cache de costos calculados para cada medida
       costosGlobalesCache: null, // Cache de costos globales
+      // Ids de los embarques (camiones) del mismo día que se combinan en esta vista.
+      idsEmbarquesRelacionados: [],
+      // Modal "Editar precio" de un cliente desde la tarjeta de ganancia.
+      edicionPrecio: null,
+      avisoPrecio: '',
       // Regla refri (solo ganancia): costo/precio de la medida base y
       // rendimiento del día anterior de la base. Cache del embarque
       // del día anterior y de sus rendimientos por medida.
@@ -1550,6 +1648,7 @@ export default {
           data: record.docData || record
         }));
 
+        this.idsEmbarquesRelacionados = embarques.map(item => item.id);
         const combinado = this.combinarEmbarquesPorFecha(embarques, embarqueId);
         if (!combinado) {
           this.aplicarDatosOffline(baseRecord);
@@ -1848,6 +1947,7 @@ export default {
             console.warn('[Rendimientos] No se pudieron cargar embarques relacionados:', error);
           }
 
+          this.idsEmbarquesRelacionados = embarquesRelacionados.map(item => item.id);
           const combinado = this.combinarEmbarquesPorFecha(embarquesRelacionados, embarqueId);
           const previoOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
           const baseServidor = combinado || embarqueBase;
@@ -4066,6 +4166,181 @@ export default {
       return { manual: '✋', especifico: '📌', general: '🌐' }[origen] || '🌐';
     },
 
+    textoOrigenCorto(origen) {
+      return { manual: 'manual', especifico: 'del cliente', general: 'general' }[origen] || 'general';
+    },
+
+    // Las medidas de maquila de Ozuna no se editan aquí: su precio es la
+    // cuota de maquila (campo de la tarjeta de Maquila ganancia).
+    puedeEditarPrecio(medida) {
+      return !/maquila\s+ozuna/i.test(medida || '');
+    },
+
+    abrirEdicionPrecio(medida, detalle) {
+      if (!this.puedeEditarPrecio(medida) || !detalle) return;
+      const medidaPrecio = this.medidaBaseRefri(medida) || medida;
+      const clienteId = this.obtenerClienteIdParaPrecios(detalle.cliente || '');
+      this.edicionPrecio = {
+        medida,
+        medidaPrecio,
+        cliente: detalle.cliente,
+        clienteId,
+        precioActual: detalle.precioVenta || null,
+        origen: detalle.origen || null,
+        nuevoPrecio: detalle.precioVenta ? String(detalle.precioVenta) : '',
+        alcance: 'embarque',
+        quitarPropio: true,
+        fecha: this.toLocalYMD(this.normalizarFecha(this.embarqueData?.fecha) || new Date()),
+        guardando: false,
+        error: ''
+      };
+      this.$nextTick(() => {
+        const input = this.$refs.inputNuevoPrecio;
+        if (input && typeof input.focus === 'function') {
+          input.focus();
+          if (typeof input.select === 'function') input.select();
+        }
+      });
+    },
+
+    cerrarEdicionPrecio() {
+      if (this.edicionPrecio && this.edicionPrecio.guardando) return;
+      this.edicionPrecio = null;
+    },
+
+    // Nombre del producto en la colección `precios`: si ya existe uno con el
+    // mismo nombre normalizado se reutiliza (misma escritura que Precios).
+    nombreProductoCatalogo(medidaPrecio) {
+      const clave = normalizarMedida(medidaPrecio);
+      const grupo = this.encontrarPreciosParaMedida(medidaPrecio);
+      const existente = (grupo?.precios || []).find(p => p?.producto && normalizarMedida(p.producto) === clave);
+      return existente ? existente.producto : normalizarNombreProductoPrecio(String(medidaPrecio).trim());
+    },
+
+    // Aplica el precio en las líneas de esa medida en cada embarque (camión)
+    // del día. Escribe solo `clientes` con la revisión del documento recién
+    // leído; si alguien guardó en medio, vuelve a leer y reintenta.
+    async aplicarPrecioEnEmbarquesDelDia(opciones) {
+      const db = getFirestore();
+      const ids = this.idsEmbarquesRelacionados.length
+        ? this.idsEmbarquesRelacionados
+        : [this.$route.params.id];
+      let cambiadas = 0;
+      let bloqueados = 0;
+      for (const id of ids) {
+        for (let intento = 0; intento < 3; intento += 1) {
+          const snap = await getDoc(doc(db, 'embarques', id));
+          if (!snap.exists()) break;
+          const data = snap.data();
+          const resultado = aplicarPrecioEnClientes(data.clientes || [], opciones);
+          if (!resultado.cambiadas) break;
+          if (data.embarqueBloqueado) {
+            bloqueados += 1;
+            break;
+          }
+          try {
+            await escribirCamposEmbarque(db, id, {
+              baseRev: Number(data.rev) || 0,
+              baseCampos: { clientes: data.clientes || [] },
+              campos: { clientes: resultado.clientes }
+            });
+            cambiadas += resultado.cambiadas;
+            break;
+          } catch (error) {
+            if (esErrorConflictoEmbarque(error) && intento < 2) continue;
+            throw error;
+          }
+        }
+      }
+      return { cambiadas, bloqueados };
+    },
+
+    async guardarEdicionPrecio() {
+      const edicion = this.edicionPrecio;
+      if (!edicion || edicion.guardando) return;
+      const precio = Number(edicion.nuevoPrecio);
+      if (!(precio > 0)) {
+        edicion.error = 'Escribe un precio mayor a 0.';
+        return;
+      }
+      if (!navigator.onLine) {
+        edicion.error = 'Necesitas internet para cambiar precios.';
+        return;
+      }
+      if (edicion.alcance === 'cliente' && !edicion.clienteId) {
+        edicion.error = 'Este cliente no tiene precios propios en la lista de Precios.';
+        return;
+      }
+
+      edicion.guardando = true;
+      edicion.error = '';
+      try {
+        const db = getFirestore();
+        const quitarPropio = edicion.alcance === 'general' && edicion.origen === 'especifico' &&
+          Boolean(edicion.clienteId) && edicion.quitarPropio;
+
+        if (edicion.alcance !== 'embarque') {
+          const producto = this.nombreProductoCatalogo(edicion.medidaPrecio);
+          const registro = {
+            producto,
+            precio,
+            fecha: edicion.fecha,
+            categoria: categoriaProductoPrecio(producto),
+            timestamp: Date.now(),
+            fechaCreacion: this.toLocalYMD(new Date()),
+            horaCreacion: new Date().toLocaleTimeString('es-ES')
+          };
+          if (edicion.alcance === 'cliente') registro.clienteId = edicion.clienteId;
+          await addDoc(collection(db, 'precios'), registro);
+
+          // Igual que "Sobreescribir con precio general" en Precios: el
+          // cliente deja de tener precio propio para ese producto.
+          if (quitarPropio) {
+            const clave = normalizarMedida(producto);
+            const grupo = this.encontrarPreciosParaMedida(edicion.medidaPrecio);
+            const propios = (grupo?.precios || []).filter(p =>
+              p?.id && p.clienteId === edicion.clienteId && normalizarMedida(p.producto) === clave);
+            for (const registroPropio of propios) {
+              await deleteDoc(doc(db, 'precios', registroPropio.id));
+            }
+          }
+        }
+
+        const { cambiadas, bloqueados } = await this.aplicarPrecioEnEmbarquesDelDia({
+          medida: edicion.medida,
+          precio,
+          alcance: edicion.alcance,
+          cliente: edicion.cliente,
+          fecha: edicion.fecha,
+          clienteId: edicion.clienteId,
+          quitarPropio
+        });
+
+        if (edicion.alcance !== 'embarque') await this.cargarPreciosVenta();
+        await this.cargarEmbarque();
+        await this.calcularGanancias();
+
+        const donde = {
+          embarque: 'solo en este embarque',
+          cliente: `como precio de ${edicion.cliente}`,
+          general: 'como precio general'
+        }[edicion.alcance];
+        let aviso = `Precio $${this.formatearPrecioVenta(precio)} guardado ${donde}`;
+        aviso += cambiadas ? ` · ${cambiadas} ${cambiadas === 1 ? 'línea actualizada' : 'líneas actualizadas'}` : '';
+        if (bloqueados) aviso += ` · ${bloqueados} embarque(s) bloqueado(s) sin cambiar`;
+        this.avisoPrecio = aviso;
+        clearTimeout(this._timerAvisoPrecio);
+        this._timerAvisoPrecio = setTimeout(() => { this.avisoPrecio = ''; }, 6000);
+        this.edicionPrecio = null;
+      } catch (error) {
+        console.error('[Rendimientos] No se pudo guardar el precio:', error);
+        edicion.guardando = false;
+        edicion.error = esErrorConflictoEmbarque(error)
+          ? 'Otra pantalla está guardando este embarque. Intenta de nuevo en unos segundos.'
+          : 'No se pudo guardar el precio. ' + (error?.message || 'Intenta de nuevo.');
+      }
+    },
+
     describirOrigenPrecio(detalle) {
       const textos = {
         manual: 'Precio capturado a mano en el embarque',
@@ -5992,6 +6267,92 @@ input {
   line-height: 1.4;
   color: #6c7a89;
 }
+.ayuda-editar-precio { font-weight: 400; color: #6c7a89; font-size: .75rem; }
+.detalle-cliente-editable { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.detalle-cliente-editable:hover,
+.detalle-cliente-editable:focus-visible {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, .18);
+  outline: none;
+}
+.btn-cliente-sin-precio {
+  margin: 4px 4px 0 0;
+  padding: 3px 9px;
+  border: 1px solid #f0b429;
+  border-radius: 999px;
+  background: #fff8e6;
+  color: #7a4b00;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* Modal "Editar precio": mismo tema oscuro que los demás modales */
+.modal-content.modal-editar-precio { max-width: 440px; width: calc(100% - 32px); text-align: left; }
+.modal-content.modal-editar-precio h3 { margin: 0 0 4px; }
+.modal-editar-precio .editar-precio-actual { margin: 0 0 12px; color: #9fb3cc; }
+.modal-editar-precio .editar-precio-actual strong { color: #fff; }
+.modal-editar-precio .editar-precio-label { display: block; margin: 12px 0 6px; font-weight: 700; color: #c8d8eb; }
+.modal-content.modal-editar-precio .editar-precio-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 1.25rem;
+}
+.modal-editar-precio .editar-precio-opciones { display: flex; flex-direction: column; gap: 8px; }
+.modal-editar-precio .editar-precio-opcion {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+  cursor: pointer;
+}
+.modal-editar-precio .editar-precio-opcion span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.modal-editar-precio .editar-precio-opcion strong { color: #f3f8ff; }
+.modal-editar-precio .editar-precio-opcion small { color: #9fb3cc; line-height: 1.35; }
+.modal-editar-precio .editar-precio-opcion.activa { border-color: #38bdf8; background: rgba(56, 189, 248, .12); }
+.modal-editar-precio .editar-precio-opcion.deshabilitada { opacity: .5; cursor: not-allowed; }
+.modal-content.modal-editar-precio input[type='radio'],
+.modal-content.modal-editar-precio input[type='checkbox'] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: none;
+  accent-color: #38bdf8;
+}
+.modal-editar-precio .editar-precio-quitar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 2px 0 0 4px;
+  font-size: .9rem;
+  color: #fcd34d;
+  cursor: pointer;
+}
+.modal-editar-precio .editar-precio-nota { margin: 12px 0 0; font-size: .78rem; color: #8da0bd; }
+.modal-editar-precio .editar-precio-error { margin: 8px 0 0; color: #fca5a5; font-weight: 700; }
+.aviso-precio-guardado {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 2000;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #14532d;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+  cursor: pointer;
+}
+
 .aviso-kilos-sin-precio {
   margin: 8px 0 0;
   font-size: .82rem;

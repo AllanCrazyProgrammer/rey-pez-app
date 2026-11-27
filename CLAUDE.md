@@ -95,6 +95,12 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
 - Crudos: mismo costo + $3.50/kg; la ganancia por cliente usa su propio precio.
 - Maquila Ozuna: precio vacío usa el de las líneas del embarque; esas medidas no
   prenden "Analizar ganancia" por default (se contaría doble).
+- Editar precio desde "Precio por cliente" (modal en Rendimientos): solo este embarque
+  (líneas `precioOrigen: 'manual'`), precio específico del cliente o nuevo general
+  (registro en `precios` con la fecha del embarque). Escribe `clientes` de cada camión
+  del día con `escribirCamposEmbarque` (salta embarques bloqueados). Qué líneas cambian:
+  `aplicarPrecioEnClientes`. Prueba con emulador: dev server con
+  `VUE_APP_FIRESTORE_EMULATOR=127.0.0.1:<puerto>` y proyecto `demo-reypez`.
 
 ## Saldos de cuentas (Cuentas México)
 

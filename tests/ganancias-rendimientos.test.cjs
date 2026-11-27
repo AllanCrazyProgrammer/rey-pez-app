@@ -134,3 +134,73 @@ test('precio de maquila ponderado de las líneas del embarque', () => {
   assert.equal(g.precioMaquilaPonderado([{ kilos: 100, precio: 21 }, { kilos: 100, precio: 23 }]), 22)
   assert.equal(g.precioMaquilaPonderado([{ kilos: 0, precio: 21 }]), 0)
 })
+
+const embarqueEjemplo = () => ([
+  { nombre: 'Catarro', productos: [
+    { id: 1, medida: '51/60', precio: 185, precioOrigen: 'general' },
+    { id: 2, medida: '41/50', precio: 230, precioOrigen: 'general' }
+  ] },
+  { nombre: 'Otilio', productos: [
+    { id: 3, medida: '51/60', precio: 180, precioOrigen: 'especifico', precioClienteId: 'otilio' },
+    { id: 4, medida: '51/60', precio: 180, precioOrigen: 'especifico', refrigerar: true }
+  ] },
+  { nombre: 'Joselito', productos: [{ id: 5, medida: '51/60', precio: 190, precioOrigen: 'manual', precioMedidaBase: '51/60' }] },
+  { nombre: 'guayaba', productos: [{ id: 6, medida: '51/60 ' }] },
+  { nombre: 'Ozuna', productos: [
+    { id: 7, medida: '51/60', precio: 21, esVenta: false },
+    { id: 8, medida: '51/60', precio: 185, esVenta: true, precioOrigen: 'general' }
+  ] }
+])
+const precioDe = (clientes, id) => clientes.flatMap(c => c.productos).find(p => p.id === id)
+
+test('editar precio solo en este embarque: líneas del cliente quedan manuales', () => {
+  const original = embarqueEjemplo()
+  const copia = JSON.stringify(original)
+  const r = g.aplicarPrecioEnClientes(original, { medida: '51/60', precio: 188, alcance: 'embarque', cliente: 'catarro', fecha: '2026-11-27' })
+  assert.equal(JSON.stringify(original), copia, 'no muta la entrada')
+  assert.equal(r.cambiadas, 1)
+  const linea = precioDe(r.clientes, 1)
+  assert.equal(linea.precio, 188)
+  assert.equal(linea.precioOrigen, 'manual')
+  assert.equal(linea.precioMedidaBase, '51/60')
+  assert.equal(precioDe(r.clientes, 2).precio, 230, 'otra medida no cambia')
+  assert.equal(precioDe(r.clientes, 8).precio, 185, 'otro cliente no cambia')
+})
+
+test('editar precio específico del cliente: sus líneas pasan a 📌 (refrigerados no)', () => {
+  const r = g.aplicarPrecioEnClientes(embarqueEjemplo(), { medida: '51/60', precio: 178, alcance: 'cliente', cliente: 'Otilio', fecha: '2026-11-27', clienteId: 'otilio' })
+  assert.equal(r.cambiadas, 1)
+  assert.equal(precioDe(r.clientes, 3).precio, 178)
+  assert.equal(precioDe(r.clientes, 3).precioOrigen, 'especifico')
+  assert.equal(precioDe(r.clientes, 4).precio, 180)
+})
+
+test('nuevo precio general: cambia lo que sigue al general; respeta manual y propio de otros', () => {
+  const r = g.aplicarPrecioEnClientes(embarqueEjemplo(), { medida: '51/60', precio: 190, alcance: 'general', cliente: 'Catarro', fecha: '2026-11-27' })
+  assert.equal(precioDe(r.clientes, 1).precio, 190)
+  assert.equal(precioDe(r.clientes, 6).precio, 190, 'línea sin precio toma el general')
+  assert.equal(precioDe(r.clientes, 8).precio, 190, 'venta de Ozuna sigue el general')
+  assert.equal(precioDe(r.clientes, 7).precio, 21, 'maquila de Ozuna no se toca')
+  assert.equal(precioDe(r.clientes, 3).precio, 180, 'Otilio conserva su precio propio')
+  assert.equal(precioDe(r.clientes, 5).precio, 190 , 'Joselito manual ya estaba en 190')
+  assert.equal(precioDe(r.clientes, 5).precioOrigen, 'manual', 'manual de otro cliente no se toca')
+  assert.equal(r.cambiadas, 3)
+})
+
+test('nuevo precio general desde un cliente con precio propio: quitarPropio decide', () => {
+  const conserva = g.aplicarPrecioEnClientes(embarqueEjemplo(), { medida: '51/60', precio: 195, alcance: 'general', cliente: 'Otilio', fecha: '2026-11-27' })
+  assert.equal(precioDe(conserva.clientes, 3).precio, 180)
+  const quita = g.aplicarPrecioEnClientes(embarqueEjemplo(), { medida: '51/60', precio: 195, alcance: 'general', cliente: 'Otilio', fecha: '2026-11-27', quitarPropio: true })
+  assert.equal(precioDe(quita.clientes, 3).precio, 195)
+  assert.equal(precioDe(quita.clientes, 3).precioOrigen, 'general')
+  assert.equal(precioDe(quita.clientes, 3).precioClienteId, null)
+})
+
+test('origen de línea y categoría de catálogo', () => {
+  assert.equal(g.origenPrecioLinea({ precio: 0 }), null)
+  assert.equal(g.origenPrecioLinea({ precio: 10 }), 'general')
+  assert.equal(g.origenPrecioLinea({ precio: 10, precioOrigen: 'manual' }), 'manual')
+  assert.equal(g.categoriaProductoPrecio('51/60'), 'Camarón S/C')
+  assert.equal(g.categoriaProductoPrecio('Med-Gde c/c'), 'Camarón C/C')
+  assert.equal(g.categoriaProductoPrecio('Piojo'), 'Otros')
+})
