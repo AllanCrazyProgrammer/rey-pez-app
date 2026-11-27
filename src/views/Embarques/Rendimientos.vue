@@ -716,6 +716,12 @@ export default {
       precioMaquila: {},
       costosCalculados: {}, // Cache de costos calculados para cada medida
       costosGlobalesCache: null, // Cache de costos globales
+      // Regla refri (solo ganancia): costo/precio de la medida base y
+      // rendimiento del día anterior de la base. Cache del embarque
+      // del día anterior y de sus rendimientos por medida.
+      embarqueDiaAnteriorCache: null,
+      embarqueDiaAnteriorFecha: '',
+      rendimientoDiaAnteriorCache: {},
       activeVistaTab: 'rendimientos',
       resumenSacadaHoy: {
         loading: false,
@@ -2227,19 +2233,25 @@ export default {
         return this.costosCalculados[medida];
       }
       
+      // Regla refri (solo ganancia): el costo se busca con la medida
+      // base y el rendimiento es el del día anterior de la base
+      // cuando ya se calculó por la ruta asíncrona.
+      const baseRefriSync = this.medidaBaseRefri(medida);
+      const medidaCostoSync = baseRefriSync || medida;
+
       // Si no está en cache, intentar calcularlo de forma síncrona usando los costos disponibles
       const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-      let costo = Number(costosEmbarque[medida]) || 0;
-      
+      let costo = Number(costosEmbarque[medidaCostoSync]) || 0;
+
       // Si no hay costo en el embarque, buscar en el cache de costos globales
       if (costo === 0 && this.costosGlobalesCache) {
         // Buscar coincidencia exacta en costos globales
-        if (this.costosGlobalesCache[medida]) {
-          costo = this.costosGlobalesCache[medida].costoBase;
+        if (this.costosGlobalesCache[medidaCostoSync]) {
+          costo = this.costosGlobalesCache[medidaCostoSync].costoBase;
           console.log(`💰 [${medida}] Usando costo global del cache: $${costo}`);
         } else {
           // Buscar insensible a mayúsculas
-          const medidaLower = medida.toLowerCase().trim();
+          const medidaLower = medidaCostoSync.toLowerCase().trim();
           for (const [claveMedida, costoInfo] of Object.entries(this.costosGlobalesCache)) {
             if (claveMedida.toLowerCase().trim() === medidaLower) {
               costo = costoInfo.costoBase;
@@ -2249,8 +2261,14 @@ export default {
           }
         }
       }
-      
-      const rendimientoOriginal = this.getRendimiento(medida);
+
+      let rendimientoOriginal = this.getRendimiento(medida);
+      if (baseRefriSync) {
+        const rendAyer = this.rendimientoDiaAnteriorCache[baseRefriSync.toLowerCase().trim()];
+        if (rendAyer !== undefined && rendAyer !== null) {
+          rendimientoOriginal = rendAyer;
+        }
+      }
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
       const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
       const aplicarExtra = this.debeAplicarCostoExtra(medida);
@@ -2268,7 +2286,129 @@ export default {
       return resultado;
     },
 
+    // Medida base de una medida refri ("71/90 refri" -> "71/90").
+    // Regla refri (SOLO ganancia): costo, precio y rendimiento se
+    // toman de la base como si no dijera refri. La hoja de
+    // rendimientos (rendimiento mostrado, kilosCrudos) no se toca.
+    medidaBaseRefri(medida) {
+      if (!this.esMedidaRefri(medida)) return null;
+      const base = String(medida || '')
+        .replace(/refri/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return base || null;
+    },
+
+    // Embarque del día anterior al actual (solo lectura, cacheado
+    // por visita). Sin conexión o sin embarque ese día devuelve null.
+    async obtenerEmbarqueDiaAnterior() {
+      if (!this.embarqueData || !navigator.onLine) return null;
+      const fechaActual = this.normalizarFecha(this.embarqueData.fecha) || new Date();
+      const ayer = new Date(fechaActual);
+      ayer.setDate(ayer.getDate() - 1);
+      const ayerISO = this.toLocalYMD(ayer);
+      if (this.embarqueDiaAnteriorFecha === ayerISO) {
+        return this.embarqueDiaAnteriorCache;
+      }
+      try {
+        const db = getFirestore();
+        const snapshot = await getDocs(
+          query(collection(db, 'embarques'), orderBy('fecha', 'desc'), limit(60))
+        );
+        let encontrado = null;
+        snapshot.docs.forEach(docSnap => {
+          if (encontrado || docSnap.id === this.$route.params.id) return;
+          const data = docSnap.data();
+          if (this.obtenerFechaISODesdeValor(data.fecha) === ayerISO) {
+            encontrado = data;
+          }
+        });
+        this.embarqueDiaAnteriorFecha = ayerISO;
+        this.embarqueDiaAnteriorCache = encontrado;
+        return encontrado;
+      } catch (error) {
+        console.warn('[Rendimientos] No se pudo leer el embarque del día anterior:', error);
+        return null;
+      }
+    },
+
+    // Kilos crudos de una medida en un embarque dado, con el mismo
+    // criterio que calcularRendimiento (mix suma sus dos partes).
+    obtenerKilosCrudosDeEmbarque(embarqueData, medida) {
+      const mapa = embarqueData?.kilosCrudos || {};
+      let valor = mapa[medida];
+      if (valor === undefined) {
+        const lower = medida.toLowerCase().trim();
+        for (const [clave, v] of Object.entries(mapa)) {
+          if (clave.toLowerCase().trim() === lower) {
+            valor = v;
+            break;
+          }
+        }
+      }
+      if (valor === undefined || valor === null) return null;
+      if (this.esMedidaMix(medida)) {
+        return (Number(valor?.medida1) || 0) + (Number(valor?.medida2) || 0);
+      }
+      return Number(valor) || 0;
+    },
+
+    // Rendimiento de la medida base en el embarque del día anterior,
+    // con la misma lógica que calcularRendimiento: kilosCrudos del
+    // embarque anterior entre el total embarcado (redondeado hacia
+    // abajo) de ese día. Devuelve null si no existe (sin embarque,
+    // sin kilos o sin crudos): quien llama conserva el comportamiento
+    // actual en ese caso.
+    async obtenerRendimientoDiaAnterior(medidaBase) {
+      if (!medidaBase) return null;
+      const clave = medidaBase.toLowerCase().trim();
+      if (Object.prototype.hasOwnProperty.call(this.rendimientoDiaAnteriorCache, clave)) {
+        return this.rendimientoDiaAnteriorCache[clave];
+      }
+      let rendimiento = null;
+      try {
+        const anterior = await this.obtenerEmbarqueDiaAnterior();
+        if (anterior) {
+          const totalEmbarcado = Math.floor(Number(this.obtenerTotalEmbarcado(medidaBase, anterior)) || 0);
+          if (totalEmbarcado > 0) {
+            const kilosCrudos = this.obtenerKilosCrudosDeEmbarque(anterior, medidaBase);
+            if (kilosCrudos !== null && kilosCrudos !== undefined) {
+              rendimiento = Number(kilosCrudos) / totalEmbarcado;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Rendimientos] No se pudo calcular el rendimiento del día anterior:', error);
+        rendimiento = null;
+      }
+      this.$set(this.rendimientoDiaAnteriorCache, clave, rendimiento);
+      return rendimiento;
+    },
+
     async calcularCostoFinal(medida) {
+      // Regla refri (SOLO ganancia): costo y rendimiento de la medida
+      // base. El rendimiento es el del día anterior de la base; si no
+      // existe, se conserva el comportamiento actual.
+      const baseRefri = this.medidaBaseRefri(medida);
+      if (baseRefri) {
+        const resultadoBusqueda = await this.encontrarCostoParaMedida(baseRefri);
+        const costo = resultadoBusqueda ? resultadoBusqueda.costo : 0;
+        if (resultadoBusqueda && resultadoBusqueda.medidaEncontrada !== medida) {
+          console.log(`💰 [${medida}] Usando costo de la base: ${resultadoBusqueda.medidaEncontrada} ($${costo})`);
+        }
+        let rendimientoOriginal = await this.obtenerRendimientoDiaAnterior(baseRefri);
+        if (rendimientoOriginal === null || rendimientoOriginal === undefined) {
+          rendimientoOriginal = this.getRendimiento(medida);
+        }
+        const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
+        const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
+        const aplicarExtra = this.debeAplicarCostoExtra(medida);
+        if (aplicarExtra) {
+          return Math.round((costo * rendimiento) + costoExtra);
+        }
+        return Math.round(costo * rendimiento);
+      }
+
       // Usar búsqueda inteligente de costos
       const resultadoBusqueda = await this.encontrarCostoParaMedida(medida);
       let costo = 0;
@@ -2388,12 +2528,16 @@ export default {
           clave.toLowerCase().trim() === lower && Number(valor) > 0);
       };
       const faltantes = [];
-      (this.medidasUnicas || []).forEach(medida => {
-        if (!tieneCosto(medida)) faltantes.push(medida);
-      });
-      this.obtenerTallasCrudosUnicas().forEach(talla => {
-        if (!tieneCosto(talla) && !faltantes.includes(talla)) faltantes.push(talla);
-      });
+      const agregarFaltante = (medida) => {
+        // Regla refri (solo ganancia): el costo es el de la medida
+        // base; el faltante se registra con la base para que el
+        // prellenado y el prompt busquen/pidan ese costo.
+        const baseRefri = this.medidaBaseRefri(medida);
+        const clave = baseRefri || medida;
+        if (!tieneCosto(clave) && !faltantes.includes(clave)) faltantes.push(clave);
+      };
+      (this.medidasUnicas || []).forEach(medida => agregarFaltante(medida));
+      this.obtenerTallasCrudosUnicas().forEach(talla => agregarFaltante(talla));
       return faltantes;
     },
 
@@ -2626,9 +2770,22 @@ export default {
         const costoFinal = await this.calcularCostoFinal(medida);
         this.$set(this.costosCalculados, medida, costoFinal);
         
-        // Obtener el costo base original (sin cálculos adicionales)
+        // Obtener el costo base original (sin cálculos adicionales).
+        // Regla refri (solo ganancia): el costo base es el de la
+        // medida base ("71/90" para "71/90 refri").
         const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-        const costoBase = Number(costosEmbarque[medida]) || 0;
+        const baseRefriCosto = this.medidaBaseRefri(medida);
+        const claveCostoBase = baseRefriCosto || medida;
+        let costoBase = Number(costosEmbarque[claveCostoBase]) || 0;
+        if (costoBase <= 0 && baseRefriCosto) {
+          const lowerCostoBase = claveCostoBase.toLowerCase().trim();
+          for (const [clave, valor] of Object.entries(costosEmbarque)) {
+            if (clave.toLowerCase().trim() === lowerCostoBase) {
+              costoBase = Number(valor) || 0;
+              break;
+            }
+          }
+        }
         
         // Obtener clientes que tienen productos de esta medida
         const clientesConMedida = this.obtenerClientesConMedida(medida);
@@ -2695,16 +2852,20 @@ export default {
       let gananciaTotalSumada = 0;
       let totalVentasPonderadas = 0;
       
+      // Regla refri (solo ganancia): el precio se toma de la medida
+      // base como si no dijera refri.
+      const medidaPrecio = this.medidaBaseRefri(medida) || medida;
+
       // Obtener precio general más reciente
-      const precioGeneral = this.obtenerPrecioVentaParaFecha(medida, fechaEmbarque, null);
+      const precioGeneral = this.obtenerPrecioVentaParaFecha(medidaPrecio, fechaEmbarque, null);
       const fechaGeneral = precioGeneral ? this.normalizarFecha(precioGeneral.fecha) : null;
-      
+
       // Calcular ganancias por cada cliente
       clientesConMedida.forEach(({ cliente, totalEmbarcado }) => {
         const clienteIdParaPrecios = this.obtenerClienteIdParaPrecios(cliente.nombre);
-        
+
         // Buscar precio específico para el cliente
-        const precioEspecifico = this.obtenerPrecioVentaParaFecha(medida, fechaEmbarque, clienteIdParaPrecios);
+        const precioEspecifico = this.obtenerPrecioVentaParaFecha(medidaPrecio, fechaEmbarque, clienteIdParaPrecios);
         
         // Decidir qué precio usar: específico solo si es más reciente que el general
         let precioAUsar = precioGeneral; // Por defecto usar general
@@ -3358,24 +3519,26 @@ export default {
       this.medidasUnicas = Array.from(medidasMap.values());
     },
 
-    obtenerTotalEmbarcado(medida) {
-      if (!this.embarqueData || !this.embarqueData.clientes) return 0;
-      
+    // Acepta un embarque opcional (para el rendimiento del día
+    // anterior de una medida refri); por default el embarque actual.
+    obtenerTotalEmbarcado(medida, embarqueData = this.embarqueData) {
+      if (!embarqueData || !embarqueData.clientes) return 0;
+
       if (medida.includes('-') && medida.endsWith('mix')) {
         const [medida1, medida2] = medida.split('-').map(m => m.trim());
-        const total1 = this.calcularTotalParaMedida(medida1 + ' mix');
-        const total2 = this.calcularTotalParaMedida(medida2.replace(' mix', '') + ' mix');
+        const total1 = this.calcularTotalParaMedida(medida1 + ' mix', embarqueData);
+        const total2 = this.calcularTotalParaMedida(medida2.replace(' mix', '') + ' mix', embarqueData);
         return total1 + total2;
       }
-      
-      return this.calcularTotalParaMedida(medida);
+
+      return this.calcularTotalParaMedida(medida, embarqueData);
     },
 
-    calcularTotalParaMedida(medida) {
+    calcularTotalParaMedida(medida, embarqueData = this.embarqueData) {
       const esOzuna = medida.includes('Maquila Ozuna');
       const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
-      
-      return this.embarqueData.clientes.reduce((total, cliente) => {
+
+      return (embarqueData?.clientes || []).reduce((total, cliente) => {
         return total + cliente.productos
           .filter(p => {
             if (!p.medida) return false;
