@@ -309,3 +309,20 @@ test('solo refri: no hay ganancia pero el desglose sigue', () => {
   assert.equal(r.totalEmbarcado, 0)
   assert.equal(r.detallesPorCliente.length, 1)
 })
+
+test('kilos sin decimales por cliente: el total es la suma de lo que se ve (caso 71/90)', () => {
+  const r = g.calcularGananciaLimpio([
+    { cliente: 'Joselito', kilos: 97.6, precio: 165, origen: 'especifico' },
+    { cliente: 'Otilio', kilos: 200.5, precio: 165, origen: 'especifico' },
+    { cliente: 'Otilio', kilos: 53.3, precio: 165, origen: 'especifico' },
+    { cliente: 'refri', kilos: 6.4, precio: 165, origen: 'general' }
+  ], 140)
+  const [joselito, otilio] = r.detallesPorCliente
+  assert.equal(joselito.totalEmbarcado, 97)
+  assert.equal(otilio.totalEmbarcado, 253, 'se suman las líneas del cliente y luego se quitan decimales')
+  assert.equal(joselito.gananciaTotal, 97 * 25)
+  assert.equal(otilio.gananciaTotal, 253 * 25)
+  assert.equal(r.totalEmbarcado, 350)
+  assert.equal(r.gananciaTotal, 8750)
+  assert.equal(r.gananciaTotal, joselito.gananciaTotal + otilio.gananciaTotal)
+})

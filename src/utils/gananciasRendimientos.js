@@ -166,31 +166,34 @@ export function calcularGananciaLimpio(lineas, costoFinal) {
       });
     }
     grupos.get(clave).totalEmbarcado += kilos;
-    if (noCuenta) {
-      kilosRefri += kilos;
-      return;
-    }
-    kilosConPrecio += kilos;
-    ventas += precio * kilos;
+    if (noCuenta) kilosRefri += kilos;
   });
 
   if (grupos.size === 0) return null;
 
+  // Kilos enteros por cliente (sin decimales, como se muestran): la ganancia
+  // de cada renglón y el total son exactamente los que se ven en pantalla.
+  // Ej.: 97.6 kg + 253.8 kg cuentan como 97 + 253 = 350 kg.
   const detallesPorCliente = Array.from(grupos.values()).map(g => {
+    const kilosEnteros = Math.floor(g.totalEmbarcado + 1e-9);
     const gananciaUnitaria = g.noCuenta ? 0 : g.precioVenta - costo;
     return {
       ...g,
       clienteId: null,
       esEspecifico: g.origen === 'especifico',
-      totalEmbarcado: Math.round(g.totalEmbarcado * 10) / 10,
+      totalEmbarcado: kilosEnteros,
       gananciaUnitaria: Math.round(gananciaUnitaria * 100) / 100,
-      gananciaTotal: g.noCuenta ? 0 : Math.round(gananciaUnitaria * g.totalEmbarcado)
+      gananciaTotal: g.noCuenta ? 0 : Math.round(gananciaUnitaria * kilosEnteros)
     };
   });
   const vendidos = detallesPorCliente.filter(d => !d.noCuenta);
+  vendidos.forEach(d => {
+    kilosConPrecio += d.totalEmbarcado;
+    ventas += d.precioVenta * d.totalEmbarcado;
+  });
 
   const precioPromedio = kilosConPrecio > 0 ? ventas / kilosConPrecio : 0;
-  const gananciaTotal = Math.round(ventas - costo * kilosConPrecio);
+  const gananciaTotal = vendidos.reduce((total, d) => total + d.gananciaTotal, 0);
   const precios = new Set(vendidos.map(d => d.precioVenta));
   const clientesConEspecifico = [...new Set(
     vendidos.filter(d => d.origen === 'especifico' || d.origen === 'manual').map(d => d.cliente)
