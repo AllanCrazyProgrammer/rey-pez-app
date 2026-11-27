@@ -42,6 +42,7 @@ export const CAMPOS_RENDIMIENTOS = [
   'notaRendimientos',
   'totalGanancias',
   'costosPorMedida',
+  'costosOmitidos',
 ];
 
 export const CAMPOS_COSTOS = [

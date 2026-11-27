@@ -47,6 +47,14 @@
         ${{ formatearPrecio(totalGeneralGanancias) }}
       </span>
       <span class="ganancia-total-sticky-detalle">{{ resumenAnalisisGanancia }}</span>
+      <button
+        v-if="costosFaltantesPendientes > 0"
+        type="button"
+        class="ganancia-total-sticky-costos"
+        @click="preguntarCostosFaltantes(true)"
+      >
+        ⚠️ Faltan {{ costosFaltantesPendientes }} costos
+      </button>
     </div>
 
     <div v-if="avisoError" class="aviso-conflicto aviso-error" role="alert">
@@ -579,6 +587,39 @@
       </div>
     </div>
 
+    <!-- Modal de costos faltantes -->
+    <div v-if="mostrarModalCostosFaltantes" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Faltan costos del día</h3>
+        <p class="modal-descripcion">
+          Estas medidas del embarque no tienen costo registrado ni en embarques
+          anteriores ni en el catálogo. Sin costo, la ganancia sale inflada.
+          Captura el costo por kg o usa Omitir.
+        </p>
+        <div class="costos-faltantes-lista">
+          <div v-for="medida in costosFaltantes" :key="medida" class="costo-faltante-row">
+            <span class="costo-faltante-medida">{{ medida }}</span>
+            <input
+              type="number"
+              v-model="costosFaltantesInputs[medida]"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              placeholder="$ por kg"
+              class="costo-faltante-input"
+              aria-label="Costo por kg"
+            >
+            <button type="button" @click="guardarCostoFaltante(medida)" class="btn-guardar btn-chico">Guardar</button>
+            <button type="button" @click="omitirCostoFaltante(medida)" class="btn-cancelar btn-chico">Omitir</button>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" @click="omitirTodosCostosFaltantes" class="btn-cancelar">Omitir todas</button>
+          <button type="button" @click="cerrarModalCostosFaltantes" class="btn-cancelar">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
     <PesadasDelDiaModal
       :abierto="pesadasModal.abierto"
       :cargando="pesadasModal.cargando"
@@ -595,7 +636,7 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import {
   CAMPOS_RENDIMIENTOS,
@@ -665,6 +706,12 @@ export default {
       pesoTaraCosto: 19, // Peso por defecto para cálculo de costos
       pesoTaraVenta: 20, // Peso por defecto para cálculo de ventas
       mostrarModalConfiguracion: false,
+      // Prompt de costos faltantes: medidas del embarque actual sin costo
+      // en ningún lado (ni embarques anteriores ni catálogo).
+      mostrarModalCostosFaltantes: false,
+      costosFaltantes: [],
+      costosFaltantesInputs: {},
+      costosPromptMostrado: false,
       analizarMaquilaGanancia: {},
       precioMaquila: {},
       costosCalculados: {}, // Cache de costos calculados para cada medida
@@ -727,6 +774,11 @@ export default {
     totalGeneralGanancias() {
       return this.calcularTotalGeneralGanancias();
     },
+    // Cantidad de costos faltantes pendientes (para el botón de la barra).
+    costosFaltantesPendientes() {
+      if (!this.embarqueData) return 0;
+      return this.medidasSinCostoConKilos().length;
+    },
     resumenAnalisisGanancia() {
       const limpios = (this.medidasUnicas || [])
         .filter(medida => this.analizarGanancia[medida] && !this.medidaOculta[medida]).length;
@@ -776,6 +828,7 @@ export default {
     await this.cargarPreciosVenta();
     await this.precargarCostos();
     await this.cargarResumenSacadasHoy();
+    this.preguntarCostosFaltantes();
   },
 
   // Recargar datos cuando se vuelve a este componente
@@ -804,6 +857,7 @@ export default {
       this.calcularGanancias();
       this.calcularGananciasCrudos();
     });
+    this.preguntarCostosFaltantes();
   },
 
       methods: {
@@ -2343,18 +2397,27 @@ export default {
       return faltantes;
     },
 
-    // Costos por medida del embarque anterior más reciente que tenga costo
-    // para cada medida (un mapa medida -> costo). Solo embarques con fecha
-    // anterior a la del embarque actual.
+    // Costos por medida de los embarques anteriores más recientes que tengan
+    // costo para cada medida (un mapa medida -> costo). Busca hacia atrás
+    // hasta 30 días antes del embarque actual, del más reciente al más
+    // viejo: el primer costo encontrado por medida gana. Solo embarques con
+    // fecha anterior a la del embarque actual. La lectura es acotada
+    // (orderBy fecha desc + limit) en vez de leer toda la colección.
     async obtenerCostosEmbarquesAnteriores(fechaActualISO) {
       const db = getFirestore();
-      const snapshot = await getDocs(collection(db, 'embarques'));
+      const fechaBase = this.normalizarFecha(fechaActualISO) || new Date();
+      const corte = new Date(fechaBase);
+      corte.setDate(corte.getDate() - 30);
+      const corteISO = this.toLocalYMD(corte);
+      const snapshot = await getDocs(
+        query(collection(db, 'embarques'), orderBy('fecha', 'desc'), limit(60))
+      );
       const anteriores = [];
       snapshot.docs.forEach(docSnap => {
         if (docSnap.id === this.$route.params.id) return;
         const data = docSnap.data();
         const fechaISO = this.obtenerFechaISODesdeValor(data.fecha);
-        if (!fechaISO || fechaISO >= fechaActualISO) return;
+        if (!fechaISO || fechaISO < corteISO || fechaISO >= fechaActualISO) return;
         if (!data.costosPorMedida || Object.keys(data.costosPorMedida).length === 0) return;
         anteriores.push({ fechaISO, costos: data.costosPorMedida });
       });
@@ -2376,11 +2439,14 @@ export default {
       return mapa;
     },
 
-    // Prellena costosPorMedida para las medidas sin costo: primero desde
-    // el embarque anterior más reciente que tenga costo para la medida y,
+    // Prellena costosPorMedida para las medidas sin costo: primero busca
+    // hacia atrás en los embarques anteriores (hasta 30 días, del más
+    // reciente al más viejo) el último costo registrado para la medida y,
     // si no hay, desde el catálogo global de costos (la misma búsqueda que
     // encontrarCostoParaMedida). Nunca sobrescribe un costo existente.
     // Persiste por la ruta existente (persistirCamposRendimientos).
+    // Las medidas que sigan sin costo se preguntan con el prompt de
+    // costos faltantes (preguntarCostosFaltantes).
     async prellenarCostosDesdeEmbarqueAnterior() {
       try {
         if (!this.embarqueData || !navigator.onLine) return 0;
@@ -2432,6 +2498,110 @@ export default {
         console.warn('[Rendimientos] No se pudieron prellenar costos desde el embarque anterior:', error);
         return 0;
       }
+    },
+
+    // Medidas/tallas del embarque actual sin costo y sin omitir, solo las
+    // que están en el embarque (limpios con kilos embarcados > 0 y tallas
+    // de crudo en venta). Sirve para el prompt de costos faltantes.
+    medidasSinCostoConKilos() {
+      const omitidos = this.embarqueData?.costosOmitidos || {};
+      const omitidosLower = new Set(
+        Object.entries(omitidos)
+          .filter(([, valor]) => valor)
+          .map(([clave]) => clave.toLowerCase().trim())
+      );
+      const fueOmitida = (medida) => omitidosLower.has(medida.toLowerCase().trim());
+      const pendientes = [];
+      this.obtenerMedidasSinCosto().forEach(medida => {
+        if (fueOmitida(medida)) return;
+        const esTallaCrudo = this.obtenerTallasCrudosUnicas().includes(medida);
+        // Limpios: solo con kilos embarcados. Tallas de crudo: ya solo
+        // existen si hay venta en el embarque.
+        if (!esTallaCrudo && !(this.obtenerTotalEmbarcado(medida) > 0)) return;
+        pendientes.push(medida);
+      });
+      return pendientes;
+    },
+
+    // Prompt de costos faltantes: si alguna medida del embarque actual
+    // sigue sin costo tras el prellenado (embarques anteriores + catálogo),
+    // muestra el modal para capturarlo. Una vez por visita; Omitir guarda
+    // la decisión en el embarque y no se vuelve a preguntar por esa medida.
+    preguntarCostosFaltantes(forzar = false) {
+      if (!this.embarqueData || !navigator.onLine) return;
+      if (!forzar && (this.costosPromptMostrado || this.mostrarModalCostosFaltantes)) return;
+      const pendientes = this.medidasSinCostoConKilos();
+      if (pendientes.length === 0) return;
+      this.costosFaltantes = pendientes;
+      this.costosFaltantesInputs = {};
+      pendientes.forEach(medida => {
+        this.$set(this.costosFaltantesInputs, medida, '');
+      });
+      this.mostrarModalCostosFaltantes = true;
+      this.costosPromptMostrado = true;
+    },
+
+    // Guarda el costo capturado en el prompt: persiste por la ruta
+    // existente y recalcula las ganancias con él.
+    async guardarCostoFaltante(medida) {
+      const costo = Number(this.costosFaltantesInputs[medida]);
+      if (!(costo > 0)) return;
+      if (!this.embarqueData.costosPorMedida) {
+        this.$set(this.embarqueData, 'costosPorMedida', {});
+      }
+      this.$set(this.embarqueData.costosPorMedida, medida, costo);
+      await this.persistirCamposRendimientos({
+        costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida)
+      });
+      this.costosFaltantes = this.costosFaltantes.filter(m => m !== medida);
+      this.$delete(this.costosFaltantesInputs, medida);
+      await this.calcularGanancias();
+      if (this.costosFaltantes.length === 0) {
+        this.mostrarModalCostosFaltantes = false;
+      }
+    },
+
+    // Omitir una medida: queda sin costo con el aviso existente y no se
+    // le vuelve a preguntar por ella en este embarque/día. No bloquea nada.
+    async omitirCostoFaltante(medida) {
+      if (!this.embarqueData.costosOmitidos) {
+        this.$set(this.embarqueData, 'costosOmitidos', {});
+      }
+      this.$set(this.embarqueData.costosOmitidos, medida, true);
+      await this.persistirCamposRendimientos({
+        costosOmitidos: this.deepClone(this.embarqueData.costosOmitidos)
+      });
+      this.costosFaltantes = this.costosFaltantes.filter(m => m !== medida);
+      this.$delete(this.costosFaltantesInputs, medida);
+      if (this.costosFaltantes.length === 0) {
+        this.mostrarModalCostosFaltantes = false;
+      }
+    },
+
+    async omitirTodosCostosFaltantes() {
+      const pendientes = [...this.costosFaltantes];
+      if (pendientes.length === 0) {
+        this.mostrarModalCostosFaltantes = false;
+        return;
+      }
+      if (!this.embarqueData.costosOmitidos) {
+        this.$set(this.embarqueData, 'costosOmitidos', {});
+      }
+      pendientes.forEach(medida => {
+        this.$set(this.embarqueData.costosOmitidos, medida, true);
+      });
+      await this.persistirCamposRendimientos({
+        costosOmitidos: this.deepClone(this.embarqueData.costosOmitidos)
+      });
+      this.costosFaltantes = [];
+      this.costosFaltantesInputs = {};
+      this.mostrarModalCostosFaltantes = false;
+    },
+
+    // Cerrar el modal sin omitir: no bloquea nada; en la próxima visita
+    // se vuelve a preguntar por las medidas que no se omitieron.
+    cerrarModalCostosFaltantes() {
+      this.mostrarModalCostosFaltantes = false;
     },
 
     async calcularGanancias() {
@@ -4318,6 +4488,56 @@ input {
   padding: 8px 15px;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.modal-descripcion {
+  font-size: 0.95rem;
+  margin: 10px 0;
+}
+
+.costos-faltantes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.costo-faltante-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.costo-faltante-medida {
+  flex: 1;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.costo-faltante-input {
+  width: 110px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.btn-chico {
+  padding: 8px 10px;
+}
+
+.ganancia-total-sticky-costos {
+  background: #e53e3e;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .configuracion-grid {
