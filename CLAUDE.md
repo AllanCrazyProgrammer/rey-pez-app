@@ -97,6 +97,9 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
   limpio (no Maquila Ozuna), regla `aplicaCostoExtra`. La casilla "+ $18 costo extra"
   (tarjeta de Rendimientos o Gestión de Costos) guarda `aplicarCostoExtra[medida]` y
   `costoExtraDecidido[medida]`; un false viejo sin decidir en medida sin número no cuenta.
+- Cliente "refri" (`esClienteRefri`): se anota en "Precio por cliente" (🧊, "no cuenta") pero
+  no suma kilos, ventas ni ganancia del día (se refrigeró, no se vendió). El renglón Total
+  del desglose solo suma lo vendido.
 - Crudos: mismo costo + $3.50/kg; la ganancia por cliente usa su propio precio.
 - Maquila Ozuna: precio vacío usa el de las líneas del embarque; esas medidas no
   prenden "Analizar ganancia" por default (se contaría doble).

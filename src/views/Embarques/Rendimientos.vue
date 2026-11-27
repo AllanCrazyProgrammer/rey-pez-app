@@ -346,7 +346,7 @@
                     v-for="detalle in gananciasCalculadas[medida].detallesPorCliente"
                     :key="detalle.cliente + '-' + detalle.precioVenta + '-' + detalle.origen"
                     class="detalle-cliente"
-                    :class="{ 'detalle-cliente-editable': puedeEditarPrecio(medida) }"
+                    :class="{ 'detalle-cliente-editable': puedeEditarPrecio(medida), 'detalle-cliente-refri': detalle.noCuenta }"
                     :role="puedeEditarPrecio(medida) ? 'button' : null"
                     :tabindex="puedeEditarPrecio(medida) ? 0 : null"
                     :aria-label="puedeEditarPrecio(medida) ? `Editar precio de ${detalle.cliente}` : null"
@@ -355,18 +355,35 @@
                   >
                     <span class="cliente-nombre">{{ detalle.cliente }}:</span>
                     <span class="cliente-kilos">{{ formatearNumero(detalle.totalEmbarcado) }}kg</span>
-                    <span class="cliente-precio">${{ formatearPrecioVenta(detalle.precioVenta) }}</span>
-                    <span class="cliente-ganancia" :class="{
+                    <span class="cliente-precio">{{ detalle.precioVenta ? '$' + formatearPrecioVenta(detalle.precioVenta) : '—' }}</span>
+                    <span v-if="detalle.noCuenta" class="cliente-ganancia cliente-no-cuenta" title="Se refrigeró, no se vendió: no cuenta en la ganancia del día">no cuenta</span>
+                    <span v-else class="cliente-ganancia" :class="{
                       'ganancia-positiva': detalle.gananciaTotal > 0,
                       'ganancia-negativa': detalle.gananciaTotal < 0
                     }">
                       ${{ formatearPrecio(detalle.gananciaTotal) }}
                     </span>
-                    <span class="fuente-precio" :title="describirOrigenPrecio(detalle)">
+                    <span v-if="detalle.noCuenta" class="fuente-precio" title="Refri: se refrigeró, no se vendió">🧊</span>
+                    <span v-else class="fuente-precio" :title="describirOrigenPrecio(detalle)">
                       {{ iconoOrigenPrecio(detalle.origen) }}
                     </span>
                   </div>
-                  <p class="leyenda-origen-precio">✋ manual · 📌 del cliente · 🌐 general</p>
+                  <div
+                    v-if="gananciasCalculadas[medida].detallesPorCliente.length > 1"
+                    class="detalle-cliente detalle-cliente-total"
+                  >
+                    <span class="cliente-nombre">Total:</span>
+                    <span class="cliente-kilos">{{ formatearNumero(sumarKilosDetalle(gananciasCalculadas[medida].detallesPorCliente)) }}kg</span>
+                    <span class="cliente-precio" title="Precio promedio ponderado por kilos">${{ formatearPrecioVenta(gananciasCalculadas[medida].precioVenta) }}</span>
+                    <span class="cliente-ganancia" :class="{
+                      'ganancia-positiva': gananciasCalculadas[medida].gananciaTotal > 0,
+                      'ganancia-negativa': gananciasCalculadas[medida].gananciaTotal < 0
+                    }">
+                      ${{ formatearPrecio(gananciasCalculadas[medida].gananciaTotal) }}
+                    </span>
+                    <span class="fuente-precio" aria-hidden="true">Σ</span>
+                  </div>
+                  <p class="leyenda-origen-precio">✋ manual · 📌 del cliente · 🌐 general<template v-if="gananciasCalculadas[medida].kilosRefri"> · 🧊 refri: no se vendió, no cuenta en la ganancia ni en el total</template></p>
                 </div>
                 <p v-if="gananciasCalculadas[medida].kilosSinPrecio > 0" class="aviso-sin-precio aviso-kilos-sin-precio">
                   ⚠️ {{ formatearNumero(gananciasCalculadas[medida].kilosSinPrecio) }} kg sin precio no entran en la ganancia:
@@ -4457,6 +4474,12 @@ export default {
       return { manual: '✋', especifico: '📌', general: '🌐' }[origen] || '🌐';
     },
 
+    // Suma de kilos del desglose "Precio por cliente" (renglón Total).
+    // Solo lo vendido: el renglón "refri" no cuenta.
+    sumarKilosDetalle(detalles) {
+      return (detalles || []).reduce((total, d) => total + (d.noCuenta ? 0 : (Number(d.totalEmbarcado) || 0)), 0);
+    },
+
     textoOrigenCorto(origen) {
       return { manual: 'manual', especifico: 'del cliente', general: 'general' }[origen] || 'general';
     },
@@ -6551,6 +6574,19 @@ input {
   font-size: .85rem;
 }
 .ganancia-info .detalles-clientes-limpio h5 { font-size: .85rem; margin-bottom: 6px; }
+.detalles-clientes-limpio .detalle-cliente-total {
+  margin-top: 2px;
+  border-color: #b8c6d6;
+  border-top-width: 2px;
+  background: #eef3f8;
+  font-weight: 700;
+}
+.detalles-clientes-limpio .detalle-cliente-refri { background: #f3f5f8; color: #7b8794; }
+.detalles-clientes-limpio .detalle-cliente-refri .cliente-nombre,
+.detalles-clientes-limpio .detalle-cliente-refri .cliente-precio { color: #7b8794; }
+.detalles-clientes-limpio .cliente-no-cuenta { color: #7b8794; font-size: .8rem; font-weight: 600; font-style: italic; }
+.detalles-clientes-limpio .detalle-cliente-total .cliente-kilos { color: #2c3e50; font-weight: 700; }
+.detalles-clientes-limpio .detalle-cliente-total .fuente-precio { cursor: default; color: #6c7a89; font-weight: 700; }
 .ganancia-info .detalles-clientes-limpio .leyenda-origen-precio {
   margin: 4px 0 0;
   font-size: .7rem;

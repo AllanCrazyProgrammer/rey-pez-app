@@ -283,3 +283,29 @@ test('costo extra: decisión guardada y false automático viejo', () => {
   // maquila prendida a mano
   assert.equal(g.aplicaCostoExtra('51/60 Maquila Ozuna', { '51/60 Maquila Ozuna': true }), true)
 })
+
+test('cliente "refri": se anota en el desglose pero no cuenta en la ganancia', () => {
+  const r = g.calcularGananciaLimpio([
+    { cliente: 'Joselito', kilos: 97, precio: 165, origen: 'especifico' },
+    { cliente: 'Otilio', kilos: 253, precio: 165, origen: 'especifico' },
+    { cliente: 'refri', kilos: 6, precio: 165, origen: 'general' },
+    { cliente: 'Refri ', kilos: 4, precio: null }
+  ], 140)
+  assert.equal(r.gananciaTotal, (97 + 253) * 25)
+  assert.equal(r.totalEmbarcado, 350)
+  assert.equal(r.kilosRefri, 10)
+  assert.equal(r.kilosSinPrecio, 0, 'refri sin precio no sale como "sin precio"')
+  const refri = r.detallesPorCliente.filter(d => d.noCuenta)
+  assert.equal(refri.length, 2)
+  assert.ok(refri.every(d => d.gananciaTotal === 0))
+  assert.equal(r.detallesPorCliente.length, 4)
+  assert.equal(g.esClienteRefri('Refrigerado'), true)
+  assert.equal(g.esClienteRefri('Catarro'), false)
+})
+
+test('solo refri: no hay ganancia pero el desglose sigue', () => {
+  const r = g.calcularGananciaLimpio([{ cliente: 'refri', kilos: 6, precio: 165 }], 140)
+  assert.equal(r.gananciaTotal, 0)
+  assert.equal(r.totalEmbarcado, 0)
+  assert.equal(r.detallesPorCliente.length, 1)
+})

@@ -117,77 +117,98 @@ export function precioVentaDeProducto(producto, { esMaquila = false } = {}) {
 }
 
 /**
+ * ¿El "cliente" es refri? En el embarque se anota lo que se manda a
+ * refrigerar como un cliente llamado "refri": se muestra en el desglose,
+ * pero no se vendió, así que no cuenta en la ganancia del día.
+ */
+export function esClienteRefri(nombre) {
+  return /^\s*refri/i.test(String(nombre || ''));
+}
+
+/**
  * Ganancia de una medida limpia a partir de sus líneas de venta.
  * @param {Array<{cliente:string, kilos:number, precio:(number|null), origen?:string, fecha?:string, desdeEmbarque?:boolean}>} lineas
  * @param {number} costoFinal costo por kg ya con rendimiento y costo extra
  * @returns resumen o null si ninguna línea tiene precio
+ *   Las líneas del cliente "refri" salen en detallesPorCliente con
+ *   noCuenta: true y no suman kilos, ventas ni ganancia.
  */
 export function calcularGananciaLimpio(lineas, costoFinal) {
   const costo = numero(costoFinal);
   const grupos = new Map();
   let kilosConPrecio = 0;
   let kilosSinPrecio = 0;
+  let kilosRefri = 0;
   let ventas = 0;
   const clientesSinPrecio = new Set();
 
   (lineas || []).forEach(linea => {
     const kilos = numero(linea.kilos);
     if (!(kilos > 0)) return;
+    const noCuenta = esClienteRefri(linea.cliente);
     const precio = Number(linea.precio);
-    if (!(precio > 0)) {
+    const tienePrecio = precio > 0;
+    if (!tienePrecio && !noCuenta) {
       kilosSinPrecio += kilos;
       clientesSinPrecio.add(linea.cliente);
       return;
     }
-    const clave = `${linea.cliente}__${precio}__${linea.origen || ''}`;
+    const clave = `${linea.cliente}__${tienePrecio ? precio : 0}__${linea.origen || ''}`;
     if (!grupos.has(clave)) {
       grupos.set(clave, {
         cliente: linea.cliente,
-        precioVenta: precio,
+        precioVenta: tienePrecio ? precio : 0,
         origen: linea.origen || 'general',
         fechaPrecio: linea.fecha || '',
         desdeEmbarque: Boolean(linea.desdeEmbarque),
+        noCuenta,
         totalEmbarcado: 0
       });
     }
     grupos.get(clave).totalEmbarcado += kilos;
+    if (noCuenta) {
+      kilosRefri += kilos;
+      return;
+    }
     kilosConPrecio += kilos;
     ventas += precio * kilos;
   });
 
-  if (kilosConPrecio === 0) return null;
+  if (grupos.size === 0) return null;
 
   const detallesPorCliente = Array.from(grupos.values()).map(g => {
-    const gananciaUnitaria = g.precioVenta - costo;
+    const gananciaUnitaria = g.noCuenta ? 0 : g.precioVenta - costo;
     return {
       ...g,
       clienteId: null,
       esEspecifico: g.origen === 'especifico',
       totalEmbarcado: Math.round(g.totalEmbarcado * 10) / 10,
       gananciaUnitaria: Math.round(gananciaUnitaria * 100) / 100,
-      gananciaTotal: Math.round(gananciaUnitaria * g.totalEmbarcado)
+      gananciaTotal: g.noCuenta ? 0 : Math.round(gananciaUnitaria * g.totalEmbarcado)
     };
   });
+  const vendidos = detallesPorCliente.filter(d => !d.noCuenta);
 
-  const precioPromedio = ventas / kilosConPrecio;
+  const precioPromedio = kilosConPrecio > 0 ? ventas / kilosConPrecio : 0;
   const gananciaTotal = Math.round(ventas - costo * kilosConPrecio);
-  const precios = new Set(detallesPorCliente.map(d => d.precioVenta));
+  const precios = new Set(vendidos.map(d => d.precioVenta));
   const clientesConEspecifico = [...new Set(
-    detallesPorCliente.filter(d => d.origen === 'especifico' || d.origen === 'manual').map(d => d.cliente)
+    vendidos.filter(d => d.origen === 'especifico' || d.origen === 'manual').map(d => d.cliente)
   )];
-  const fechas = detallesPorCliente.map(d => d.fechaPrecio).filter(Boolean).sort();
+  const fechas = vendidos.map(d => d.fechaPrecio).filter(Boolean).sort();
 
   return {
     precioVenta: Math.round(precioPromedio * 100) / 100,
     costoFinal: Math.round(costo),
-    gananciaUnitaria: Math.round((precioPromedio - costo) * 100) / 100,
+    gananciaUnitaria: kilosConPrecio > 0 ? Math.round((precioPromedio - costo) * 100) / 100 : 0,
     gananciaTotal,
     totalEmbarcado: Math.round(kilosConPrecio),
     kilosSinPrecio: Math.round(kilosSinPrecio * 10) / 10,
+    kilosRefri: Math.round(kilosRefri * 10) / 10,
     clientesSinPrecio: [...clientesSinPrecio],
     esPromedio: precios.size > 1,
-    esEspecifico: detallesPorCliente.length === 1 && clientesConEspecifico.length === 1,
-    clienteEspecifico: detallesPorCliente.length === 1 && clientesConEspecifico.length === 1
+    esEspecifico: vendidos.length === 1 && clientesConEspecifico.length === 1,
+    clienteEspecifico: vendidos.length === 1 && clientesConEspecifico.length === 1
       ? clientesConEspecifico[0] : null,
     clientesConEspecifico,
     fechaPrecio: fechas.length ? fechas[fechas.length - 1] : undefined,
