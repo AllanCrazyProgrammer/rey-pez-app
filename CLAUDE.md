@@ -81,6 +81,21 @@ Entrada de producto por descarga: `src/views/Barcos/EntradaProductoBarco.vue`
 (ruta `/barcos/entrada-producto?barco=galileo|maria-guadalupe`). El neto se
 calcula como `kilos - taras * 3`. Colección Firestore: `entradasProductoBarcos`.
 
+## Análisis de ganancia (Rendimientos y Gestión de Costos)
+
+Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
+`node --test tests/ganancias-rendimientos.test.cjs`); `Rendimientos.vue` y
+`GestionCostos.vue` las usan, no dupliques la lógica.
+- Precio de venta por línea del embarque: `producto.precio` (la etiqueta "Venta $X",
+  igual a la cuenta del cliente) y, si falta, catálogo `precios` a la fecha del
+  embarque con el **específico del cliente siempre antes que el general**. Las
+  líneas de maquila de Ozuna no usan `producto.precio` (es la cuota de maquila).
+- Costo base: manual del embarque (`costosPorMedidaManuales`) > catálogo
+  `historial_costos` (medida + proveedor) > `costosPorMedida`. Costo extra: 0 es válido.
+- Crudos: mismo costo + $3.50/kg; la ganancia por cliente usa su propio precio.
+- Maquila Ozuna: precio vacío usa el de las líneas del embarque; esas medidas no
+  prenden "Analizar ganancia" por default (se contaría doble).
+
 ## Saldos de cuentas (Cuentas México)
 
 Componente `src/components/Cuentas/SaldosCuentas.vue`, lógica pura en

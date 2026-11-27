@@ -159,7 +159,8 @@
                   step="0.01"
                   v-model="precioMaquila[medida]"
                   @input="programarGuardadoAnalisis"
-                  placeholder="Precio por kg"
+                  :placeholder="precioMaquilaDelEmbarque(medida) ? `$${precioMaquilaDelEmbarque(medida)} del embarque` : 'Precio por kg'"
+                  :title="precioMaquilaDelEmbarque(medida) ? 'Vacío usa el precio de maquila de las líneas del embarque' : ''"
                   class="precio-maquila-input"
                 >
               </div>
@@ -271,19 +272,19 @@
                 <div class="ganancia-item">
                   <span class="label">Precio de Venta:</span>
                   <div class="precio-venta-container">
-                    <span class="valor precio-venta">${{ formatearPrecio(gananciasCalculadas[medida].precioVenta) }}</span>
+                    <span class="valor precio-venta">${{ formatearPrecioVenta(gananciasCalculadas[medida].precioVenta) }}</span>
                     
                     <!-- Precio promedio de múltiples clientes -->
                     <span v-if="gananciasCalculadas[medida].esPromedio" 
                           class="precio-promedio-badge"
-                          :title="`Precio promedio ponderado. Clientes con precios específicos: ${gananciasCalculadas[medida].clientesConEspecifico.join(', ')}`">
+                          title="Precio promedio ponderado por kilos. Cada cliente usa su propio precio (ver desglose).">
                       📊 Promedio
                     </span>
                     
                     <!-- Precio específico de un cliente -->
                     <span v-else-if="gananciasCalculadas[medida].esEspecifico" 
                           class="precio-especifico-badge"
-                          :title="`Precio específico más reciente para ${gananciasCalculadas[medida].clienteEspecifico}`">
+                          :title="`Precio propio de ${gananciasCalculadas[medida].clienteEspecifico}`">
                       📌 {{ gananciasCalculadas[medida].clienteEspecifico }}
                     </span>
                     
@@ -291,14 +292,21 @@
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Costo medida:</span>
-                  <span class="valor costo-medida">${{ formatearPrecio(gananciasCalculadas[medida].costoBase) }}</span>
+                  <div class="costo-final-container">
+                    <span class="valor costo-medida">${{ formatearPrecio(gananciasCalculadas[medida].costoBase) }}</span>
+                    <span
+                      class="costo-fuente-badge"
+                      :class="'costo-fuente-' + (gananciasCalculadas[medida].costoFuente || 'ninguno')"
+                      :title="gananciasCalculadas[medida].costoFuenteTexto"
+                    >{{ gananciasCalculadas[medida].costoFuenteTexto }}</span>
+                  </div>
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Costo Final:</span>
                   <div class="costo-final-container">
                     <span class="valor costo-final">${{ formatearPrecio(gananciasCalculadas[medida].costoFinal) }}</span>
                     <span v-if="debeAplicarCostoExtra(medida)" class="costo-extra-indicator">
-                      (+ ${{ embarqueData?.costoExtra || 18 }} extra)
+                      (+ ${{ costoExtraEfectivo }} extra)
                     </span>
                   </div>
                 </div>
@@ -322,7 +330,36 @@
                     ${{ formatearPrecio(gananciasCalculadas[medida].gananciaTotal) }}
                   </span>
                 </div>
-                <div class="ganancia-fecha">
+                <div
+                  v-if="gananciasCalculadas[medida].detallesPorCliente.length > 1 || gananciasCalculadas[medida].clientesConEspecifico.length"
+                  class="detalles-clientes detalles-clientes-limpio"
+                >
+                  <h5>Precio por cliente:</h5>
+                  <div
+                    v-for="detalle in gananciasCalculadas[medida].detallesPorCliente"
+                    :key="detalle.cliente + '-' + detalle.precioVenta + '-' + detalle.origen"
+                    class="detalle-cliente"
+                  >
+                    <span class="cliente-nombre">{{ detalle.cliente }}:</span>
+                    <span class="cliente-kilos">{{ formatearNumero(detalle.totalEmbarcado) }}kg</span>
+                    <span class="cliente-precio">${{ formatearPrecioVenta(detalle.precioVenta) }}</span>
+                    <span class="cliente-ganancia" :class="{
+                      'ganancia-positiva': detalle.gananciaTotal > 0,
+                      'ganancia-negativa': detalle.gananciaTotal < 0
+                    }">
+                      ${{ formatearPrecio(detalle.gananciaTotal) }}
+                    </span>
+                    <span class="fuente-precio" :title="describirOrigenPrecio(detalle)">
+                      {{ iconoOrigenPrecio(detalle.origen) }}
+                    </span>
+                  </div>
+                  <p class="leyenda-origen-precio">✋ manual · 📌 del cliente · 🌐 general · 🚢 del embarque</p>
+                </div>
+                <p v-if="gananciasCalculadas[medida].kilosSinPrecio > 0" class="aviso-sin-precio aviso-kilos-sin-precio">
+                  ⚠️ {{ formatearNumero(gananciasCalculadas[medida].kilosSinPrecio) }} kg sin precio
+                  ({{ gananciasCalculadas[medida].clientesSinPrecio.join(', ') }}) no entran en la ganancia
+                </p>
+                <div v-if="gananciasCalculadas[medida].fechaPrecio" class="ganancia-fecha">
                   <span class="fecha-precio">Precio del: {{ formatearFecha(gananciasCalculadas[medida].fechaPrecio) }}</span>
                 </div>
               </div>
@@ -345,7 +382,7 @@
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Precio Maquila:</span>
-                  <span class="valor precio-maquila">${{ formatearPrecio(precioMaquila[medida] || 0) }}</span>
+                  <span class="valor precio-maquila">${{ formatearPrecioConDecimales(precioMaquilaEfectivo(medida)) }}</span>
                 </div>
                 <div class="ganancia-item ganancia-total-item">
                   <span class="label">Ganancia Total Maquila:</span>
@@ -403,8 +440,15 @@
                   </div>
                 </div>
                 <div class="ganancia-item">
-                  <span class="label">Costo Base:</span>
-                  <span class="valor costo-base">${{ formatearPrecioConDecimales(gananciasCalculadasCrudos[talla].costoBase) }}</span>
+                  <span class="label">Costo/kg:</span>
+                  <div class="costo-final-container">
+                    <span class="valor costo-base">${{ formatearPrecioConDecimales(gananciasCalculadasCrudos[talla].costoBase) }}</span>
+                    <span
+                      class="costo-fuente-badge"
+                      :class="'costo-fuente-' + (gananciasCalculadasCrudos[talla].costoFuente || 'ninguno')"
+                      :title="gananciasCalculadasCrudos[talla].costoFuenteTexto"
+                    >{{ gananciasCalculadasCrudos[talla].costoFuenteTexto }} + ${{ gananciasCalculadasCrudos[talla].sobrecostoKg }} crudo</span>
+                  </div>
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Ganancia/kg:</span>
@@ -654,6 +698,18 @@ import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { formatearFecha } from '@/utils/formatters';
 import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida } from '@/utils/preciosHistoricos';
 import { obtenerGrupoPreciosPorNombre } from '@/utils/preciosAliasCatalogo';
+import {
+  SOBRECOSTO_CRUDO_KG,
+  resolverPrecioCatalogo,
+  precioVentaDeProducto,
+  calcularGananciaLimpio,
+  resolverCostoMedida,
+  describirFuenteCosto,
+  normalizarCostoExtra,
+  calcularCostoFinalKg,
+  calcularGananciaCrudo,
+  precioMaquilaPonderado
+} from '@/utils/gananciasRendimientos';
 import { normalizarNombreMedida, renombrarMedidaRendimientos } from '@/utils/renombrarMedidaRendimientos';
 import { formatoFechaPesadas } from '@/utils/pesadas';
 import { agruparPesadasPorMedida, compararDespiqueEmbarcado, fechaPesadasDelEmbarque, filtrarPesadasPorDia } from '@/utils/pesadasPorMedida';
@@ -701,7 +757,6 @@ export default {
       analizarGananciaCrudos: {}, // Nueva propiedad para controlar análisis de crudos
       rendimientoManual: {},
       aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
-      diasRecientes: 3, // Días para considerar un embarque como "reciente"
       // Configuración de pesos por defecto
       pesoTaraCosto: 19, // Peso por defecto para cálculo de costos
       pesoTaraVenta: 20, // Peso por defecto para cálculo de ventas
@@ -780,6 +835,9 @@ export default {
     totalGeneralGanancias() {
       return this.calcularTotalGeneralGanancias();
     },
+    costoExtraEfectivo() {
+      return normalizarCostoExtra(this.embarqueData?.costoExtra);
+    },
     // Cantidad de costos faltantes pendientes (para el botón de la barra).
     costosFaltantesPendientes() {
       if (!this.embarqueData) return 0;
@@ -840,6 +898,12 @@ export default {
   // Recargar datos cuando se vuelve a este componente
   async activated() {
     console.log('Recargando datos de rendimientos...');
+    // Los cachés dependen del embarque (fecha y día anterior): al volver a
+    // la pantalla se recalculan para no usar costos de otra visita.
+    this.costosGlobalesCache = null;
+    this.rendimientoDiaAnteriorCache = {};
+    this.embarqueDiaAnteriorFecha = '';
+    this.embarqueDiaAnteriorCache = null;
     const embarqueId = this.$route.params.id;
     const registroOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
 
@@ -1692,17 +1756,15 @@ export default {
       if (!tarasCrudosPorMedida || !this.embarqueData) return {};
       
       const costosCrudos = {};
-      const costosEmbarque = this.embarqueData.costosPorMedida || {};
       
       // Obtener todas las medidas de crudo únicas
       const medidasCrudo = Object.keys(tarasCrudosPorMedida);
       
       medidasCrudo.forEach(medida => {
-        // Obtener el costo base para esta medida
-        const costoBase = Number(costosEmbarque[medida]) || 0;
-        
-        // Calcular el costo final para crudos (costo base + 3.5)
-        const costoFinal = costoBase + 3.5;
+        // Mismo costo que la tarjeta de ganancia (manual > catálogo > guardado)
+        const resuelto = this.resolverCostoBaseSync(medida);
+        const costoBase = resuelto ? resuelto.costo : 0;
+        const costoFinal = costoBase + SOBRECOSTO_CRUDO_KG;
         
         costosCrudos[medida] = {
           costoBase: costoBase,
@@ -1946,103 +2008,15 @@ export default {
       return null; // No se encontró
     },
 
+    // Precio de catálogo a la fecha del embarque con la misma regla que las
+    // cuentas y el embarque: el específico del cliente gana al general
+    // (aunque el general sea más nuevo) y solo cuentan precios con fecha
+    // <= embarque. Ver resolverPrecioCatalogo en utils/gananciasRendimientos.
     obtenerPrecioVentaParaFecha(medida, fechaEmbarque, clienteId = null) {
-      // Usar la función auxiliar mejorada para buscar precios
       const resultadoBusqueda = this.encontrarPreciosParaMedida(medida);
-      
-      if (!resultadoBusqueda) {
-        console.log(`[${medida}] No se encontraron precios para ninguna variación`);
-        console.log(`[${medida}] Precios disponibles:`, Object.keys(this.preciosVenta));
-        return null;
-      }
-      
-      const { medidaEncontrada, precios: preciosProducto } = resultadoBusqueda;
-      
-      if (medidaEncontrada !== medida) {
-        console.log(`[${medida}] Precio encontrado como: ${medidaEncontrada}`);
-      }
-      
-      // Validar y normalizar la fecha del embarque
-      const fechaEmbarqueNormalizada = this.normalizarFecha(fechaEmbarque);
-      if (!fechaEmbarqueNormalizada) {
-        console.warn(`[${medida}] Fecha de embarque inválida:`, fechaEmbarque);
-        return null;
-      }
-      
-      // Crear fecha del embarque solo con año-mes-día (sin hora)
-      const fechaEmbarqueStr = this.toLocalYMD(fechaEmbarqueNormalizada);
-      const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
-      const fechaHoy = this.toLocalYMD(new Date());
-      const fechaHoyObj = new Date(fechaHoy);
-      const diasDiferencia = Math.floor((fechaHoyObj - fechaEmbarqueObj) / (1000 * 60 * 60 * 24));
-      
-      const embarqueEsReciente = diasDiferencia <= this.diasRecientes;
-      const embarqueEsHoyOFuturo = fechaEmbarqueStr >= fechaHoy;
-      const debeUsarPreciosRecientes = embarqueEsReciente || embarqueEsHoyOFuturo;
-      
-      // Debug simplificado solo para errores
-      if (!preciosProducto || preciosProducto.length === 0) {
-        console.log(`[${medida}] ⚠️ No se encontraron precios disponibles`);
-      }
-      
-      if (debeUsarPreciosRecientes) {
-        let razonPrecioReciente = '';
-        if (embarqueEsHoyOFuturo) {
-          razonPrecioReciente = '(embarque de hoy/futuro)';
-        } else if (embarqueEsReciente) {
-          razonPrecioReciente = `(embarque reciente: hace ${diasDiferencia} día${diasDiferencia !== 1 ? 's' : ''})`;
-        }
-        
-        // Precio más reciente aplicado
-        
-        // Para embarques de hoy o futuros, buscar el precio más reciente
-        if (clienteId) {
-          const precioEspecificoReciente = preciosProducto.find(p => p.clienteId === clienteId);
-          if (precioEspecificoReciente) {
-            return precioEspecificoReciente;
-          }
-        }
-        
-        // Si no hay específico, usar el precio general más reciente
-        const precioGeneralReciente = preciosProducto.find(p => !p.clienteId);
-        if (precioGeneralReciente) {
-          return precioGeneralReciente;
-        }
-      } else {
-        // LÓGICA ORIGINAL: Para embarques pasados, buscar el precio válido para esa fecha
-        
-        // Primero buscar precio específico para el cliente si se proporciona
-        if (clienteId) {
-          for (const precio of preciosProducto) {
-            const fechaPrecioNormalizada = this.normalizarFecha(precio.fecha);
-            if (!fechaPrecioNormalizada) continue;
-            
-            const fechaPrecioStr = this.toLocalYMD(fechaPrecioNormalizada);
-            if (fechaPrecioStr <= fechaEmbarqueStr && precio.clienteId === clienteId) {
-              return precio;
-            }
-          }
-        }
-        
-        // Si no hay precio específico, buscar precio general
-        for (const precio of preciosProducto) {
-          const fechaPrecioNormalizada = this.normalizarFecha(precio.fecha);
-          if (!fechaPrecioNormalizada) continue;
-          
-          const fechaPrecioStr = this.toLocalYMD(fechaPrecioNormalizada);
-          if (fechaPrecioStr <= fechaEmbarqueStr && !precio.clienteId) {
-            return precio;
-          }
-        }
-      }
-      
-      // FALLBACK: Si no se encuentra nada, usar el más antiguo disponible
-      const preciosGenerales = preciosProducto.filter(p => !p.clienteId);
-      if (preciosGenerales.length > 0) {
-        return preciosGenerales[preciosGenerales.length - 1];
-      }
-      
-      return preciosProducto[preciosProducto.length - 1];
+      if (!resultadoBusqueda) return null;
+      const fecha = this.toLocalYMD(this.normalizarFecha(fechaEmbarque) || new Date());
+      return resolverPrecioCatalogo(resultadoBusqueda.precios, fecha, clienteId);
     },
 
     // Función auxiliar para encontrar costos con búsqueda inteligente
@@ -2365,35 +2339,26 @@ export default {
       return this.resolverCostoCatalogo(medida);
     },
 
-    // Costo base a usar en ganancia para una medida, con la misma
-    // precedencia que Gestión de Costos: catálogo resuelto (medida +
-    // proveedor) primero; luego costo manual del embarque; y solo como
-    // respaldo sin conexión o sin catálogo, el valor guardado en
-    // costosPorMedida. Devuelve {costo, fuente, detalle} o null.
+    // Costo base de una medida (misma regla que Gestión de Costos):
+    // costo manual del embarque > catálogo (medida + proveedor) > guardado
+    // en costosPorMedida. Devuelve {costo, fuente, detalle} o null.
     async resolverCostoBase(medida) {
       const catalogo = await this.resolverCostoCatalogo(medida);
-      if (catalogo && Number(catalogo.costo) > 0) {
-        return { costo: Number(catalogo.costo), fuente: 'catalogo', detalle: catalogo };
-      }
-      const manuales = this.embarqueData?.costosPorMedidaManuales || {};
-      let manual = Number(manuales[medida]);
-      if (!(manual > 0)) {
-        const lower = String(medida || '').toLowerCase().trim();
-        for (const [clave, valor] of Object.entries(manuales)) {
-          if (clave.toLowerCase().trim() === lower) { manual = Number(valor) || 0; break; }
-        }
-      }
-      if (manual > 0) return { costo: manual, fuente: 'manual' };
-      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-      let guardado = Number(costosEmbarque[medida]);
-      if (!(guardado > 0)) {
-        const lower = String(medida || '').toLowerCase().trim();
-        for (const [clave, valor] of Object.entries(costosEmbarque)) {
-          if (clave.toLowerCase().trim() === lower) { guardado = Number(valor) || 0; break; }
-        }
-      }
-      if (guardado > 0) return { costo: guardado, fuente: 'embarque' };
-      return null;
+      return this.resolverCostoBaseConCatalogo(medida, catalogo);
+    },
+
+    // Versión síncrona (crudos, PDF): usa el cache del catálogo si ya está.
+    resolverCostoBaseSync(medida) {
+      return this.resolverCostoBaseConCatalogo(medida, this.resolverCostoCatalogoSync(medida));
+    },
+
+    resolverCostoBaseConCatalogo(medida, catalogo) {
+      return resolverCostoMedida({
+        medida,
+        catalogo,
+        manuales: this.embarqueData?.costosPorMedidaManuales || {},
+        guardados: this.embarqueData?.costosPorMedida || {}
+      });
     },
 
     // Método para precargar todos los costos
@@ -2435,27 +2400,11 @@ export default {
       const baseRefriSync = this.medidaBaseRefri(medida);
       const medidaCostoSync = baseRefriSync || medida;
 
-      // Mismo costo resuelto que la ruta asíncrona (catálogo
-      // medida+proveedor, luego manual, luego guardado). Si el cache del
-      // catálogo no está cargado, se usa el valor guardado.
-      let costo = 0;
-      const resueltoSync = this.resolverCostoCatalogoSync(medidaCostoSync);
-      if (resueltoSync && Number(resueltoSync.costo) > 0) {
-        costo = Number(resueltoSync.costo);
-      } else {
-        const manualesSync = this.embarqueData?.costosPorMedidaManuales || {};
-        costo = Number(manualesSync[medidaCostoSync]) || 0;
-        if (costo === 0) {
-          const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-          costo = Number(costosEmbarque[medidaCostoSync]) || 0;
-          if (costo === 0) {
-            const lowerSync = medidaCostoSync.toLowerCase().trim();
-            for (const [clave, valor] of Object.entries(costosEmbarque)) {
-              if (clave.toLowerCase().trim() === lowerSync) { costo = Number(valor) || 0; break; }
-            }
-          }
-        }
-      }
+      // Mismo costo resuelto que la ruta asíncrona (manual, catálogo,
+      // guardado). Si el cache del catálogo no está cargado, se usa el
+      // manual o el guardado.
+      const resueltoSync = this.resolverCostoBaseSync(medidaCostoSync);
+      const costo = resueltoSync ? resueltoSync.costo : 0;
 
       let rendimientoOriginal = this.getRendimiento(medida);
       if (baseRefriSync) {
@@ -2464,17 +2413,13 @@ export default {
           rendimientoOriginal = rendAyer;
         }
       }
-      const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
-      const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
-      const aplicarExtra = this.debeAplicarCostoExtra(medida);
-      
-      let resultado;
-      if (aplicarExtra) {
-        resultado = Math.round((costo * rendimiento) + costoExtra);
-      } else {
-        resultado = Math.round(costo * rendimiento);
-      }
-      
+      const resultado = calcularCostoFinalKg({
+        costo,
+        rendimiento: rendimientoOriginal,
+        aplicarExtra: this.debeAplicarCostoExtra(medida),
+        costoExtra: this.embarqueData?.costoExtra
+      });
+
       // Guardar en cache para futuras llamadas
       this.$set(this.costosCalculados, medida, resultado);
       
@@ -2582,7 +2527,7 @@ export default {
 
     async calcularCostoFinal(medida) {
       // Costo resuelto con la misma lógica que Gestión de Costos
-      // (catálogo medida+proveedor, luego manual, luego guardado).
+      // (manual del embarque, luego catálogo medida+proveedor, luego guardado).
       // Regla refri (SOLO ganancia): costo y rendimiento de la medida
       // base. El rendimiento es el del día anterior de la base; si no
       // existe, se conserva el comportamiento actual.
@@ -2606,18 +2551,13 @@ export default {
       } else {
         rendimientoOriginal = this.getRendimiento(medida);
       }
-      // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
-      const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
-      const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
-      
-      // Verificar si está marcado para aplicar costo extra
-      const aplicarExtra = this.debeAplicarCostoExtra(medida);
-      
-      if (aplicarExtra) {
-        return Math.round((costo * rendimiento) + costoExtra);
-      } else {
-        return Math.round(costo * rendimiento);
-      }
+      // Rendimiento a 2 decimales (como en la UI); el costo extra respeta 0.
+      return calcularCostoFinalKg({
+        costo,
+        rendimiento: rendimientoOriginal,
+        aplicarExtra: this.debeAplicarCostoExtra(medida),
+        costoExtra: this.embarqueData?.costoExtra
+      });
     },
 
     // Prende por default el análisis de ganancia en las medidas con kilos
@@ -2635,7 +2575,9 @@ export default {
 
         // Medida limpia: kilos embarcados > 0 y precio de venta disponible.
         // Sin precio queda en false y conserva el aviso "sin precio" existente.
-        if (this.analizarGanancia[medida] === undefined) {
+        // Las medidas "Maquila Ozuna" no se prenden: el camarón es de Ozuna
+        // y su ganancia es la de maquila (se contaría doble).
+        if (this.analizarGanancia[medida] === undefined && !/maquila\s+ozuna/i.test(medida)) {
           const tieneKilos = this.obtenerTotalEmbarcado(medida) > 0;
           const tienePrecio = tieneKilos && !!this.obtenerPrecioVentaParaFecha(medida, fechaEmbarque, null);
           if (tieneKilos && tienePrecio) {
@@ -2924,8 +2866,15 @@ export default {
         this.$set(this.embarqueData, 'costosPorMedida', {});
       }
       this.$set(this.embarqueData.costosPorMedida, medida, costo);
+      // También como costo manual del embarque: así Gestión de Costos lo
+      // muestra igual y no lo borra al sincronizar con el catálogo.
+      if (!this.embarqueData.costosPorMedidaManuales) {
+        this.$set(this.embarqueData, 'costosPorMedidaManuales', {});
+      }
+      this.$set(this.embarqueData.costosPorMedidaManuales, medida, costo);
       await this.persistirCamposRendimientos({
-        costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida)
+        costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida),
+        costosPorMedidaManuales: this.deepClone(this.embarqueData.costosPorMedidaManuales)
       });
       this.costosFaltantes = this.costosFaltantes.filter(m => m !== medida);
       this.$delete(this.costosFaltantesInputs, medida);
@@ -2992,6 +2941,9 @@ export default {
         this.toLocalYMD(new Date());
       
       const ganancias = {};
+
+      // Cargar el catálogo de costos una vez (también lo usan los crudos).
+      await this.asegurarCacheCostosGlobales();
       
       for (const medida of this.medidasUnicas) {
         // Solo calcular ganancias si el análisis está activado para esta medida
@@ -3000,25 +2952,18 @@ export default {
         const costoFinal = await this.calcularCostoFinal(medida);
         this.$set(this.costosCalculados, medida, costoFinal);
         
-        // Obtener el costo base original (sin cálculos adicionales).
-        // Regla refri (solo ganancia): el costo base es el de la
-        // medida base ("71/90" para "71/90 refri"). Misma resolución
-        // que calcularCostoFinal (catálogo medida+proveedor, luego
-        // manual, luego guardado) para que la tarjeta muestre el
-        // mismo costo que se usa en el cálculo.
-        const baseRefriCosto = this.medidaBaseRefri(medida);
-        const claveCostoBase = baseRefriCosto || medida;
+        // Costo base (sin rendimiento ni extra) con la misma resolución que
+        // calcularCostoFinal, para que la tarjeta muestre el costo usado y su
+        // fuente. Regla refri (solo ganancia): costo de la medida base.
+        const claveCostoBase = this.medidaBaseRefri(medida) || medida;
         const resueltoBase = await this.resolverCostoBase(claveCostoBase);
         const costoBase = resueltoBase ? resueltoBase.costo : 0;
-        
-        // Obtener clientes que tienen productos de esta medida
-        const clientesConMedida = this.obtenerClientesConMedida(medida);
-        
-        // Calcular precio promedio ponderado y ganancias reales
-        const resultadoCalculo = this.calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal, costoBase);
-        
-        if (!resultadoCalculo) continue; // Si no hay precios, saltar esta medida
-        
+
+        const resultadoCalculo = this.calcularPrecioYGanancias(medida, fechaEmbarque, costoFinal, costoBase);
+        if (!resultadoCalculo) continue; // Ninguna línea con precio
+
+        resultadoCalculo.costoFuente = resueltoBase ? resueltoBase.fuente : null;
+        resultadoCalculo.costoFuenteTexto = describirFuenteCosto(resueltoBase);
         ganancias[medida] = resultadoCalculo;
       }
       
@@ -3069,130 +3014,57 @@ export default {
       await this.persistirCamposRendimientos({ totalGanancias: total });
     },
 
-    // Nuevo método que calcula precio promedio ponderado y ganancias
-    calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal, costoBase) {
-      let gananciasPorCliente = [];
-      let totalEmbarcadoGeneral = 0;
-      let gananciaTotalSumada = 0;
-      let totalVentasPonderadas = 0;
-      
-      // Regla refri (solo ganancia): el precio se toma de la medida
-      // base como si no dijera refri.
+    // Ganancia de una medida limpia. Cada línea del embarque usa su propio
+    // precio de venta: el escrito en el producto ("Venta $X", el mismo de la
+    // cuenta del cliente) y, si no tiene, el del catálogo con prioridad al
+    // específico del cliente. Ver utils/gananciasRendimientos.
+    calcularPrecioYGanancias(medida, fechaEmbarque, costoFinal, costoBase) {
+      // Regla refri (solo ganancia): el precio de catálogo es el de la base.
       const medidaPrecio = this.medidaBaseRefri(medida) || medida;
-
-      // Obtener precio general más reciente
-      const precioGeneral = this.obtenerPrecioVentaParaFecha(medidaPrecio, fechaEmbarque, null);
-      const fechaGeneral = precioGeneral ? this.normalizarFecha(precioGeneral.fecha) : null;
-
-      // Calcular ganancias por cada cliente
-      clientesConMedida.forEach(({ cliente, totalEmbarcado }) => {
-        const clienteIdParaPrecios = this.obtenerClienteIdParaPrecios(cliente.nombre);
-
-        // Buscar precio específico para el cliente
-        const precioEspecifico = this.obtenerPrecioVentaParaFecha(medidaPrecio, fechaEmbarque, clienteIdParaPrecios);
-        
-        // Decidir qué precio usar: específico solo si es más reciente que el general
-        let precioAUsar = precioGeneral; // Por defecto usar general
-        let esEspecifico = false;
-        
-        if (precioEspecifico && precioEspecifico.clienteId) {
-          const fechaEspecifico = this.normalizarFecha(precioEspecifico.fecha);
-          // Solo usar específico si es más reciente que el general (o si no hay general)
-          if (fechaEspecifico && (!fechaGeneral || fechaEspecifico > fechaGeneral)) {
-            precioAUsar = precioEspecifico;
-            esEspecifico = true;
-          }
-        }
-        
-        if (precioAUsar) {
-          const precioUnitario = Math.round(precioAUsar.precio);
-          const gananciaUnitaria = Math.round(precioUnitario - costoFinal);
-          const gananciaTotal = Math.round(gananciaUnitaria * totalEmbarcado);
-          
-          gananciasPorCliente.push({
-            cliente: cliente.nombre,
-            precioVenta: precioUnitario,
-            totalEmbarcado: totalEmbarcado,
-            gananciaUnitaria: gananciaUnitaria,
-            gananciaTotal: gananciaTotal,
-            fechaPrecio: precioAUsar.fecha,
-            esEspecifico: esEspecifico,
-            clienteId: precioAUsar.clienteId || null
-          });
-          
-          totalEmbarcadoGeneral += totalEmbarcado;
-          gananciaTotalSumada += gananciaTotal;
-          totalVentasPonderadas += precioUnitario * totalEmbarcado;
-        }
+      const esMaquila = /maquila\s+ozuna/i.test(medida);
+      const lineas = this.obtenerLineasVentaMedida(medida).map(({ cliente, kilos, producto }) => {
+        const delEmbarque = precioVentaDeProducto(producto, { esMaquila });
+        const precio = delEmbarque || this.obtenerPrecioVentaParaFecha(
+          medidaPrecio, fechaEmbarque, this.obtenerClienteIdParaPrecios(cliente.nombre || '')
+        );
+        return {
+          cliente: cliente.nombre,
+          kilos,
+          precio: precio ? precio.precio : null,
+          origen: precio ? precio.origen : null,
+          fecha: precio ? precio.fecha : '',
+          desdeEmbarque: Boolean(delEmbarque)
+        };
       });
-      
-      if (gananciasPorCliente.length === 0) return null;
-      
-      // Calcular precio promedio ponderado
-      const precioPromedioPonderado = totalEmbarcadoGeneral > 0 ? 
-        Math.round(totalVentasPonderadas / totalEmbarcadoGeneral) : 0;
-      
-      // Determinar información para mostrar
-      const clientesConEspecifico = gananciasPorCliente.filter(g => g.esEspecifico);
-      const preciosUnicos = new Set(gananciasPorCliente.map(g => g.precioVenta));
-      const tieneMultiplesPrecios = preciosUnicos.size > 1;
-      const soloUnCliente = gananciasPorCliente.length === 1;
-      
-      // Debug detallado
-      console.log(`[${medida}] Cálculo de precios:`, {
-        fechaEmbarque: fechaEmbarque,
-        precioGeneral: precioGeneral ? { precio: precioGeneral.precio, fecha: precioGeneral.fecha, clienteId: precioGeneral.clienteId } : null,
-        fechaGeneral: precioGeneral?.fecha,
-        clientesConEspecifico: clientesConEspecifico.map(c => ({ 
-          cliente: c.cliente, 
-          precio: c.precioVenta, 
-          fecha: c.fechaPrecio,
-          clienteId: c.clienteId 
-        })),
-        precioPromedio: precioPromedioPonderado,
-        tieneMultiplesPrecios,
-        soloUnCliente,
-        totalClientes: gananciasPorCliente.length,
-        detallesPorCliente: gananciasPorCliente.map(g => ({
-          cliente: g.cliente,
-          precio: g.precioVenta,
-          fecha: g.fechaPrecio,
-          esEspecifico: g.esEspecifico
-        }))
+
+      const resultado = calcularGananciaLimpio(lineas, costoFinal);
+      if (!resultado) return null;
+      return { ...resultado, costoBase: Math.round(costoBase || 0) };
+    },
+
+    // Líneas de venta (un renglón por producto) de una medida limpia. Ozuna
+    // solo cuenta como venta si la línea está marcada "Venta"; sus líneas de
+    // maquila van a la medida "X Maquila Ozuna". Los refrigerados no cuentan.
+    obtenerLineasVentaMedida(medida) {
+      if (!this.embarqueData || !this.embarqueData.clientes) return [];
+      const esOzuna = medida.includes('Maquila Ozuna');
+      const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
+      const lineas = [];
+      this.embarqueData.clientes.forEach(cliente => {
+        (cliente.productos || []).forEach(producto => {
+          if (!producto.medida || producto.refrigerar) return;
+          const mismaMedida = producto.medida.toLowerCase().trim() === medidaBase;
+          const incluir = esOzuna
+            ? mismaMedida && cliente.nombre === 'Ozuna' && !producto.esVenta
+            : mismaMedida && (cliente.nombre !== 'Ozuna' || producto.esVenta);
+          if (!incluir) return;
+          const kilos = producto.tipo === 'c/h20'
+            ? this.calcularTotalBolsas(producto) * (parseFloat(producto.camaronNeto) || 0.65)
+            : this.calcularTotalKilos(producto);
+          if (kilos > 0) lineas.push({ cliente, kilos, producto });
+        });
       });
-      
-      let infoMostrar = {
-        esPromedio: tieneMultiplesPrecios,
-        esEspecifico: false,
-        clienteEspecifico: null,
-        clientesConEspecifico: clientesConEspecifico.map(c => c.cliente),
-        fechaMasReciente: gananciasPorCliente.reduce((fecha, g) => {
-          const fechaActual = this.normalizarFecha(g.fechaPrecio);
-          return !fecha || (fechaActual && fechaActual > fecha) ? fechaActual : fecha;
-        }, null)
-      };
-      
-      // Si solo hay un cliente con precio específico más reciente, mostrarlo como específico
-      if (clientesConEspecifico.length === 1 && soloUnCliente) {
-        infoMostrar.esEspecifico = true;
-        infoMostrar.esPromedio = false;
-        infoMostrar.clienteEspecifico = clientesConEspecifico[0].cliente;
-      }
-      
-      return {
-        precioVenta: precioPromedioPonderado,
-        costoFinal: Math.round(costoFinal),
-        costoBase: Math.round(costoBase || 0),
-        gananciaUnitaria: Math.round(precioPromedioPonderado - costoFinal),
-        gananciaTotal: gananciaTotalSumada,
-        totalEmbarcado: Math.round(totalEmbarcadoGeneral),
-        fechaPrecio: infoMostrar.fechaMasReciente ? this.toLocalYMD(infoMostrar.fechaMasReciente) : undefined,
-        esPromedio: infoMostrar.esPromedio,
-        esEspecifico: infoMostrar.esEspecifico,
-        clienteEspecifico: infoMostrar.clienteEspecifico,
-        clientesConEspecifico: infoMostrar.clientesConEspecifico,
-        detallesPorCliente: gananciasPorCliente
-      };
+      return lineas;
     },
 
     // ============ MÉTODOS PARA CÁLCULO DE GANANCIAS DE CRUDOS ============
@@ -3266,14 +3138,13 @@ export default {
     calcularGananciasPorTallaCrudo(talla, fechaEmbarque) {
       if (!this.embarqueData || !this.embarqueData.clientes) return null;
       
-      let totalKilosVenta = 0;
-      let totalVentas = 0;
-      let detallesPorCliente = [];
+      const detallesPorCliente = [];
       let hayPreciosIndividuales = false;
-      
-      // Calcular el costo base para esta talla usando el sistema existente
-      const costoBase = this.calcularCostoCrudoPorTalla(talla);
-      const costoFinal = costoBase + 3.5; // Sumar 3.5 al costo
+
+      // Costo de la talla (manual > catálogo > guardado) + sobrecosto de crudo
+      const resueltoCosto = this.resolverCostoBaseSync(talla);
+      const costoBase = resueltoCosto ? resueltoCosto.costo : 0;
+      const costoFinal = costoBase + SOBRECOSTO_CRUDO_KG;
 
       // Obtener los kilos de costo para esta talla
       const tarasData = this.calcularTarasCrudosPorMedida();
@@ -3293,15 +3164,14 @@ export default {
                   if (esVenta) {
                     // Calcular kilos del item
                     const kilosVentaItem = this.calcularKilosCrudosItem(item);
-                    totalKilosVenta += kilosVentaItem;
                     
                     // Determinar precio a usar
                     let precioAUsar = null;
                     let fuentePrecio = '';
                     
-                    if (item.precio && item.precio > 0) {
+                    if (Number(item.precio) > 0) {
                       // Usar precio individual del item
-                      precioAUsar = item.precio;
+                      precioAUsar = Number(item.precio);
                       fuentePrecio = 'individual';
                       hayPreciosIndividuales = true;
                     } else {
@@ -3315,14 +3185,10 @@ export default {
                     }
                     
                     if (precioAUsar && kilosVentaItem > 0) {
-                      totalVentas += precioAUsar * kilosVentaItem;
-                      
                       detallesPorCliente.push({
                         cliente: cliente.nombre,
                         kilos: kilosVentaItem,
                         precioVenta: precioAUsar,
-                        gananciaUnitaria: 0, // Se recalcula después
-                        gananciaTotal: 0, // Se recalcula después
                         fuentePrecio: fuentePrecio,
                         taras: item.taras,
                         sobrante: item.sobrante,
@@ -3337,96 +3203,28 @@ export default {
         }
       });
       
-      if (totalKilosVenta === 0) {
-        return null;
-      }
-      
-      const totalCosto = costoFinal * totalKilosCosto;
-      const totalGanancias = totalVentas - totalCosto;
-      
-      // Calcular precio promedio ponderado
-      const precioPromedioPonderado = totalKilosVenta > 0 ? totalVentas / totalKilosVenta : 0;
-      const gananciaUnitariaPromedio = totalKilosVenta > 0 ? totalGanancias / totalKilosVenta : 0;
+      // Ganancia por cliente con su propio precio; el costo (pagado por los
+      // kilos de costo) se reparte por kilo vendido y la suma da el total.
+      const calculo = calcularGananciaCrudo(detallesPorCliente, costoFinal, totalKilosCosto);
+      if (!calculo) return null;
 
-      // Actualizar los detalles de ganancia por cliente (es una aproximación)
-      detallesPorCliente.forEach(detalle => {
-        detalle.gananciaUnitaria = gananciaUnitariaPromedio;
-        detalle.gananciaTotal = detalle.gananciaUnitaria * detalle.kilos;
-      });
-      
-      const resultado = {
+      return {
         talla: talla,
-        totalKilos: Math.round(totalKilosVenta),
+        totalKilos: Math.round(calculo.totalKilos),
         totalKilosCosto: Math.round(totalKilosCosto),
-        precioVenta: Math.round(precioPromedioPonderado),
+        precioVenta: Math.round(calculo.precioPromedio),
         costoBase: costoFinal,
-        costoTotal: Math.round(totalCosto), // Añadido para posible uso
-        gananciaUnitaria: Math.round(gananciaUnitariaPromedio),
-        gananciaTotal: Math.round(totalGanancias),
+        costoSinSobrecosto: costoBase,
+        sobrecostoKg: SOBRECOSTO_CRUDO_KG,
+        costoFuente: resueltoCosto ? resueltoCosto.fuente : null,
+        costoFuenteTexto: describirFuenteCosto(resueltoCosto),
+        costoTotal: Math.round(calculo.totalCosto),
+        gananciaUnitaria: Math.round(calculo.gananciaUnitaria),
+        gananciaTotal: Math.round(calculo.gananciaTotal),
         hayPreciosIndividuales: hayPreciosIndividuales,
-        detallesPorCliente: detallesPorCliente,
+        detallesPorCliente: calculo.detalles,
         fechaCalculo: this.toLocalYMD(new Date())
       };
-      
-      // Ganancia calculada exitosamente
-      
-      return resultado;
-    },
-
-    // Calcular costo para una talla de crudo
-    calcularCostoCrudoPorTalla(talla) {
-      // Usar el sistema de costos existente
-      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-      
-      // Buscar primero con nombre exacto
-      let costo = Number(costosEmbarque[talla]) || 0;
-      let medidaEncontrada = talla;
-      
-      // Si no se encuentra, buscar insensible a mayúsculas/minúsculas
-      if (costo === 0) {
-        const tallaLower = talla.toLowerCase();
-        for (const [medida, costoValue] of Object.entries(costosEmbarque)) {
-          if (medida.toLowerCase() === tallaLower) {
-            costo = Number(costoValue) || 0;
-            medidaEncontrada = medida;
-            break;
-          }
-        }
-      }
-      
-      // Si aún no se encuentra costo, inicializar costosPorMedida si no existe
-      if (costo === 0 && (!this.embarqueData.costosPorMedida || Object.keys(this.embarqueData.costosPorMedida).length === 0)) {
-        console.log(`⚠️ No se encontró costo para talla ${talla}. Inicializando costosPorMedida automáticamente.`);
-        this.inicializarCostosPorMedida();
-        
-        // Intentar buscar nuevamente después de inicializar
-        const costosEmbarqueActualizados = this.embarqueData?.costosPorMedida || {};
-        costo = Number(costosEmbarqueActualizados[talla]) || 0;
-        
-        if (costo === 0) {
-          const tallaLower = talla.toLowerCase();
-          for (const [medida, costoValue] of Object.entries(costosEmbarqueActualizados)) {
-            if (medida.toLowerCase() === tallaLower) {
-              costo = Number(costoValue) || 0;
-              medidaEncontrada = medida;
-              break;
-            }
-          }
-        }
-      }
-      
-      console.log(`🔍 DEBUG - Calculando costo para talla ${talla}:`, {
-        tallaBuscada: talla,
-        medidaEncontrada: medidaEncontrada,
-        costosDisponibles: Object.keys(costosEmbarque),
-        costoEncontrado: costosEmbarque[medidaEncontrada],
-        costoCalculado: costo,
-        esCrudo: talla.includes('c/c'),
-        busquedaCaseInsensitive: talla !== medidaEncontrada
-      });
-      
-      // Para crudos, no aplicar costo extra ya que son materias primas
-      return costo;
     },
 
     // Calcular kilos de un item de crudo
@@ -3622,59 +3420,6 @@ export default {
 
 
     // Nuevo método para obtener clientes que tienen productos de una medida específica
-    obtenerClientesConMedida(medida) {
-      if (!this.embarqueData || !this.embarqueData.clientes) return [];
-      
-      const clientesConMedida = [];
-      const esOzuna = medida.includes('Maquila Ozuna');
-      const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
-      
-      this.embarqueData.clientes.forEach(cliente => {
-        let totalEmbarcado = 0;
-        
-        cliente.productos.forEach(producto => {
-          if (!producto.medida) return;
-          
-          let incluir = false;
-          
-          // Lógica para determinar si incluir el producto
-          if (esOzuna) {
-            // Solo incluir si el producto es de cliente Ozuna y NO es una venta
-            incluir = producto.medida.toLowerCase().trim() === medidaBase && 
-                     cliente.nombre === 'Ozuna' && 
-                     !producto.esVenta;
-          } else {
-            // Solo incluir si el producto coincide con la medida y NO es de Ozuna o es de Ozuna pero es VENTA
-            incluir = producto.medida.toLowerCase().trim() === medidaBase && 
-                     (cliente.nombre !== 'Ozuna' || producto.esVenta);
-          }
-          
-          if (incluir) {
-            // Excluir productos refrigerados del cálculo de ganancias
-            if (!producto.refrigerar) {
-              if (producto.tipo === 'c/h20') {
-                const totalBolsas = this.calcularTotalBolsas(producto);
-                const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
-                totalEmbarcado += (totalBolsas * valorNeto);
-              } else {
-                // Las taras extra corrigen el conteo de taras, pero no los kilos.
-                totalEmbarcado += this.calcularTotalKilos(producto);
-              }
-            }
-          }
-        });
-        
-        if (totalEmbarcado > 0) {
-          clientesConMedida.push({
-            cliente: cliente,
-            totalEmbarcado: totalEmbarcado
-          });
-        }
-      });
-      
-      return clientesConMedida;
-    },
-
     async guardarCambiosEnTiempoReal() {
       if (this._hidratandoRendimientos) return;
       if (!this.guardadoAutomaticoActivo) return;
@@ -4034,7 +3779,7 @@ export default {
         if (this.analizarMaquilaGanancia[medida] && !this.medidaOculta[medida]) {
           gananciasVisiblesMaquila[medida] = {
             totalEmbarcado: this.obtenerTotalEmbarcado(medida),
-            precioMaquila: Number(this.precioMaquila[medida]) || 0,
+            precioMaquila: this.precioMaquilaEfectivo(medida),
             gananciaTotal: this.calcularGananciaMaquila(medida)
           };
         }
@@ -4273,24 +4018,6 @@ export default {
 
     
 
-    mostrarIndicadorPrecioReciente(medida) {
-      if (!this.embarqueData || !this.embarqueData.fecha) return false;
-      
-      const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData.fecha);
-      if (!fechaEmbarqueNormalizada) return false;
-      
-      const fechaEmbarqueStr = this.toLocalYMD(fechaEmbarqueNormalizada);
-      const fechaHoy = this.toLocalYMD(new Date());
-      const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
-      const fechaHoyObj = new Date(fechaHoy);
-      const diasDiferencia = Math.floor((fechaHoyObj - fechaEmbarqueObj) / (1000 * 60 * 60 * 24));
-      
-      const embarqueEsReciente = diasDiferencia <= this.diasRecientes;
-      const embarqueEsHoyOFuturo = fechaEmbarqueStr >= fechaHoy;
-      
-      return embarqueEsReciente || embarqueEsHoyOFuturo;
-    },
-
     // Métodos para configuración de pesos
     abrirModalConfiguracion() {
       this.mostrarModalConfiguracion = true;
@@ -4330,10 +4057,46 @@ export default {
     },
 
     // Calcular ganancia de maquila para una medida
+    formatearPrecioVenta(precio) {
+      const n = Number(precio) || 0;
+      return Number.isInteger(n) ? this.formatearPrecio(n) : this.formatearPrecioConDecimales(n);
+    },
+
+    iconoOrigenPrecio(origen) {
+      return { manual: '✋', especifico: '📌', general: '🌐', embarque: '🚢' }[origen] || '🌐';
+    },
+
+    describirOrigenPrecio(detalle) {
+      const textos = {
+        manual: 'Precio capturado a mano en el embarque',
+        especifico: 'Precio específico del cliente',
+        general: 'Precio general',
+        embarque: 'Precio escrito en el embarque'
+      };
+      const base = textos[detalle.origen] || 'Precio general';
+      const donde = detalle.desdeEmbarque ? ' (línea del embarque)' : ' (catálogo de precios)';
+      const fecha = detalle.fechaPrecio ? `, del ${detalle.fechaPrecio}` : '';
+      return base + donde + fecha;
+    },
+
+    // Precio de maquila por kg: el capturado en Rendimientos y, si está
+    // vacío, el que traen las líneas de maquila del embarque (el mismo que
+    // se le cobra a Ozuna). Antes, vacío daba ganancia de maquila 0.
+    precioMaquilaDelEmbarque(medida) {
+      if (!/maquila\s+ozuna/i.test(medida || '')) return 0;
+      return precioMaquilaPonderado(
+        this.obtenerLineasVentaMedida(medida).map(({ kilos, producto }) => ({ kilos, precio: producto.precio }))
+      );
+    },
+
+    precioMaquilaEfectivo(medida) {
+      const capturado = Number(this.precioMaquila[medida]);
+      if (capturado > 0) return capturado;
+      return this.precioMaquilaDelEmbarque(medida);
+    },
+
     calcularGananciaMaquila(medida) {
-      const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
-      const precioMaquila = Number(this.precioMaquila[medida]) || 0;
-      return totalEmbarcado * precioMaquila;
+      return this.obtenerTotalEmbarcado(medida) * this.precioMaquilaEfectivo(medida);
     },
 
 
@@ -6192,6 +5955,47 @@ input {
 .detalle-cliente {
   border-color: #e1e8f0;
   border-radius: 8px;
+}
+
+/* Análisis de ganancia: fuente del costo y desglose de precio por cliente */
+.costo-fuente-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  color: #36506b;
+  background: #e6edf5;
+}
+.costo-fuente-manual { color: #7a4b00; background: #fff1d6; }
+.costo-fuente-catalogo { color: #1d5c3a; background: #e1f4e8; }
+.costo-fuente-embarque { color: #36506b; background: #e6edf5; }
+.costo-fuente-ninguno { color: #9b1c1c; background: #fde2e2; }
+
+.detalles-clientes-limpio { margin-top: 8px; }
+.detalles-clientes-limpio .detalle-cliente {
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  padding: 5px 8px;
+  margin-bottom: 5px;
+  font-size: .85rem;
+}
+.ganancia-info .detalles-clientes-limpio h5 { font-size: .85rem; margin-bottom: 6px; }
+.ganancia-info .detalles-clientes-limpio .leyenda-origen-precio {
+  margin: 4px 0 0;
+  font-size: .7rem;
+  line-height: 1.4;
+  color: #6c7a89;
+}
+.aviso-kilos-sin-precio {
+  margin: 8px 0 0;
+  font-size: .82rem;
 }
 
 .resumen-dia-total {

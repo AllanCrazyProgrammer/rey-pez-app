@@ -339,6 +339,7 @@ import { debounce } from 'lodash';
 import CostoModal from './CostoModal.vue';
 import CostoProveedorModal from './CostoProveedorModal.vue';
 import { formatearFecha } from '@/utils/formatters';
+import { resolverCostoMedida, calcularCostoFinalKg } from '@/utils/gananciasRendimientos';
 
 export default {
   name: 'GestionCostos',
@@ -622,32 +623,27 @@ export default {
       return medida.toLowerCase().includes('mix');
     },
 
+    // Costo base con la misma regla que Rendimientos
+    // (utils/gananciasRendimientos): manual del embarque > catálogo
+    // (medida + proveedor) > guardado. Antes el manual se mostraba con la
+    // etiqueta "Manual" pero se usaba el del catálogo.
+    resolverCostoBase(medida) {
+      return resolverCostoMedida({
+        medida,
+        catalogo: this.encontrarCostoParaMedida(medida),
+        manuales: this.costosEmbarqueManuales,
+        guardados: {}
+      });
+    },
+
     calcularCostoFinal(medida) {
-      let costo = 0;
-      const costoGlobal = this.encontrarCostoParaMedida(medida);
-      if (costoGlobal) {
-        costo = Number(costoGlobal.costo);
-      } else if (this.tieneCostoEspecifico(medida)) {
-        costo = Number(this.obtenerCostoEspecifico(medida));
-      }
-      
-      const rendimientoOriginal = Number(this.rendimientos[medida]) || 0;
-      // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
-      const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
-      const costoExtraNumerico = Number(this.costoExtra);
-      const costoExtra = Number.isNaN(costoExtraNumerico) ? 18 : costoExtraNumerico;
-      
-      // Verificar si está marcado para aplicar costo extra
-      const aplicarExtra = this.aplicarCostoExtra[medida] || false;
-      
-      let resultado;
-      if (aplicarExtra) {
-        resultado = Math.round((costo * rendimiento) + costoExtra);
-      } else {
-        resultado = Math.round(costo * rendimiento);
-      }
-      
-      return resultado.toFixed(1);
+      const resuelto = this.resolverCostoBase(medida);
+      return calcularCostoFinalKg({
+        costo: resuelto ? resuelto.costo : 0,
+        rendimiento: Number(this.rendimientos[medida]) || 0,
+        aplicarExtra: Boolean(this.aplicarCostoExtra[medida]),
+        costoExtra: this.costoExtra
+      }).toFixed(1);
     },
 
     async iniciarEscuchaPreciosGlobales() {
@@ -1803,15 +1799,8 @@ export default {
       const costos = {};
       
       this.medidasEmbarque.forEach(medida => {
-        const costoGlobal = this.encontrarCostoParaMedida(medida);
-
-        if (costoGlobal) {
-          costos[medida] = Number(costoGlobal.costo).toFixed(2);
-        } else if (this.tieneCostoEspecifico(medida)) {
-          costos[medida] = Number(this.obtenerCostoEspecifico(medida)).toFixed(2);
-        } else {
-          costos[medida] = '0.00';
-        }
+        const resuelto = this.resolverCostoBase(medida);
+        costos[medida] = resuelto ? Number(resuelto.costo).toFixed(2) : '0.00';
       });
       
       return costos;

@@ -16,6 +16,7 @@ const dateUtils = compile(fs.readFileSync('src/utils/dateUtils.js', 'utf8'), {
   moment: require('moment'), 'moment/locale/es': require('moment/locale/es')
 });
 const preciosHistoricos = compile(fs.readFileSync('src/utils/preciosHistoricos.js', 'utf8'), { './dateUtils': dateUtils });
+const gananciasRendimientos = compile(fs.readFileSync('src/utils/gananciasRendimientos.js', 'utf8'), {});
 const preciosAliasCatalogo = compile(fs.readFileSync('src/utils/preciosAliasCatalogo.js', 'utf8'), { './preciosHistoricos': preciosHistoricos });
 test('automatic report reuses real screen calculations, includes current products and never saves shipment edits', async () => {
   const calls = [];
@@ -33,6 +34,7 @@ test('automatic report reuses real screen calculations, includes current product
     '@/utils/pdf/sacadas': {}, '@/components/Existencias/MedidasParaHoyCards.vue': {}, '@/services/EmbarquesOfflineService': offline, '@/utils/formatters': { formatearFecha: value => value },
     '@/utils/preciosHistoricos': preciosHistoricos,
     '@/utils/preciosAliasCatalogo': preciosAliasCatalogo,
+    '@/utils/gananciasRendimientos': gananciasRendimientos,
     '@/services/embarqueEscritura': { escribirCamposEmbarque: async () => { throw new Error('el reporte no debe escribir el embarque'); } },
     '@/utils/embarqueRevision': {
       CAMPOS_RENDIMIENTOS: [],

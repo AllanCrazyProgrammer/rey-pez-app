@@ -394,7 +394,7 @@
                         <span class="radio-custom"></span>
                         <span class="radio-text sobreescribir">
                           <i class="overwrite-icon">🔄</i>
-                          Sobreescribir con precio general
+                          Sobreescribir con precio general (borra su precio propio)
                         </span>
                       </label>
                     </div>
@@ -924,7 +924,7 @@ export default {
           if (procesarDecisiones && this.preciosEspecificosAfectados.length > 0) {
             for (const precioEspecifico of this.preciosEspecificosAfectados) {
               if (this.decisionesClientes[precioEspecifico.clienteId] === 'sobreescribir') {
-                await deleteDoc(doc(db, 'precios', precioEspecifico.id));
+                await this.eliminarPreciosEspecificosCliente(precioEspecifico);
               }
             }
           }
@@ -1106,8 +1106,7 @@ export default {
             const decision = this.decisionesClientes[precioEspecifico.clienteId];
             
             if (decision === 'sobreescribir') {
-              // Eliminar el precio específico existente
-              await deleteDoc(doc(db, 'precios', precioEspecifico.id));
+              await this.eliminarPreciosEspecificosCliente(precioEspecifico);
             }
             // Si la decisión es 'mantener', no hacemos nada
           }
@@ -1132,6 +1131,20 @@ export default {
       } catch (error) {
         console.error('Error al agregar precio:', error);
         alert('Error al guardar el precio');
+      }
+    },
+
+    // "Sobreescribir con precio general": el cliente deja de tener precio
+    // propio para ese producto. Se borran TODOS sus registros específicos
+    // (no solo el más reciente); si quedaba uno viejo, el embarque, las
+    // cuentas y Rendimientos lo volvían a usar porque el específico gana.
+    async eliminarPreciosEspecificosCliente(precioEspecifico) {
+      const ids = new Set([precioEspecifico.id]);
+      (precioEspecifico.historial || []).forEach((registro) => {
+        if (registro?.id && registro.clienteId === precioEspecifico.clienteId) ids.add(registro.id);
+      });
+      for (const id of ids) {
+        if (id) await deleteDoc(doc(db, 'precios', id));
       }
     },
 

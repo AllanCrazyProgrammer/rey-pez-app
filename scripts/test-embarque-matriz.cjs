@@ -153,6 +153,7 @@ function partirHost(valor) {
       throw new Error(dep);
     });
     if (id === './components/PesadasDelDiaModal.vue') return {};
+    if (id === '@/utils/gananciasRendimientos') return compilar('src/utils/gananciasRendimientos.js', require);
     if (id === '@/utils/preciosAliasCatalogo') return { obtenerGrupoPreciosPorNombre: () => null };
     throw new Error('Rendimientos: ' + id);
   }, {
@@ -167,6 +168,7 @@ function partirHost(valor) {
     if (id === 'lodash') return { debounce: (fn) => fn };
     if (id.endsWith('.vue')) return {};
     if (id === '@/utils/formatters') return { formatearFecha: (valor) => valor };
+    if (id === '@/utils/gananciasRendimientos') return compilar('src/utils/gananciasRendimientos.js', require);
     throw new Error('Costos: ' + id);
   }, { window: { confirm: () => false, location: { reload() {} } }, alert: () => {} }).default;
 

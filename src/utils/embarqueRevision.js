@@ -42,6 +42,8 @@ export const CAMPOS_RENDIMIENTOS = [
   'notaRendimientos',
   'totalGanancias',
   'costosPorMedida',
+  // El costo capturado en el aviso "Faltan costos" es manual del embarque.
+  'costosPorMedidaManuales',
   'costosOmitidos',
 ];
 

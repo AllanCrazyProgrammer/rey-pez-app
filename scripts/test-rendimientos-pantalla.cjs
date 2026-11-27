@@ -124,6 +124,7 @@ function partirHost(valor) {
       throw new Error(dep);
     });
     if (id === './components/PesadasDelDiaModal.vue') return {};
+    if (id === '@/utils/gananciasRendimientos') return compilar('src/utils/gananciasRendimientos.js', require);
     if (id === '@/utils/preciosAliasCatalogo') return { obtenerGrupoPreciosPorNombre: () => null };
     throw new Error('Dependencia inesperada: ' + id);
   }, {
