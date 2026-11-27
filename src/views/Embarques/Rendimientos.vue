@@ -4511,13 +4511,15 @@ export default {
     // Aplica el precio en las líneas de esa medida en cada embarque (camión)
     // del día. Escribe solo `clientes` con la revisión del documento recién
     // leído; si alguien guardó en medio, vuelve a leer y reintenta.
+    // Un embarque "Protegido" también se actualiza: la protección bloquea
+    // kilos y taras, no precios (en el editor el botón "$" y la
+    // actualización automática de precios siguen activos).
     async aplicarPrecioEnEmbarquesDelDia(opciones) {
       const db = getFirestore();
       const ids = this.idsEmbarquesRelacionados.length
         ? this.idsEmbarquesRelacionados
         : [this.$route.params.id];
       let cambiadas = 0;
-      let bloqueados = 0;
       for (const id of ids) {
         for (let intento = 0; intento < 3; intento += 1) {
           const snap = await getDoc(doc(db, 'embarques', id));
@@ -4525,10 +4527,6 @@ export default {
           const data = snap.data();
           const resultado = aplicarPrecioEnClientes(data.clientes || [], opciones);
           if (!resultado.cambiadas) break;
-          if (data.embarqueBloqueado) {
-            bloqueados += 1;
-            break;
-          }
           try {
             await escribirCamposEmbarque(db, id, {
               baseRev: Number(data.rev) || 0,
@@ -4543,7 +4541,7 @@ export default {
           }
         }
       }
-      return { cambiadas, bloqueados };
+      return { cambiadas };
     },
 
     async guardarEdicionPrecio() {
@@ -4597,7 +4595,7 @@ export default {
           }
         }
 
-        const { cambiadas, bloqueados } = await this.aplicarPrecioEnEmbarquesDelDia({
+        const { cambiadas } = await this.aplicarPrecioEnEmbarquesDelDia({
           medida: edicion.medida,
           precio,
           alcance: edicion.alcance,
@@ -4618,7 +4616,6 @@ export default {
         }[edicion.alcance];
         let aviso = `Precio $${this.formatearPrecioVenta(precio)} guardado ${donde}`;
         aviso += cambiadas ? ` · ${cambiadas} ${cambiadas === 1 ? 'línea actualizada' : 'líneas actualizadas'}` : '';
-        if (bloqueados) aviso += ` · ${bloqueados} embarque(s) bloqueado(s) sin cambiar`;
         this.avisoPrecio = aviso;
         clearTimeout(this._timerAvisoPrecio);
         this._timerAvisoPrecio = setTimeout(() => { this.avisoPrecio = ''; }, 6000);

@@ -103,7 +103,8 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
 - Editar precio desde "Precio por cliente" (modal en Rendimientos): solo este embarque
   (líneas `precioOrigen: 'manual'`), precio específico del cliente o nuevo general
   (registro en `precios` con la fecha del embarque). Escribe `clientes` de cada camión
-  del día con `escribirCamposEmbarque` (salta embarques bloqueados). Qué líneas cambian:
+  del día con `escribirCamposEmbarque` (también los "Protegidos": la protección bloquea kilos
+  y taras, no precios). Qué líneas cambian:
   `aplicarPrecioEnClientes`.
 - Costo desde Rendimientos (etiqueta del costo en la tarjeta o aviso "Faltan costos"):
   "Recordar para los siguientes días" agrega un renglón a `historial_costos` con la fecha
