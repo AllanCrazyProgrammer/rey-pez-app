@@ -104,6 +104,12 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
   "Recordar para los siguientes días" agrega un renglón a `historial_costos` con la fecha
   del embarque (`entradaCatalogoCosto`) y quita el manual de ese embarque; desmarcado
   queda como costo manual solo de ese embarque.
+- Proveedor activo (medida sin proveedor en el nombre, ej. "51/60", con varios en el
+  catálogo): elección del embarque (`proveedorActivoPorMedida`) > default general
+  `configuracion/costosProveedorActivo.porMedida` (última elección en Costos o en el modal
+  de costo de Rendimientos) > `ordenarProveedoresDefault` (sin proveedor, luego el más reciente).
+- Gestión de Costos copia la foto base (`clonarDatosPlanos`): si comparte los mapas que
+  edita, el guardado cree que no hubo cambios y no escribe.
 - Prueba con emulador: dev server con
   `VUE_APP_FIRESTORE_EMULATOR=127.0.0.1:<puerto>` y proyecto `demo-reypez`.
 

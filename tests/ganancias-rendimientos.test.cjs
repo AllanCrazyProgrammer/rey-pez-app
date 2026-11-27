@@ -235,3 +235,32 @@ test('costo recordado: si venía de la talla base no cambia la talla base', () =
   assert.equal(e.costoKey, '51/60 tirado__sin-proveedor')
   assert.equal(e.tipoCosto, 'crudo')
 })
+
+test('proveedor activo: embarque > default general > nada', () => {
+  assert.equal(g.proveedorActivoParaMedida('51/60', { '51/60': 'a' }, { '51/60': 'b' }), 'a')
+  assert.equal(g.proveedorActivoParaMedida('51/60', {}, { '51/60': 'b' }), 'b')
+  assert.equal(g.proveedorActivoParaMedida('51/60', undefined, undefined), null)
+})
+
+test('respaldo sin elección: sin proveedor primero, luego el más reciente; archivados fuera', () => {
+  const lista = [
+    { costoKey: 'selecta', proveedorNombre: '41 y 61 prime selecta', fecha: '2026-04-28' },
+    { costoKey: 'tirado', proveedorNombre: 'Tirado', fecha: '2026-11-23' },
+    { costoKey: 'honduras', proveedorNombre: 'Honduras', fecha: '2026-04-28', timestamp: 5 },
+    { costoKey: 'viejo', proveedorNombre: 'X', fecha: '2026-12-01', archivado: true }
+  ]
+  assert.deepEqual(g.ordenarProveedoresDefault(lista).map(e => e.costoKey), ['tirado', 'honduras', 'selecta'])
+  assert.equal(g.ordenarProveedoresDefault([...lista, { costoKey: 'base', proveedorNombre: '', fecha: '2026-01-01' }])[0].costoKey, 'base')
+})
+
+test('clonar foto: copia mapas pero conserva Timestamps', () => {
+  class Timestamp { constructor (s) { this.seconds = s } }
+  const ts = new Timestamp(10)
+  const original = { mapa: { '51/60': 'a' }, lista: [{ x: 1 }], fecha: ts }
+  const copia = g.clonarDatosPlanos(original)
+  copia.mapa['51/60'] = 'b'
+  copia.lista[0].x = 2
+  assert.equal(original.mapa['51/60'], 'a')
+  assert.equal(original.lista[0].x, 1)
+  assert.equal(copia.fecha, ts)
+})

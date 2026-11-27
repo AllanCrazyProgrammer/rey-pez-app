@@ -114,7 +114,7 @@
               v-for="costoInfo in grupo.proveedores"
               :key="costoInfo.costoKey"
               class="proveedor-row"
-              :class="{ activo: costoInfo.costoKey === proveedorActivoPorMedida[grupo.medidaKey], archivada: costoInfo.archivado }"
+              :class="{ activo: costoInfo.costoKey === proveedorActivoEfectivo(grupo), archivada: costoInfo.archivado }"
               @click="!costoInfo.archivado && seleccionarProveedorActivo(grupo.medidaKey, costoInfo.costoKey)"
             >
               <div class="proveedor-row-radio">
@@ -123,7 +123,7 @@
                   type="radio"
                   :name="`activo-${grupo.medidaKey}`"
                   :value="costoInfo.costoKey"
-                  :checked="costoInfo.costoKey === proveedorActivoPorMedida[grupo.medidaKey]"
+                  :checked="costoInfo.costoKey === proveedorActivoEfectivo(grupo)"
                   @click.stop="seleccionarProveedorActivo(grupo.medidaKey, costoInfo.costoKey)"
                 >
                 <i v-else class="fas fa-archive proveedor-row-archived-icon"></i>
@@ -332,14 +332,21 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, collection, onSnapshot, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot, addDoc, deleteDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import { CAMPOS_COSTOS, esErrorConflictoEmbarque, fotoCampos, integrarCamposEnBase, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import CostoModal from './CostoModal.vue';
 import CostoProveedorModal from './CostoProveedorModal.vue';
 import { formatearFecha } from '@/utils/formatters';
-import { resolverCostoMedida, calcularCostoFinalKg } from '@/utils/gananciasRendimientos';
+import {
+  resolverCostoMedida,
+  calcularCostoFinalKg,
+  clonarDatosPlanos,
+  proveedorActivoParaMedida,
+  ordenarProveedoresDefault,
+  DOC_PROVEEDOR_ACTIVO
+} from '@/utils/gananciasRendimientos';
 
 export default {
   name: 'GestionCostos',
@@ -366,6 +373,8 @@ export default {
       tabRegistradas: 'limpios',
       tabEmbarque: 'limpios',
       proveedorActivoPorMedida: {},
+      // Default general por medida (última elección): configuracion/costosProveedorActivo.
+      proveedorActivoGlobal: {},
       medidaSeleccionada: {},
       medidaOculta: {}, // Para el sistema de ocultación en PDF
       aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
@@ -401,7 +410,7 @@ export default {
 
   async created() {
     console.log('[GestionCostos] Componente creado, iniciando carga...');
-    await this.cargarEmbarque();
+    await Promise.all([this.cargarEmbarque(), this.cargarProveedorActivoGlobal()]);
     await this.iniciarEscuchaPreciosGlobales();
     // Aplicar debounce al método guardarCostoExtra
     this.guardarCostoExtraDebounced = debounce(this.guardarCostoExtra, 500);
@@ -475,7 +484,9 @@ export default {
         if (embarqueDoc.exists()) {
           this.embarqueData = embarqueDoc.data();
           this._revBase = Number(this.embarqueData.rev) || 0;
-          this._baseCamposCostos = fotoCampos(this.embarqueData, CAMPOS_COSTOS);
+          // Copia: si la foto comparte los mapas que se editan, el guardado
+          // cree que no hubo cambios y no escribe (la selección no se guardaba).
+          this._baseCamposCostos = clonarDatosPlanos(fotoCampos(this.embarqueData, CAMPOS_COSTOS));
           console.log('[GestionCostos] Embarque cargado:', this.embarqueData);
           
           // Si el embarque no tiene fecha, establecer la fecha actual
@@ -487,12 +498,12 @@ export default {
           }
           
           this.obtenerMedidasEmbarque();
-          this.medidaSeleccionada = this.embarqueData.medidaSeleccionada || {};
-          this.medidaOculta = this.embarqueData.medidaOculta || {}; // Cargar configuración de ocultación
-          this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {}; // Cargar configuración de costo extra
-          this.costosEmbarque = this.embarqueData.costosPorMedida || {};
-          this.costosEmbarqueManuales = this.embarqueData.costosPorMedidaManuales || {};
-          this.proveedorActivoPorMedida = this.embarqueData.proveedorActivoPorMedida || {};
+          this.medidaSeleccionada = { ...(this.embarqueData.medidaSeleccionada || {}) };
+          this.medidaOculta = { ...(this.embarqueData.medidaOculta || {}) }; // Cargar configuración de ocultación
+          this.aplicarCostoExtra = { ...(this.embarqueData.aplicarCostoExtra || {}) }; // Cargar configuración de costo extra
+          this.costosEmbarque = { ...(this.embarqueData.costosPorMedida || {}) };
+          this.costosEmbarqueManuales = { ...(this.embarqueData.costosPorMedidaManuales || {}) };
+          this.proveedorActivoPorMedida = { ...(this.embarqueData.proveedorActivoPorMedida || {}) };
           this.costoExtra = this.embarqueData.costoExtra ?? 18;
           this.calcularRendimientos();
           // Inicializar configuración de costo extra si no existe
@@ -795,7 +806,7 @@ export default {
             ...(resultado.camposEscritos || {}),
           };
           if (Object.keys(reconocidos).length) {
-            this._baseCamposCostos = integrarCamposEnBase(this._baseCamposCostos, reconocidos);
+            this._baseCamposCostos = integrarCamposEnBase(this._baseCamposCostos, clonarDatosPlanos(reconocidos));
           }
         }
         return resultado;
@@ -807,14 +818,43 @@ export default {
       }
     },
 
+    async cargarProveedorActivoGlobal() {
+      try {
+        const snap = await getDoc(doc(getFirestore(), ...DOC_PROVEEDOR_ACTIVO));
+        this.proveedorActivoGlobal = (snap.exists() && snap.data().porMedida) || {};
+      } catch (error) {
+        console.warn('[GestionCostos] No se pudo leer el proveedor activo general:', error);
+      }
+    },
+
+    // Proveedor que se usa para una medida del catálogo: elección de este
+    // embarque, luego el default general y, si nunca se eligió, el respaldo
+    // (sin proveedor primero, luego el más reciente; igual que Rendimientos).
+    proveedorActivoEfectivo(grupo) {
+      const elegido = proveedorActivoParaMedida(grupo.medidaKey, this.proveedorActivoPorMedida, this.proveedorActivoGlobal);
+      if (elegido && grupo.proveedores.some(p => p.costoKey === elegido && !p.archivado)) return elegido;
+      const respaldo = ordenarProveedoresDefault(grupo.proveedores)[0];
+      return respaldo ? respaldo.costoKey : null;
+    },
+
+    // Guarda la elección en el embarque y como default general para los
+    // siguientes días.
     async seleccionarProveedorActivo(medidaKey, costoKey) {
       this.$set(this.proveedorActivoPorMedida, medidaKey, costoKey);
+      this.$set(this.proveedorActivoGlobal, medidaKey, costoKey);
       try {
-        await this.persistirCamposCostos( {
-          proveedorActivoPorMedida: this.proveedorActivoPorMedida
-        });
+        await Promise.all([
+          this.persistirCamposCostos({
+            proveedorActivoPorMedida: { ...this.proveedorActivoPorMedida }
+          }),
+          setDoc(doc(getFirestore(), ...DOC_PROVEEDOR_ACTIVO), {
+            porMedida: { [medidaKey]: costoKey },
+            actualizado: serverTimestamp()
+          }, { merge: true })
+        ]);
       } catch (error) {
         console.error('Error al guardar proveedor activo:', error);
+        alert('No se pudo guardar el proveedor elegido. Intenta de nuevo.');
       }
     },
 
@@ -1204,7 +1244,7 @@ export default {
       });
 
       const medidaKey = this.normalizarMedida(medidaEmbarque);
-      const proveedorActivoKey = this.proveedorActivoPorMedida[medidaKey];
+      const proveedorActivoKey = proveedorActivoParaMedida(medidaKey, this.proveedorActivoPorMedida, this.proveedorActivoGlobal);
 
       const extraerTallaBase = (texto) => {
         const match = texto.match(/\d+\/\d+/);
@@ -1304,11 +1344,7 @@ export default {
           }
         }
 
-        return coincidencias.sort((a, b) => {
-          const aSinProveedor = a.proveedorNombre ? 1 : 0;
-          const bSinProveedor = b.proveedorNombre ? 1 : 0;
-          return aSinProveedor - bSinProveedor;
-        });
+        return ordenarProveedoresDefault(coincidencias);
       };
 
       const obtenerEntradas = (mapa) => {
@@ -1769,15 +1805,8 @@ export default {
         grupos.get(medidaKey).proveedores.push(costoInfo);
       });
 
-      grupos.forEach((grupo, medidaKey) => {
-        if (!this.proveedorActivoPorMedida[medidaKey] && grupo.proveedores.length > 0) {
-          const primerActivo = grupo.proveedores.find(p => !p.archivado);
-          if (primerActivo) {
-            this.$set(this.proveedorActivoPorMedida, medidaKey, primerActivo.costoKey);
-          }
-        }
-      });
-
+      // El proveedor marcado se calcula con proveedorActivoEfectivo (sin
+      // escribir en el mapa del embarque desde un computed).
       return Array.from(grupos.values()).sort((a, b) => a.medida.localeCompare(b.medida));
     },
 

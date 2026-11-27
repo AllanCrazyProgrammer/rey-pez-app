@@ -44,6 +44,8 @@ export const CAMPOS_RENDIMIENTOS = [
   'costosPorMedida',
   // El costo capturado en el aviso "Faltan costos" es manual del embarque.
   'costosPorMedidaManuales',
+  // Proveedor elegido desde el modal de costo de Rendimientos.
+  'proveedorActivoPorMedida',
   'costosOmitidos',
 ];
 

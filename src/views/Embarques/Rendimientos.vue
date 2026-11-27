@@ -740,6 +740,28 @@
           {{ edicionCosto.medida }} usa el costo de {{ edicionCosto.clave }}.
         </p>
 
+        <template v-if="edicionCosto.proveedores.length > 1">
+          <p class="editar-precio-label">Proveedor ({{ edicionCosto.proveedores.length }} en el catálogo)</p>
+          <div class="editar-precio-opciones">
+            <button
+              v-for="proveedor in edicionCosto.proveedores"
+              :key="proveedor.costoKey"
+              type="button"
+              class="editar-precio-opcion opcion-proveedor"
+              :class="{ activa: proveedor.costoKey === edicionCosto.proveedorActual }"
+              :disabled="edicionCosto.guardando"
+              @click="elegirProveedorCosto(proveedor)"
+            >
+              <span>
+                <strong>{{ proveedor.proveedorNombre || 'Sin proveedor' }} · ${{ formatearPrecioVenta(proveedor.costoBase) }}</strong>
+                <small>{{ proveedor.costoKey === edicionCosto.proveedorActual ? 'En uso' : 'Usar este' }} · del {{ formatearFecha(proveedor.fechaTexto) }}</small>
+              </span>
+            </button>
+          </div>
+          <p class="editar-precio-nota editar-costo-nota-base">Se recuerda como default de {{ edicionCosto.clave }} para los siguientes días.</p>
+          <p class="editar-precio-label">O escribe otro costo:</p>
+        </template>
+
         <label class="editar-precio-label" for="nuevo-costo-medida">Costo por kg{{ edicionCosto.tipo === 'crudo' ? ' (sin los $3.50 de crudo)' : ' (en crudo, antes de rendimiento)' }}</label>
         <input
           id="nuevo-costo-medida"
@@ -830,7 +852,7 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy, limit, addDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where, orderBy, limit, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import {
   CAMPOS_RENDIMIENTOS,
@@ -861,7 +883,11 @@ import {
   precioMaquilaPonderado,
   aplicarPrecioEnClientes,
   categoriaProductoPrecio,
-  entradaCatalogoCosto
+  entradaCatalogoCosto,
+  normalizarMedidaCosto as normalizarMedidaCatalogoCosto,
+  proveedorActivoParaMedida,
+  ordenarProveedoresDefault,
+  DOC_PROVEEDOR_ACTIVO
 } from '@/utils/gananciasRendimientos';
 import { normalizarNombreMedida, renombrarMedidaRendimientos } from '@/utils/renombrarMedidaRendimientos';
 import { formatoFechaPesadas } from '@/utils/pesadas';
@@ -2291,10 +2317,19 @@ export default {
           }
         });
 
-        return { porFecha, activos };
+        // Default general de proveedor por medida (última elección).
+        let proveedorActivoGlobal = {};
+        try {
+          const snapProveedor = await getDoc(doc(db, ...DOC_PROVEEDOR_ACTIVO));
+          proveedorActivoGlobal = (snapProveedor.exists() && snapProveedor.data().porMedida) || {};
+        } catch (errorProveedor) {
+          console.warn('[Rendimientos] No se pudo leer el proveedor activo general:', errorProveedor);
+        }
+
+        return { porFecha, activos, proveedorActivoGlobal };
       } catch (error) {
         console.error('Error al obtener costos registrados globales:', error);
-        return { porFecha: [], activos: [] };
+        return { porFecha: [], activos: [], proveedorActivoGlobal: {} };
       }
     },
 
@@ -2345,8 +2380,12 @@ export default {
         .replace(/\s+c\/c/g, '')
         .trim();
       const medidaKey = medidaEmbarqueNormalizada;
-      const proveedorActivoPorMedida = this.embarqueData?.proveedorActivoPorMedida || {};
-      const proveedorActivoKey = proveedorActivoPorMedida[medidaKey];
+      // Elección de este embarque > default general (última elección) > respaldo.
+      const proveedorActivoKey = proveedorActivoParaMedida(
+        medidaKey,
+        this.embarqueData?.proveedorActivoPorMedida || {},
+        this.costosGlobalesCache?.proveedorActivoGlobal || {}
+      );
 
       const extraerTallaBase = (texto) => {
         const match = texto.match(/\d+\/\d+/);
@@ -2417,11 +2456,9 @@ export default {
           }
         }
 
-        return coincidencias.sort((a, b) => {
-          const aSinProveedor = a.proveedorNombre ? 1 : 0;
-          const bSinProveedor = b.proveedorNombre ? 1 : 0;
-          return aSinProveedor - bSinProveedor;
-        });
+        // Nunca se eligió: sin proveedor primero, luego el más reciente
+        // (mismo respaldo que Gestión de Costos).
+        return ordenarProveedoresDefault(coincidencias);
       };
 
       const buscarExacta = (entradas) => {
@@ -3088,10 +3125,90 @@ export default {
       await this.calcularGanancias();
     },
 
+    // Proveedores del catálogo con exactamente esa medida (no archivados),
+    // con el costo vigente a la fecha del embarque cuando lo hay.
+    proveedoresCatalogoDeMedida(clave) {
+      const cache = this.costosGlobalesCache;
+      if (!cache) return [];
+      const objetivo = normalizarMedidaCatalogoCosto(clave);
+      const porKey = new Map();
+      [cache.activos || [], cache.porFecha || []].forEach(lista => {
+        lista.forEach(entrada => {
+          if (normalizarMedidaCatalogoCosto(entrada.medida) !== objetivo || entrada.archivado) return;
+          porKey.set(entrada.costoKey, entrada); // porFecha (vigente) va al final y gana
+        });
+      });
+      return ordenarProveedoresDefault(Array.from(porKey.values())).map(entrada => ({
+        costoKey: entrada.costoKey,
+        proveedorNombre: entrada.proveedorNombre || '',
+        costoBase: Number(entrada.costoBase) || 0,
+        fechaTexto: typeof entrada.fecha === 'string' ? entrada.fecha.slice(0, 10) : this.toLocalYMD(this.normalizarFecha(entrada.fecha) || new Date())
+      }));
+    },
+
+    // Usar otro proveedor del catálogo para la medida: se guarda en este
+    // embarque y como default general (igual que el radio de Gestión de
+    // Costos). Quita el costo manual de esa medida para que mande el catálogo.
+    async elegirProveedorCosto(proveedor) {
+      const edicion = this.edicionCosto;
+      if (!edicion || edicion.guardando || !this.embarqueData) return;
+      if (!navigator.onLine) {
+        edicion.error = 'Necesitas internet para cambiar de proveedor.';
+        return;
+      }
+      edicion.guardando = true;
+      edicion.error = '';
+      try {
+        const medidaKey = normalizarMedidaCatalogoCosto(edicion.clave);
+        const porMedida = { ...(this.embarqueData.proveedorActivoPorMedida || {}), [medidaKey]: proveedor.costoKey };
+        const mismaClave = (texto) => String(texto || '').toLowerCase().trim() === String(edicion.clave).toLowerCase().trim();
+        const manuales = { ...(this.embarqueData.costosPorMedidaManuales || {}) };
+        Object.keys(manuales).forEach(k => { if (mismaClave(k)) delete manuales[k]; });
+        const guardados = { ...(this.embarqueData.costosPorMedida || {}) };
+        Object.keys(guardados).forEach(k => { if (mismaClave(k)) delete guardados[k]; });
+        guardados[edicion.clave] = proveedor.costoBase;
+
+        await setDoc(doc(getFirestore(), ...DOC_PROVEEDOR_ACTIVO), {
+          porMedida: { [medidaKey]: proveedor.costoKey },
+          actualizado: serverTimestamp()
+        }, { merge: true });
+        if (this.costosGlobalesCache) {
+          this.costosGlobalesCache.proveedorActivoGlobal = {
+            ...(this.costosGlobalesCache.proveedorActivoGlobal || {}),
+            [medidaKey]: proveedor.costoKey
+          };
+        }
+        this.$set(this.embarqueData, 'proveedorActivoPorMedida', porMedida);
+        this.$set(this.embarqueData, 'costosPorMedidaManuales', manuales);
+        this.$set(this.embarqueData, 'costosPorMedida', guardados);
+        await this.persistirCamposRendimientos({
+          proveedorActivoPorMedida: this.deepClone(porMedida),
+          costosPorMedidaManuales: this.deepClone(manuales),
+          costosPorMedida: this.deepClone(guardados)
+        });
+        this.costosCalculados = {};
+        await this.calcularGanancias();
+        this.avisoPrecio = `${edicion.clave}: costo de ${proveedor.proveedorNombre || 'sin proveedor'} ($${this.formatearPrecioVenta(proveedor.costoBase)}); queda como default`;
+        clearTimeout(this._timerAvisoPrecio);
+        this._timerAvisoPrecio = setTimeout(() => { this.avisoPrecio = ''; }, 6000);
+        this.edicionCosto = null;
+      } catch (error) {
+        console.error('[Rendimientos] No se pudo cambiar el proveedor:', error);
+        edicion.guardando = false;
+        edicion.error = 'No se pudo cambiar el proveedor. ' + (error?.message || 'Intenta de nuevo.');
+      }
+    },
+
     abrirEdicionCosto(medida, tipo = 'limpio') {
       const clave = tipo === 'limpio' ? (this.medidaBaseRefri(medida) || medida) : medida;
       const resuelto = this.resolverCostoBaseSync(clave);
+      const proveedores = this.proveedoresCatalogoDeMedida(clave);
+      const proveedorActual = resuelto && resuelto.fuente === 'catalogo' && resuelto.detalle
+        ? resuelto.detalle.costoKey
+        : null;
       this.edicionCosto = {
+        proveedores,
+        proveedorActual,
         medida,
         clave,
         tipo,
@@ -6477,6 +6594,14 @@ input {
 .modal-editar-precio .editar-precio-opcion small { color: #9fb3cc; line-height: 1.35; }
 .modal-editar-precio .editar-precio-opcion.activa { border-color: #38bdf8; background: rgba(56, 189, 248, .12); }
 .modal-editar-precio .editar-precio-opcion.deshabilitada { opacity: .5; cursor: not-allowed; }
+.modal-editar-precio button.opcion-proveedor {
+  width: 100%;
+  min-height: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.modal-editar-precio button.opcion-proveedor:disabled { opacity: .6; cursor: wait; }
 .modal-content.modal-editar-precio input[type='radio'],
 .modal-content.modal-editar-precio input[type='checkbox'] {
   flex: 0 0 18px;

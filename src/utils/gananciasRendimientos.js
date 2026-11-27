@@ -435,3 +435,56 @@ export function entradaCatalogoCosto({ medida, costo, fecha, tipoCosto = 'limpio
     observacion: 'Capturado en Rendimientos'
   };
 }
+
+// ─── Proveedor activo por medida ─────────────────────────────────────────
+// Cuando una medida del embarque no dice proveedor (ej. "51/60") y el catálogo
+// tiene varios (Honduras, Tirado, ...), se usa: la elección de ESTE embarque,
+// luego el default general (última elección en Gestión de Costos o
+// Rendimientos, guardada en configuracion/costosProveedorActivo) y, si nunca
+// se eligió, el respaldo `ordenarProveedoresDefault`.
+export const DOC_PROVEEDOR_ACTIVO = Object.freeze(['configuracion', 'costosProveedorActivo']);
+
+export function proveedorActivoParaMedida(medidaKey, porEmbarque = {}, global = {}) {
+  return (porEmbarque && porEmbarque[medidaKey]) || (global && global[medidaKey]) || null;
+}
+
+const fechaOrden = (entrada) => {
+  const f = entrada?.fecha;
+  if (typeof f === 'string') return f.slice(0, 10);
+  return fechaYMD(f) || fechaYMD(entrada?.timestamp) || '';
+};
+
+/**
+ * Respaldo cuando nunca se eligió proveedor: primero la entrada sin
+ * proveedor (costo base de la medida), luego la más reciente. Lo usan
+ * Rendimientos y Gestión de Costos para mostrar y calcular lo mismo.
+ */
+export function ordenarProveedoresDefault(entradas) {
+  return (entradas || []).filter(e => e && !e.archivado).slice().sort((a, b) => {
+    const sinA = a.proveedorNombre ? 1 : 0;
+    const sinB = b.proveedorNombre ? 1 : 0;
+    if (sinA !== sinB) return sinA - sinB;
+    const fa = fechaOrden(a);
+    const fb = fechaOrden(b);
+    if (fa !== fb) return fa < fb ? 1 : -1;
+    return marcaTiempo(b) - marcaTiempo(a);
+  });
+}
+
+/**
+ * Copia profunda de datos planos (objetos y arreglos); los objetos con
+ * clase (Timestamp de Firestore, Date) se conservan tal cual. Sirve para
+ * la "foto" de los campos del embarque: si se comparte el objeto, editar el
+ * mapa también cambia la foto y el guardado cree que no hubo cambios.
+ */
+export function clonarDatosPlanos(valor) {
+  if (Array.isArray(valor)) return valor.map(clonarDatosPlanos);
+  if (valor && typeof valor === 'object') {
+    const proto = Object.getPrototypeOf(valor);
+    if (proto !== Object.prototype && proto !== null) return valor;
+    const salida = {};
+    Object.keys(valor).forEach(k => { salida[k] = clonarDatosPlanos(valor[k]); });
+    return salida;
+  }
+  return valor;
+}
