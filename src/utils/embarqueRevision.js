@@ -46,6 +46,9 @@ export const CAMPOS_RENDIMIENTOS = [
   'costosPorMedidaManuales',
   // Proveedor elegido desde el modal de costo de Rendimientos.
   'proveedorActivoPorMedida',
+  // Casilla "+ $18 costo extra" de la tarjeta de ganancia.
+  'aplicarCostoExtra',
+  'costoExtraDecidido',
   'costosOmitidos',
 ];
 
@@ -57,6 +60,7 @@ export const CAMPOS_COSTOS = [
   'medidaSeleccionada',
   'medidaOculta',
   'aplicarCostoExtra',
+  'costoExtraDecidido',
   'costoExtra',
 ];
 

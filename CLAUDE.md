@@ -91,7 +91,12 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
   embarque con el **específico del cliente siempre antes que el general**. Las
   líneas de maquila de Ozuna no usan `producto.precio` (es la cuota de maquila).
 - Costo base: manual del embarque (`costosPorMedidaManuales`) > catálogo
-  `historial_costos` (medida + proveedor) > `costosPorMedida`. Costo extra: 0 es válido.
+  `historial_costos` (medida + proveedor) > `costosPorMedida`. Gestión de Costos no
+  borra un `costosPorMedida` sin catálogo (antes la ganancia quedaba con costo $0).
+- Costo extra (`costoExtra`, ej. $18; 0 es válido): por default en TODAS las medidas de
+  limpio (no Maquila Ozuna), regla `aplicaCostoExtra`. La casilla "+ $18 costo extra"
+  (tarjeta de Rendimientos o Gestión de Costos) guarda `aplicarCostoExtra[medida]` y
+  `costoExtraDecidido[medida]`; un false viejo sin decidir en medida sin número no cuenta.
 - Crudos: mismo costo + $3.50/kg; la ganancia por cliente usa su propio precio.
 - Maquila Ozuna: precio vacío usa el de las líneas del embarque; esas medidas no
   prenden "Analizar ganancia" por default (se contaría doble).

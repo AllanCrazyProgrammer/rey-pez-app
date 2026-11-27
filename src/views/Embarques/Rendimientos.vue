@@ -307,9 +307,14 @@
                   <span class="label">Costo Final:</span>
                   <div class="costo-final-container">
                     <span class="valor costo-final">${{ formatearPrecio(gananciasCalculadas[medida].costoFinal) }}</span>
-                    <span v-if="debeAplicarCostoExtra(medida)" class="costo-extra-indicator">
-                      (+ ${{ costoExtraEfectivo }} extra)
-                    </span>
+                    <label class="toggle-costo-extra" :class="{ activo: debeAplicarCostoExtra(medida) }">
+                      <input
+                        type="checkbox"
+                        :checked="debeAplicarCostoExtra(medida)"
+                        @change="cambiarCostoExtra(medida, $event.target.checked)"
+                      >
+                      + ${{ costoExtraEfectivo }} costo extra
+                    </label>
                   </div>
                 </div>
                 <div class="ganancia-item">
@@ -887,7 +892,8 @@ import {
   normalizarMedidaCosto as normalizarMedidaCatalogoCosto,
   proveedorActivoParaMedida,
   ordenarProveedoresDefault,
-  DOC_PROVEEDOR_ACTIVO
+  DOC_PROVEEDOR_ACTIVO,
+  aplicaCostoExtra
 } from '@/utils/gananciasRendimientos';
 import { normalizarNombreMedida, renombrarMedidaRendimientos } from '@/utils/renombrarMedidaRendimientos';
 import { formatoFechaPesadas } from '@/utils/pesadas';
@@ -936,6 +942,7 @@ export default {
       analizarGananciaCrudos: {}, // Nueva propiedad para controlar análisis de crudos
       rendimientoManual: {},
       aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
+      costoExtraDecidido: {}, // Medidas donde el usuario prendió/apagó el costo extra
       // Configuración de pesos por defecto
       pesoTaraCosto: 19, // Peso por defecto para cálculo de costos
       pesoTaraVenta: 20, // Peso por defecto para cálculo de ventas
@@ -1627,7 +1634,8 @@ export default {
       this.analizarGanancia = this.embarqueData.analizarGanancia || {};
       this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {};
       this.rendimientoManual = this.embarqueData.rendimientoManual || {};
-      this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {};
+      this.aplicarCostoExtra = { ...(this.embarqueData.aplicarCostoExtra || {}) };
+      this.costoExtraDecidido = { ...(this.embarqueData.costoExtraDecidido || {}) };
       this.analizarMaquilaGanancia = this.embarqueData.analizarMaquilaGanancia || {};
       this.precioMaquila = this.embarqueData.precioMaquila || {};
       this.pesoTaraCosto = this.embarqueData.pesoTaraCosto || 19;
@@ -1714,6 +1722,7 @@ export default {
         mergeConfig('analizarMaquilaGanancia', data.analizarMaquilaGanancia);
         mergeConfig('precioMaquila', data.precioMaquila);
         mergeConfig('aplicarCostoExtra', data.aplicarCostoExtra);
+        mergeConfig('costoExtraDecidido', data.costoExtraDecidido);
       });
 
       return combinado;
@@ -4053,25 +4062,28 @@ export default {
       });
     },
 
+    // Costo extra (ej. $18): por default en todas las medidas de limpio
+    // (no en Maquila Ozuna). Regla en utils/gananciasRendimientos.
     debeAplicarCostoExtra(medida) {
-      if (!medida) return false;
+      return aplicaCostoExtra(medida, this.aplicarCostoExtra || {}, this.costoExtraDecidido || {});
+    },
 
-      if (!this.aplicarCostoExtra) {
-        this.$set(this, 'aplicarCostoExtra', {});
-      }
-
-      if (Object.prototype.hasOwnProperty.call(this.aplicarCostoExtra, medida)) {
-        return Boolean(this.aplicarCostoExtra[medida]);
-      }
-
-      const medidaNormalizada = (medida || '').trim();
-      const esMaquilaOzuna = /maquila\s+ozuna/i.test(medidaNormalizada);
-      const esNumerica = /^(\d+\/\d+)/.test(medidaNormalizada) || /^(\d+)\s/.test(medidaNormalizada) || /^\d+$/.test(medidaNormalizada);
-
-      const aplicarPorDefecto = esNumerica && !esMaquilaOzuna;
-      this.$set(this.aplicarCostoExtra, medida, aplicarPorDefecto);
-
-      return aplicarPorDefecto;
+    // Casilla "+ $18 costo extra" de la tarjeta: guarda la decisión de esta
+    // medida en el embarque (la misma que usa Gestión de Costos).
+    async cambiarCostoExtra(medida, activo) {
+      if (!this.embarqueData) return;
+      const aplicar = { ...(this.aplicarCostoExtra || {}), [medida]: Boolean(activo) };
+      const decidido = { ...(this.costoExtraDecidido || {}), [medida]: true };
+      this.aplicarCostoExtra = aplicar;
+      this.costoExtraDecidido = decidido;
+      this.$set(this.embarqueData, 'aplicarCostoExtra', { ...aplicar });
+      this.$set(this.embarqueData, 'costoExtraDecidido', { ...decidido });
+      this.costosCalculados = {};
+      await this.calcularGanancias();
+      await this.persistirCamposRendimientos({
+        aplicarCostoExtra: this.deepClone(aplicar),
+        costoExtraDecidido: this.deepClone(decidido)
+      });
     },
 
     obtenerEtiqueta(medida, campo) {
@@ -6661,6 +6673,30 @@ button.costo-fuente-btn:focus-visible { border-color: currentColor; outline: non
   accent-color: #38bdf8;
 }
 .editar-costo-nota-base { margin-top: 0; }
+
+.toggle-costo-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 3px 9px;
+  border: 1px solid #d8e0ea;
+  border-radius: 999px;
+  color: #6c7a89;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-costo-extra.activo { color: #b45309; border-color: #f59e0b; background: #fff7e6; }
+.rendimiento-card .toggle-costo-extra input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: #f59e0b;
+}
 
 .aviso-precio-guardado {
   position: fixed;

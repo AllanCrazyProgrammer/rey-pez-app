@@ -264,3 +264,22 @@ test('clonar foto: copia mapas pero conserva Timestamps', () => {
   assert.equal(original.lista[0].x, 1)
   assert.equal(copia.fecha, ts)
 })
+
+test('costo extra: por default en todas las medidas de limpio, no en maquila', () => {
+  assert.equal(g.aplicaCostoExtra('51/60'), true)
+  assert.equal(g.aplicaCostoExtra('Piojo panga'), true)
+  assert.equal(g.aplicaCostoExtra('Med-Gde c/c'), true)
+  assert.equal(g.aplicaCostoExtra('51/60 Maquila Ozuna'), false)
+  assert.equal(g.aplicaCostoExtra(''), false)
+})
+
+test('costo extra: decisión guardada y false automático viejo', () => {
+  // false automático viejo en medida sin número: no cuenta, se suma
+  assert.equal(g.aplicaCostoExtra('Piojo panga', { 'Piojo panga': false }), true)
+  // apagado a propósito (decidido): se respeta
+  assert.equal(g.aplicaCostoExtra('Piojo panga', { 'Piojo panga': false }, { 'Piojo panga': true }), false)
+  // en medida con número el false solo pudo ser del usuario
+  assert.equal(g.aplicaCostoExtra('51/60', { '51/60': false }), false)
+  // maquila prendida a mano
+  assert.equal(g.aplicaCostoExtra('51/60 Maquila Ozuna', { '51/60 Maquila Ozuna': true }), true)
+})

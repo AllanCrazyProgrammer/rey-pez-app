@@ -214,8 +214,8 @@
               <label v-if="tabEmbarque === 'limpios'" class="checkbox-container">
                 <input 
                   type="checkbox" 
-                  v-model="aplicarCostoExtra[medida]"
-                  @change="guardarConfiguracionCostoExtra"
+                  :checked="debeAplicarCostoExtra(medida)"
+                  @change="cambiarCostoExtra(medida, $event.target.checked)"
                 >
                 <span class="checkmark"></span>
                 Aplicar costo extra
@@ -241,14 +241,17 @@
                   <span v-else-if="encontrarCostoParaMedida(medida)" class="costo-global">
                     <i class="fas fa-globe"></i> {{ describirOrigenCosto(medida) }}
                   </span>
+                  <span v-else-if="resolverCostoBase(medida)" class="costo-global">
+                    <i class="fas fa-ship"></i> Guardado en el embarque
+                  </span>
                   <span v-else class="sin-costo">
                     <i class="fas fa-exclamation-triangle"></i> Sin costo asignado
                   </span>
                 </div>
               </div>
-              <div v-if="tabEmbarque === 'limpios' && (tieneCostoEspecifico(medida) || encontrarCostoParaMedida(medida)) && rendimientos[medida]" class="costo-calculado">
+              <div v-if="tabEmbarque === 'limpios' && resolverCostoBase(medida) && rendimientos[medida]" class="costo-calculado">
                 <strong>Costo Final: ${{ calcularCostoFinal(medida) }}</strong>
-                <span v-if="aplicarCostoExtra[medida]" class="costo-extra-indicator">
+                <span v-if="debeAplicarCostoExtra(medida)" class="costo-extra-indicator">
                   (+ ${{ costoExtra }} extra)
                 </span>
               </div>
@@ -345,7 +348,8 @@ import {
   clonarDatosPlanos,
   proveedorActivoParaMedida,
   ordenarProveedoresDefault,
-  DOC_PROVEEDOR_ACTIVO
+  DOC_PROVEEDOR_ACTIVO,
+  aplicaCostoExtra
 } from '@/utils/gananciasRendimientos';
 
 export default {
@@ -378,6 +382,7 @@ export default {
       medidaSeleccionada: {},
       medidaOculta: {}, // Para el sistema de ocultación en PDF
       aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
+      costoExtraDecidido: {}, // Medidas donde el usuario prendió/apagó el costo extra
       rendimientos: {},
       costoExtra: 18,
       _revBase: 0,
@@ -501,13 +506,12 @@ export default {
           this.medidaSeleccionada = { ...(this.embarqueData.medidaSeleccionada || {}) };
           this.medidaOculta = { ...(this.embarqueData.medidaOculta || {}) }; // Cargar configuración de ocultación
           this.aplicarCostoExtra = { ...(this.embarqueData.aplicarCostoExtra || {}) }; // Cargar configuración de costo extra
+          this.costoExtraDecidido = { ...(this.embarqueData.costoExtraDecidido || {}) };
           this.costosEmbarque = { ...(this.embarqueData.costosPorMedida || {}) };
           this.costosEmbarqueManuales = { ...(this.embarqueData.costosPorMedidaManuales || {}) };
           this.proveedorActivoPorMedida = { ...(this.embarqueData.proveedorActivoPorMedida || {}) };
           this.costoExtra = this.embarqueData.costoExtra ?? 18;
           this.calcularRendimientos();
-          // Inicializar configuración de costo extra si no existe
-          await this.inicializarConfiguracionCostoExtra();
           // Aplicar costos de medidas registradas automáticamente
           await this.aplicarCostosRegistrados();
         }
@@ -643,7 +647,7 @@ export default {
         medida,
         catalogo: this.encontrarCostoParaMedida(medida),
         manuales: this.costosEmbarqueManuales,
-        guardados: {}
+        guardados: this.costosEmbarque
       });
     },
 
@@ -652,7 +656,7 @@ export default {
       return calcularCostoFinalKg({
         costo: resuelto ? resuelto.costo : 0,
         rendimiento: Number(this.rendimientos[medida]) || 0,
-        aplicarExtra: Boolean(this.aplicarCostoExtra[medida]),
+        aplicarExtra: this.debeAplicarCostoExtra(medida),
         costoExtra: this.costoExtra
       }).toFixed(1);
     },
@@ -1140,18 +1144,6 @@ export default {
       }
     },
 
-    async guardarConfiguracionCostoExtra() {
-      try {
-        await this.persistirCamposCostos( {
-          aplicarCostoExtra: this.aplicarCostoExtra
-        });
-
-        console.log('Configuración de costo extra guardada correctamente');
-      } catch (error) {
-        console.error('Error al guardar la configuración de costo extra:', error);
-      }
-    },
-
     async guardarCostoExtra() {
       try {
         const costoExtraNumerico = Number(this.costoExtra);
@@ -1180,36 +1172,25 @@ export default {
       });
     },
 
-    async inicializarConfiguracionCostoExtra() {
-      // Si ya existe configuración, no hacer nada (respetar configuración manual del usuario)
-      if (Object.keys(this.aplicarCostoExtra).length > 0) {
-        return;
-      }
-
-      // Aplicar la lógica anterior para inicializar automáticamente
-      let configuracionActualizada = false;
-      
-      this.medidasEmbarque.forEach(medida => {
-        // Aplicar la misma lógica que había antes
-        const esMedidaOzunaMaquila = medida.includes('Maquila Ozuna');
-        const esMedidaNumerica = /^\d+\/\d+/.test(medida.trim()) || /^\d+\s/.test(medida.trim()) || /^\d+$/.test(medida.trim());
-        
-        // Si era una medida que antes tenía costo extra automático, marcarla
-        if (!esMedidaOzunaMaquila && esMedidaNumerica) {
-          this.$set(this.aplicarCostoExtra, medida, true);
-          configuracionActualizada = true;
-        } else {
-          this.$set(this.aplicarCostoExtra, medida, false);
-        }
-      });
-
-      // Guardar la configuración inicial si se actualizó
-      if (configuracionActualizada) {
-        await this.guardarConfiguracionCostoExtra();
-      }
+    // Costo extra: por default en todas las medidas de limpio (no en Maquila
+    // Ozuna); misma regla que Rendimientos (utils/gananciasRendimientos).
+    // Antes aquí se guardaba un false automático en medidas sin número.
+    debeAplicarCostoExtra(medida) {
+      return aplicaCostoExtra(medida, this.aplicarCostoExtra, this.costoExtraDecidido);
     },
 
-
+    async cambiarCostoExtra(medida, activo) {
+      this.$set(this.aplicarCostoExtra, medida, Boolean(activo));
+      this.$set(this.costoExtraDecidido, medida, true);
+      try {
+        await this.persistirCamposCostos({
+          aplicarCostoExtra: { ...this.aplicarCostoExtra },
+          costoExtraDecidido: { ...this.costoExtraDecidido }
+        });
+      } catch (error) {
+        console.error('Error al guardar la configuración de costo extra:', error);
+      }
+    },
 
     // Función auxiliar para normalizar nombres de medidas
     normalizarMedida(medida) {
@@ -1505,10 +1486,10 @@ export default {
             this.$set(this.costosEmbarque, medida, costoNuevo);
             costosActualizados = true;
           }
-        } else if (Object.prototype.hasOwnProperty.call(this.costosEmbarque, medida)) {
-          this.$delete(this.costosEmbarque, medida);
-          costosActualizados = true;
         }
+        // Sin costo en el catálogo se conserva el guardado en el embarque
+        // (prellenado de días anteriores o capturado en Rendimientos). Antes
+        // se borraba y la ganancia quedaba con costo $0.
       });
 
       // Guardar automáticamente en Firebase si hubo cambios

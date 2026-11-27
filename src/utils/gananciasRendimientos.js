@@ -488,3 +488,27 @@ export function clonarDatosPlanos(valor) {
   }
   return valor;
 }
+
+// ─── Costo extra (ej. $18) en medidas de limpio ──────────────────────────
+// Se suma por default a TODAS las medidas de limpio (no a Maquila Ozuna).
+// Se puede apagar por medida desde Rendimientos o Gestión de Costos; esa
+// decisión queda en `costoExtraDecidido`. Embarques viejos: Gestión de Costos
+// guardaba solo un `false` automático en medidas sin número al inicio
+// ("Piojo panga"); ese false no cuenta como decisión. En medidas con número
+// el false solo pudo venir del usuario, así que se respeta.
+const esMedidaNumerica = (medida) => {
+  const texto = String(medida || '').trim();
+  return /^\d+\/\d+/.test(texto) || /^\d+\s/.test(texto) || /^\d+$/.test(texto);
+};
+
+export function aplicaCostoExtra(medida, aplicarMapa = {}, decididoMapa = {}) {
+  if (!medida) return false;
+  const esMaquila = /maquila\s+ozuna/i.test(medida);
+  const mapa = aplicarMapa || {};
+  if (Object.prototype.hasOwnProperty.call(mapa, medida)) {
+    const valor = Boolean(mapa[medida]);
+    const decidido = Boolean((decididoMapa || {})[medida]);
+    if (valor || decidido || esMedidaNumerica(medida) || esMaquila) return valor;
+  }
+  return !esMaquila;
+}
