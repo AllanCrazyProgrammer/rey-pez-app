@@ -2046,106 +2046,50 @@ export default {
     },
 
     // Función auxiliar para encontrar costos con búsqueda inteligente
-    async encontrarCostoParaMedida(medida) {
-      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-      
-      console.log(`🔍 Buscando costo para: "${medida}"`);
-      console.log(`📋 Costos en embarque:`, Object.keys(costosEmbarque));
-      
-      // 1. Buscar coincidencia exacta en costos del embarque primero
-      let costoEncontrado = Number(costosEmbarque[medida]);
-      if (costoEncontrado && costoEncontrado > 0) {
-        console.log(`✅ Coincidencia exacta en embarque: ${medida} = $${costoEncontrado}`);
-        return { medidaEncontrada: medida, costo: costoEncontrado };
-      }
-      
-      // 2. Buscar insensible a mayúsculas/minúsculas en embarque
-      const medidaLower = medida.toLowerCase().trim();
-      for (const [claveMedida, costoValue] of Object.entries(costosEmbarque)) {
-        if (claveMedida.toLowerCase().trim() === medidaLower) {
-          const costo = Number(costoValue);
-          if (costo > 0) {
-            console.log(`✅ Coincidencia exacta (case insensitive) en embarque: ${claveMedida} = $${costo}`);
-            return { medidaEncontrada: claveMedida, costo: costo };
-          }
-        }
-      }
-      
-      // 3. Si no se encuentra en el embarque, buscar en medidas registradas globales
-      console.log(`🌐 Buscando en medidas registradas globales...`);
-      const costosGlobales = await this.obtenerCostosRegistradosGlobales();
-      
-      // Buscar coincidencia exacta en medidas registradas
-      if (costosGlobales[medida]) {
-        console.log(`✅ Coincidencia exacta en medidas registradas: ${medida} = $${costosGlobales[medida].costoBase}`);
-        return { medidaEncontrada: medida, costo: costosGlobales[medida].costoBase };
-      }
-      
-      // Buscar insensible a mayúsculas/minúsculas en medidas registradas
-      for (const [claveMedida, costoInfo] of Object.entries(costosGlobales)) {
-        if (claveMedida.toLowerCase().trim() === medidaLower) {
-          console.log(`✅ Coincidencia exacta (case insensitive) en medidas registradas: ${claveMedida} = $${costoInfo.costoBase}`);
-          return { medidaEncontrada: claveMedida, costo: costoInfo.costoBase };
-        }
-      }
-      
-      // 4. SOLO como último recurso: Normalizar quitando sufijos comunes y buscar
-      const medidaNormalizada = medida.toLowerCase().trim()
-        .replace(' maquila ozuna', '')
-        .replace(/\s+(vayon|ahumada|sin\s+cal|cal|c\/c|crudo|limpio|tirado).*$/g, '')
-        .trim();
-      
-      console.log(`🔍 Medida normalizada: "${medidaNormalizada}"`);
-      
-      // Buscar normalizada en embarque
-      for (const [claveMedida, costoValue] of Object.entries(costosEmbarque)) {
-        const claveNormalizada = claveMedida.toLowerCase().trim()
-          .replace(' maquila ozuna', '')
-          .replace(/\s+(vayon|ahumada|sin\s+cal|cal|c\/c|crudo|limpio|tirado).*$/g, '')
-          .trim();
-        
-        if (claveNormalizada === medidaNormalizada) {
-          const costo = Number(costoValue);
-          if (costo > 0) {
-            console.log(`⚠️ [${medida}] Usando costo normalizado del embarque: ${claveMedida} ($${costo})`);
-            return { medidaEncontrada: claveMedida, costo: costo };
-          }
-        }
-      }
-      
-      // Buscar normalizada en medidas registradas
-      for (const [claveMedida, costoInfo] of Object.entries(costosGlobales)) {
-        const claveNormalizada = claveMedida.toLowerCase().trim()
-          .replace(' maquila ozuna', '')
-          .replace(/\s+(vayon|ahumada|sin\s+cal|cal|c\/c|crudo|limpio|tirado).*$/g, '')
-          .trim();
-        
-        if (claveNormalizada === medidaNormalizada) {
-          console.log(`⚠️ [${medida}] Usando costo normalizado de medidas registradas: ${claveMedida} ($${costoInfo.costoBase})`);
-          return { medidaEncontrada: claveMedida, costo: costoInfo.costoBase };
-        }
-      }
-      
-      console.log(`❌ No se encontró costo para: "${medida}"`);
-      return null; // No se encontró
+    // Normalización de medida para la resolución de costos (misma que
+    // Gestión de Costos): minúsculas, espacios colapsados, sin espacios
+    // alrededor de "/" ni "-".
+    normalizarMedidaCosto(medida) {
+      if (!medida) return '';
+      return medida
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/\s*\/\s*/g, '/')
+        .replace(/\s*-\s*/g, '-');
     },
 
-    // Función para obtener costos registrados globales
+    normalizarProveedorCosto(proveedor) {
+      return (proveedor || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+    },
+
+    generarCostoKeyCosto(medida, proveedorNombre = '') {
+      const medidaNormalizada = this.normalizarMedidaCosto(medida);
+      const proveedorNormalizado = this.normalizarProveedorCosto(proveedorNombre) || 'sin-proveedor';
+      return `${medidaNormalizada}__${proveedorNormalizado}`;
+    },
+
+    // Catálogo de costos con proveedor (misma fuente que Gestión de
+    // Costos): entradas de historial_costos. Se conserva la entrada más
+    // reciente por costoKey (medida + proveedor) para no perder la
+    // dimensión proveedor, que es la que distingue p. ej. "51/60 -
+    // Tirado" ($121) de "51/60 - 41 y 61 prime selecta" ($149).
+    // porFecha: entradas con fecha <= fecha del embarque; activos: todas
+    // las no archivadas. Antes se colapsaba por medida (solo la más
+    // reciente), lo que borraba al proveedor y hacía imposible el match
+    // medida + proveedor.
     async obtenerCostosRegistradosGlobales() {
       try {
         const db = getFirestore();
         const historialRef = collection(db, 'historial_costos');
         const historialSnapshot = await getDocs(historialRef);
-        
+
         const historialCompleto = [];
         historialSnapshot.forEach(doc => {
           const data = doc.data();
-          historialCompleto.push({
-            ...data,
-            id: doc.id
-          });
+          historialCompleto.push({ ...data, id: doc.id });
         });
-        
+
         // Helper para convertir fecha
         const toDate = (value) => {
           try {
@@ -2166,38 +2110,290 @@ export default {
           const fechaB = toDate(b.fecha) || toDate(b.timestamp) || new Date(0);
           return fechaB - fechaA;
         });
-        
+
         // Obtener fecha del embarque
         const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData?.fecha);
         const fechaEmb = fechaEmbarqueNormalizada || new Date();
         fechaEmb.setHours(12, 0, 0, 0);
-        
-        // Obtener solo los costos válidos para la fecha del embarque
-        const costosActuales = {};
-        const medidasProcesadas = new Set();
-        
-        historialCompleto.forEach(entrada => {
-          if (!medidasProcesadas.has(entrada.medida)) {
-            const fechaCosto = toDate(entrada.fecha) || toDate(entrada.timestamp) || new Date(0);
-            fechaCosto.setHours(12, 0, 0, 0);
 
-            if (fechaCosto <= fechaEmb && !entrada.eliminado && !entrada.medidaEliminada) {
-              costosActuales[entrada.medida] = {
-                costoBase: entrada.costoBase,
-                fecha: entrada.fecha,
-                timestamp: entrada.timestamp,
-                id: entrada.id
-              };
-              medidasProcesadas.add(entrada.medida);
-            }
+        const hidratar = (entrada) => {
+          const proveedorNombre = entrada.proveedorNombre || entrada.proveedor || '';
+          return {
+            ...entrada,
+            costoKey: this.generarCostoKeyCosto(entrada.medida, proveedorNombre),
+            proveedorNombre,
+            proveedorId: entrada.proveedorId || '',
+            tipoCosto: entrada.tipoCosto || 'limpio'
+          };
+        };
+
+        const porFecha = [];
+        const activos = [];
+        const vistosFecha = new Set();
+        const vistosActivos = new Set();
+
+        historialCompleto.forEach(entradaOriginal => {
+          if (entradaOriginal.eliminado || entradaOriginal.medidaEliminada) return;
+          const entrada = hidratar(entradaOriginal);
+          const fechaCosto = toDate(entrada.fecha) || toDate(entrada.timestamp) || new Date(0);
+          fechaCosto.setHours(12, 0, 0, 0);
+
+          if (!vistosActivos.has(entrada.costoKey) && !entrada.archivado) {
+            vistosActivos.add(entrada.costoKey);
+            activos.push(entrada);
+          }
+
+          if (!vistosFecha.has(entrada.costoKey) && fechaCosto <= fechaEmb && !entrada.archivado) {
+            vistosFecha.add(entrada.costoKey);
+            porFecha.push(entrada);
           }
         });
-        
-        return costosActuales;
+
+        return { porFecha, activos };
       } catch (error) {
         console.error('Error al obtener costos registrados globales:', error);
-        return {};
+        return { porFecha: [], activos: [] };
       }
+    },
+
+    // Asegura el cache del catálogo de costos. Sin conexión devuelve null.
+    async asegurarCacheCostosGlobales() {
+      if (this.costosGlobalesCache) return this.costosGlobalesCache;
+      if (!navigator.onLine) return null;
+      this.costosGlobalesCache = await this.obtenerCostosRegistradosGlobales();
+      return this.costosGlobalesCache;
+    },
+
+    // Puntaje de proveedor para una entrada del catálogo, con la misma
+    // lógica que Gestión de Costos: el proveedor implícito en el nombre
+    // de la medida del embarque (ej. "tirado" en "51/60 tirado") manda.
+    puntuarProveedorEnNombreCosto(costoInfo, proveedorBuscado) {
+      if (!proveedorBuscado) return 0;
+      const proveedorRegistrado = this.normalizarMedidaCosto(costoInfo.proveedorNombre || '');
+      const medidaRegistrada = this.normalizarMedidaCosto(costoInfo.medida);
+      // Caso especial: la entrada no tiene proveedor explícito, pero su
+      // medida ya incluye el proveedor buscado.
+      if (!proveedorRegistrado) {
+        if (medidaRegistrada.includes(proveedorBuscado)) return 800;
+        return 0;
+      }
+      if (proveedorRegistrado === proveedorBuscado) return 1000;
+      if (proveedorRegistrado.includes(proveedorBuscado) || proveedorBuscado.includes(proveedorRegistrado)) {
+        const diff = Math.abs(proveedorRegistrado.length - proveedorBuscado.length);
+        return Math.max(100, 500 - diff);
+      }
+      return proveedorBuscado
+        .split(/\s+/)
+        .filter(token => token.length >= 3)
+        .reduce((score, token) => (proveedorRegistrado.includes(token) ? score + token.length : score), 0);
+    },
+
+    // Resolución de costo en el catálogo con la MISMA lógica que Gestión
+    // de Costos (medida exacta + proveedor primero, medida base solo
+    // como fallback). `listas` es un arreglo de arreglos de entradas
+    // (porFecha, activos). No consulta costosPorMedida del embarque: ese
+    // mapa es un cache que puede quedar desactualizado (ej. "51/60
+    // tirado" guardado en $149 cuando el catálogo dice $121).
+    buscarCostoCatalogoEnListas(medidaEmbarque, listas) {
+      if (!medidaEmbarque || !listas || listas.length === 0) return null;
+
+      const medidaEmbarqueNormalizada = this.normalizarMedidaCosto(medidaEmbarque);
+      const medidaBaseSinSufijos = medidaEmbarqueNormalizada
+        .replace(/\s+maquila\s+ozuna/g, '')
+        .replace(/\s+c\/c/g, '')
+        .trim();
+      const medidaKey = medidaEmbarqueNormalizada;
+      const proveedorActivoPorMedida = this.embarqueData?.proveedorActivoPorMedida || {};
+      const proveedorActivoKey = proveedorActivoPorMedida[medidaKey];
+
+      const extraerTallaBase = (texto) => {
+        const match = texto.match(/\d+\/\d+/);
+        return match ? match[0] : '';
+      };
+      const tallaEmbarque = extraerTallaBase(medidaEmbarqueNormalizada);
+
+      const obtenerProveedorImplicitoEmbarque = () => {
+        if (!tallaEmbarque || tallaEmbarque === medidaEmbarqueNormalizada) return '';
+        return medidaEmbarqueNormalizada
+          .replace(tallaEmbarque, '')
+          .replace(/\bmaquila\b/g, '')
+          .replace(/\bozuna\b/g, '')
+          .replace(/\s+c\/c/g, '')
+          .trim();
+      };
+      const proveedorImplicitoEmbarque = obtenerProveedorImplicitoEmbarque();
+
+      const obtenerTextoProveedorDesdeMedida = (costoInfo) => {
+        const medidaRegistrada = this.normalizarMedidaCosto(costoInfo.medida);
+        if (medidaRegistrada && medidaEmbarqueNormalizada.includes(medidaRegistrada) && medidaRegistrada !== medidaEmbarqueNormalizada) {
+          const restante = medidaEmbarqueNormalizada
+            .replace(medidaRegistrada, '')
+            .replace(/\bmaquila\b/g, '')
+            .replace(/\bozuna\b/g, '')
+            .replace(/\s+c\/c/g, '')
+            .trim();
+          if (restante) return restante;
+        }
+        return proveedorImplicitoEmbarque;
+      };
+
+      const crearResultado = (costoInfo, tipoCoincidencia = 'global') => ({
+        medidaEncontrada: costoInfo.medida,
+        proveedorId: costoInfo.proveedorId || '',
+        proveedorNombre: costoInfo.proveedorNombre || '',
+        costo: costoInfo.costoBase,
+        costoKey: costoInfo.costoKey,
+        tipoCoincidencia
+      });
+
+      const ordenarPreferencias = (coincidencias) => {
+        const coincidenciasPorProveedor = coincidencias
+          .map(costoInfo => ({
+            costoInfo,
+            score: this.puntuarProveedorEnNombreCosto(costoInfo, obtenerTextoProveedorDesdeMedida(costoInfo))
+          }))
+          .filter(item => item.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        if (coincidenciasPorProveedor.length > 0) {
+          const coincidenciaProveedor = coincidenciasPorProveedor[0].costoInfo;
+          return [
+            { ...coincidenciaProveedor, tipoCoincidencia: 'medida-proveedor' },
+            ...coincidencias.filter(c => c.costoKey !== coincidenciaProveedor.costoKey)
+          ];
+        }
+
+        // Si la medida del embarque NO incluye un proveedor implícito,
+        // respetamos el "proveedor activo" elegido manualmente.
+        if (!proveedorImplicitoEmbarque && proveedorActivoKey) {
+          const activo = coincidencias.find(c => c.costoKey === proveedorActivoKey);
+          if (activo) {
+            return [
+              { ...activo, tipoCoincidencia: 'proveedor-activo' },
+              ...coincidencias.filter(c => c.costoKey !== proveedorActivoKey)
+            ];
+          }
+        }
+
+        return coincidencias.sort((a, b) => {
+          const aSinProveedor = a.proveedorNombre ? 1 : 0;
+          const bSinProveedor = b.proveedorNombre ? 1 : 0;
+          return aSinProveedor - bSinProveedor;
+        });
+      };
+
+      const buscarExacta = (entradas) => {
+        const exactas = entradas.filter(costoInfo => this.normalizarMedidaCosto(costoInfo.medida) === medidaEmbarqueNormalizada);
+        if (exactas.length === 0) return null;
+        const seleccionado = ordenarPreferencias(exactas)[0];
+        return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'exacta');
+      };
+
+      const buscarPorTalla = (entradas) => {
+        if (!tallaEmbarque || tallaEmbarque === medidaEmbarqueNormalizada) return null;
+        const porTalla = entradas.filter(costoInfo => this.normalizarMedidaCosto(costoInfo.medida) === tallaEmbarque);
+        if (porTalla.length === 0) return null;
+        const seleccionado = ordenarPreferencias(porTalla)[0];
+        return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'talla-proveedor');
+      };
+
+      const buscarBaseOzuna = (entradas) => {
+        if (!medidaEmbarque.includes('Maquila Ozuna')) return null;
+        const medidaBase = this.normalizarMedidaCosto(medidaEmbarque.replace(' Maquila Ozuna', '').trim());
+        const tallaOzuna = extraerTallaBase(medidaBase);
+        const clavesBuscar = [medidaBase];
+        if (tallaOzuna && tallaOzuna !== medidaBase) clavesBuscar.push(tallaOzuna);
+        for (const clave of clavesBuscar) {
+          const coincidenciaBase = entradas.filter(costoInfo => this.normalizarMedidaCosto(costoInfo.medida) === clave);
+          if (coincidenciaBase.length > 0) {
+            const seleccionado = ordenarPreferencias(coincidenciaBase)[0];
+            return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'base-ozuna');
+          }
+        }
+        return null;
+      };
+
+      const buscarParcial = (entradas) => {
+        const parciales = entradas.filter(costoInfo => {
+          const medidaRegistradaNormalizada = this.normalizarMedidaCosto(costoInfo.medida);
+          return (
+            (medidaRegistradaNormalizada.length > 2 && medidaBaseSinSufijos.includes(medidaRegistradaNormalizada)) ||
+            (medidaBaseSinSufijos.length > 2 && medidaRegistradaNormalizada.includes(medidaBaseSinSufijos))
+          );
+        });
+        if (parciales.length === 0) return null;
+        const seleccionado = ordenarPreferencias(parciales)[0];
+        return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'parcial');
+      };
+
+      // Estrategias ordenadas de más específica a menos específica. Cada
+      // estrategia se ejecuta en TODAS las listas antes de pasar a la
+      // siguiente, de modo que un match exacto en cualquier lista siempre
+      // gana sobre un match por talla o parcial en otra lista.
+      const estrategias = [buscarExacta, buscarPorTalla, buscarBaseOzuna, buscarParcial];
+      for (const estrategia of estrategias) {
+        for (const entradas of listas) {
+          if (!entradas || entradas.length === 0) continue;
+          const resultado = estrategia(entradas);
+          if (resultado) return resultado;
+        }
+      }
+      return null;
+    },
+
+    // Resolución de costo del catálogo (async, asegura el cache).
+    async resolverCostoCatalogo(medida) {
+      const cache = await this.asegurarCacheCostosGlobales();
+      if (!cache) return null;
+      return this.buscarCostoCatalogoEnListas(medida, [cache.porFecha, cache.activos]);
+    },
+
+    // Versión síncrona (PDF): usa el cache si ya está cargado.
+    resolverCostoCatalogoSync(medida) {
+      const cache = this.costosGlobalesCache;
+      if (!cache) return null;
+      return this.buscarCostoCatalogoEnListas(medida, [cache.porFecha, cache.activos]);
+    },
+
+    // Búsqueda de costo con la misma lógica que Gestión de Costos
+    // (medida exacta + proveedor primero, medida base solo como
+    // fallback). Antes consultaba primero costosPorMedida del embarque
+    // y luego normalizaba quitando sufijos como "tirado", lo que
+    // devolvía el costo de la medida base (ej. $149 de "51/60" para
+    // "51/60 tirado" en vez de $121 de "51/60 - Tirado").
+    async encontrarCostoParaMedida(medida) {
+      return this.resolverCostoCatalogo(medida);
+    },
+
+    // Costo base a usar en ganancia para una medida, con la misma
+    // precedencia que Gestión de Costos: catálogo resuelto (medida +
+    // proveedor) primero; luego costo manual del embarque; y solo como
+    // respaldo sin conexión o sin catálogo, el valor guardado en
+    // costosPorMedida. Devuelve {costo, fuente, detalle} o null.
+    async resolverCostoBase(medida) {
+      const catalogo = await this.resolverCostoCatalogo(medida);
+      if (catalogo && Number(catalogo.costo) > 0) {
+        return { costo: Number(catalogo.costo), fuente: 'catalogo', detalle: catalogo };
+      }
+      const manuales = this.embarqueData?.costosPorMedidaManuales || {};
+      let manual = Number(manuales[medida]);
+      if (!(manual > 0)) {
+        const lower = String(medida || '').toLowerCase().trim();
+        for (const [clave, valor] of Object.entries(manuales)) {
+          if (clave.toLowerCase().trim() === lower) { manual = Number(valor) || 0; break; }
+        }
+      }
+      if (manual > 0) return { costo: manual, fuente: 'manual' };
+      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+      let guardado = Number(costosEmbarque[medida]);
+      if (!(guardado > 0)) {
+        const lower = String(medida || '').toLowerCase().trim();
+        for (const [clave, valor] of Object.entries(costosEmbarque)) {
+          if (clave.toLowerCase().trim() === lower) { guardado = Number(valor) || 0; break; }
+        }
+      }
+      if (guardado > 0) return { costo: guardado, fuente: 'embarque' };
+      return null;
     },
 
     // Método para precargar todos los costos
@@ -2239,24 +2435,23 @@ export default {
       const baseRefriSync = this.medidaBaseRefri(medida);
       const medidaCostoSync = baseRefriSync || medida;
 
-      // Si no está en cache, intentar calcularlo de forma síncrona usando los costos disponibles
-      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-      let costo = Number(costosEmbarque[medidaCostoSync]) || 0;
-
-      // Si no hay costo en el embarque, buscar en el cache de costos globales
-      if (costo === 0 && this.costosGlobalesCache) {
-        // Buscar coincidencia exacta en costos globales
-        if (this.costosGlobalesCache[medidaCostoSync]) {
-          costo = this.costosGlobalesCache[medidaCostoSync].costoBase;
-          console.log(`💰 [${medida}] Usando costo global del cache: $${costo}`);
-        } else {
-          // Buscar insensible a mayúsculas
-          const medidaLower = medidaCostoSync.toLowerCase().trim();
-          for (const [claveMedida, costoInfo] of Object.entries(this.costosGlobalesCache)) {
-            if (claveMedida.toLowerCase().trim() === medidaLower) {
-              costo = costoInfo.costoBase;
-              console.log(`💰 [${medida}] Usando costo global (case insensitive): ${claveMedida} = $${costo}`);
-              break;
+      // Mismo costo resuelto que la ruta asíncrona (catálogo
+      // medida+proveedor, luego manual, luego guardado). Si el cache del
+      // catálogo no está cargado, se usa el valor guardado.
+      let costo = 0;
+      const resueltoSync = this.resolverCostoCatalogoSync(medidaCostoSync);
+      if (resueltoSync && Number(resueltoSync.costo) > 0) {
+        costo = Number(resueltoSync.costo);
+      } else {
+        const manualesSync = this.embarqueData?.costosPorMedidaManuales || {};
+        costo = Number(manualesSync[medidaCostoSync]) || 0;
+        if (costo === 0) {
+          const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+          costo = Number(costosEmbarque[medidaCostoSync]) || 0;
+          if (costo === 0) {
+            const lowerSync = medidaCostoSync.toLowerCase().trim();
+            for (const [clave, valor] of Object.entries(costosEmbarque)) {
+              if (clave.toLowerCase().trim() === lowerSync) { costo = Number(valor) || 0; break; }
             }
           }
         }
@@ -2386,47 +2581,31 @@ export default {
     },
 
     async calcularCostoFinal(medida) {
+      // Costo resuelto con la misma lógica que Gestión de Costos
+      // (catálogo medida+proveedor, luego manual, luego guardado).
       // Regla refri (SOLO ganancia): costo y rendimiento de la medida
       // base. El rendimiento es el del día anterior de la base; si no
       // existe, se conserva el comportamiento actual.
       const baseRefri = this.medidaBaseRefri(medida);
+      const claveCosto = baseRefri || medida;
+      const resuelto = await this.resolverCostoBase(claveCosto);
+      const costo = resuelto ? resuelto.costo : 0;
+      if (resuelto && resuelto.detalle && resuelto.detalle.medidaEncontrada !== claveCosto) {
+        console.log(`💰 [${medida}] Usando costo de: ${resuelto.detalle.medidaEncontrada} ($${costo})`);
+      }
+      if (!resuelto) {
+        console.warn(`⚠️ [${medida}] No se encontró costo para esta medida`);
+      }
+
+      let rendimientoOriginal;
       if (baseRefri) {
-        const resultadoBusqueda = await this.encontrarCostoParaMedida(baseRefri);
-        const costo = resultadoBusqueda ? resultadoBusqueda.costo : 0;
-        if (resultadoBusqueda && resultadoBusqueda.medidaEncontrada !== medida) {
-          console.log(`💰 [${medida}] Usando costo de la base: ${resultadoBusqueda.medidaEncontrada} ($${costo})`);
-        }
-        let rendimientoOriginal = await this.obtenerRendimientoDiaAnterior(baseRefri);
+        rendimientoOriginal = await this.obtenerRendimientoDiaAnterior(baseRefri);
         if (rendimientoOriginal === null || rendimientoOriginal === undefined) {
           rendimientoOriginal = this.getRendimiento(medida);
         }
-        const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
-        const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
-        const aplicarExtra = this.debeAplicarCostoExtra(medida);
-        if (aplicarExtra) {
-          return Math.round((costo * rendimiento) + costoExtra);
-        }
-        return Math.round(costo * rendimiento);
-      }
-
-      // Usar búsqueda inteligente de costos
-      const resultadoBusqueda = await this.encontrarCostoParaMedida(medida);
-      let costo = 0;
-      let medidaUsada = medida;
-      
-      if (resultadoBusqueda) {
-        costo = resultadoBusqueda.costo;
-        medidaUsada = resultadoBusqueda.medidaEncontrada;
-        
-        // Log informativo si se usó una medida diferente
-        if (medidaUsada !== medida) {
-          console.log(`💰 [${medida}] Usando costo de: ${medidaUsada} ($${costo})`);
-        }
       } else {
-        console.warn(`⚠️ [${medida}] No se encontró costo para esta medida`);
+        rendimientoOriginal = this.getRendimiento(medida);
       }
-      
-      const rendimientoOriginal = this.getRendimiento(medida);
       // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
       const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
@@ -2583,11 +2762,13 @@ export default {
       return mapa;
     },
 
-    // Prellena costosPorMedida para las medidas sin costo: primero busca
-    // hacia atrás en los embarques anteriores (hasta 30 días, del más
-    // reciente al más viejo) el último costo registrado para la medida y,
-    // si no hay, desde el catálogo global de costos (la misma búsqueda que
-    // encontrarCostoParaMedida). Nunca sobrescribe un costo existente.
+    // Prellena costosPorMedida para las medidas sin costo: primero
+    // desde el catálogo global de costos (misma lógica que Gestión de
+    // Costos: medida + proveedor primero) y, si no hay, hacia atrás en
+    // los embarques anteriores (hasta 30 días, del más reciente al más
+    // viejo). Antes de prellenar sincroniza los costos guardados viejos
+    // con el catálogo (nunca sobrescribe un costo manual ni medidas
+    // refri). Nunca sobrescribe un costo existente.
     // Persiste por la ruta existente (persistirCamposRendimientos).
     // Las medidas que sigan sin costo se preguntan con el prompt de
     // costos faltantes (preguntarCostosFaltantes).
@@ -2595,28 +2776,34 @@ export default {
       try {
         if (!this.embarqueData || !navigator.onLine) return 0;
         const fechaActualISO = this.toLocalYMD(this.normalizarFecha(this.embarqueData.fecha) || new Date());
+        // Sincronizar valores guardados viejos con el catálogo (como
+        // Gestión de Costos): si el catálogo resuelve otro costo y el
+        // guardado no es manual, se actualiza. Nunca toca manuales.
+        await this.sincronizarCostosGuardadosConCatalogo();
         const faltantes = this.obtenerMedidasSinCosto();
         if (faltantes.length === 0) return 0;
 
         const costosPrevios = await this.obtenerCostosEmbarquesAnteriores(fechaActualISO);
         const costosNuevos = {};
         for (const medida of faltantes) {
-          // 1. Embarque anterior más reciente (exacto o insensible a mayúsculas)
-          let costo = Number(costosPrevios[medida]) || 0;
-          if (costo <= 0) {
-            const lower = medida.toLowerCase().trim();
-            for (const [clave, valor] of Object.entries(costosPrevios)) {
-              if (clave.toLowerCase().trim() === lower) {
-                costo = Number(valor) || 0;
-                break;
-              }
-            }
+          // 1. Catálogo global de costos (medida + proveedor primero,
+          //    misma lógica que Gestión de Costos)
+          let costo = 0;
+          const encontrado = await this.resolverCostoCatalogo(medida);
+          if (encontrado && Number(encontrado.costo) > 0) {
+            costo = Number(encontrado.costo);
           }
-          // 2. Catálogo global de costos
+          // 2. Embarque anterior más reciente (exacto o insensible a mayúsculas)
           if (costo <= 0) {
-            const encontrado = await this.encontrarCostoParaMedida(medida);
-            if (encontrado && Number(encontrado.costo) > 0) {
-              costo = Number(encontrado.costo);
+            costo = Number(costosPrevios[medida]) || 0;
+            if (costo <= 0) {
+              const lower = medida.toLowerCase().trim();
+              for (const [clave, valor] of Object.entries(costosPrevios)) {
+                if (clave.toLowerCase().trim() === lower) {
+                  costo = Number(valor) || 0;
+                  break;
+                }
+              }
             }
           }
           if (costo > 0) {
@@ -2640,6 +2827,49 @@ export default {
         return Object.keys(costosNuevos).length;
       } catch (error) {
         console.warn('[Rendimientos] No se pudieron prellenar costos desde el embarque anterior:', error);
+        return 0;
+      }
+    },
+
+    // Sincroniza los costos guardados del embarque con el catálogo
+    // (misma lógica que Gestión de Costos): si el catálogo resuelve un
+    // costo distinto al guardado y ese guardado no es manual, se
+    // actualiza el guardado. Así un costo viejo (ej. "51/60 tirado"
+    // guardado en $149 cuando el catálogo dice $121 por el proveedor
+    // Tirado) no se queda pegado. Nunca sobrescribe costos manuales
+    // ni medidas refri (su costo va por la base).
+    async sincronizarCostosGuardadosConCatalogo() {
+      try {
+        if (!this.embarqueData || !navigator.onLine) return 0;
+        const guardados = this.embarqueData.costosPorMedida || {};
+        const manuales = this.embarqueData.costosPorMedidaManuales || {};
+        const cambios = {};
+        for (const medida of (this.medidasUnicas || [])) {
+          if (this.esMedidaRefri(medida)) continue;
+          const guardado = Number(guardados[medida]);
+          if (!(guardado > 0)) continue;
+          if (Number(manuales[medida]) > 0) continue;
+          const resuelto = await this.resolverCostoCatalogo(medida);
+          if (!resuelto || !(Number(resuelto.costo) > 0)) continue;
+          if (Number(resuelto.costo) !== guardado) {
+            cambios[medida] = Number(resuelto.costo);
+            console.log(`💰 Costo guardado sincronizado ${medida}: $${guardado} -> $${resuelto.costo} (${resuelto.estrategia})`);
+          }
+        }
+        if (Object.keys(cambios).length === 0) return 0;
+        await this.$nextTick();
+        if (!this.embarqueData.costosPorMedida) {
+          this.$set(this.embarqueData, 'costosPorMedida', {});
+        }
+        Object.entries(cambios).forEach(([medida, costo]) => {
+          this.$set(this.embarqueData.costosPorMedida, medida, costo);
+        });
+        await this.persistirCamposRendimientos({
+          costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida)
+        });
+        return Object.keys(cambios).length;
+      } catch (error) {
+        console.warn('[Rendimientos] No se pudieron sincronizar costos guardados con el catálogo:', error);
         return 0;
       }
     },
@@ -2772,20 +3002,14 @@ export default {
         
         // Obtener el costo base original (sin cálculos adicionales).
         // Regla refri (solo ganancia): el costo base es el de la
-        // medida base ("71/90" para "71/90 refri").
-        const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+        // medida base ("71/90" para "71/90 refri"). Misma resolución
+        // que calcularCostoFinal (catálogo medida+proveedor, luego
+        // manual, luego guardado) para que la tarjeta muestre el
+        // mismo costo que se usa en el cálculo.
         const baseRefriCosto = this.medidaBaseRefri(medida);
         const claveCostoBase = baseRefriCosto || medida;
-        let costoBase = Number(costosEmbarque[claveCostoBase]) || 0;
-        if (costoBase <= 0 && baseRefriCosto) {
-          const lowerCostoBase = claveCostoBase.toLowerCase().trim();
-          for (const [clave, valor] of Object.entries(costosEmbarque)) {
-            if (clave.toLowerCase().trim() === lowerCostoBase) {
-              costoBase = Number(valor) || 0;
-              break;
-            }
-          }
-        }
+        const resueltoBase = await this.resolverCostoBase(claveCostoBase);
+        const costoBase = resueltoBase ? resueltoBase.costo : 0;
         
         // Obtener clientes que tienen productos de esta medida
         const clientesConMedida = this.obtenerClientesConMedida(medida);

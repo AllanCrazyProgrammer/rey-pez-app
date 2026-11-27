@@ -543,7 +543,11 @@ export default {
       if (!this.embarqueData || !this.embarqueData.kilosCrudos) return;
       
       this.medidasEmbarque.forEach(medida => {
-        const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
+        // Mismo criterio que la vista de Rendimientos: usar los kilos
+        // enteros que muestra el total embarcado, sin redondear hacia
+        // arriba (ej. 158.5 -> 158), para que ambas pantallas muestren
+        // el mismo rendimiento (200 / 158 = 1.27, no 1.26).
+        const totalEmbarcado = Math.floor(Number(this.obtenerTotalEmbarcado(medida)) || 0);
         if (totalEmbarcado > 0) {
           let kilosCrudos;
           const kilosCrudosData = this.embarqueData.kilosCrudos[medida];
