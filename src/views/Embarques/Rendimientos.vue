@@ -236,7 +236,7 @@
           </div>
 
           <div
-            v-else-if="analizarGanancia[medida]"
+            v-else-if="analizarGanancia[medida] && rendimientoRefriAnterior(medida) === null"
             class="input-group rendimiento-manual-group"
             :class="{ 'grupo-cero-alerta': debeAlertarCero(medida, rendimientoManual[medida]) }"
           >
@@ -257,18 +257,16 @@
               Total embarcado: {{ formatearNumero(obtenerTotalEmbarcado(medida)) }} kg
             </p>
             <p class="rendimiento" :class="{ 'rendimiento-cero-alerta': debeAlertarCero(medida, obtenerRendimientoActual(medida)) }">
-              Rendimiento: 
+              <template v-if="typeof rendimientoRefriAnterior(medida) === 'number'">
+                Rendimiento ({{ medidaBaseRefri(medida) }} del embarque anterior):
+              </template>
+              <template v-else>Rendimiento:</template>
               <span :class="{ 'rendimiento-alto': getRendimiento(medida) > 1 }">
                 {{ getRendimiento(medida).toFixed(2) }}
               </span>
             </p>
-            <p
-              v-if="gananciasCalculadas[medida] && analizarGanancia[medida] && gananciasCalculadas[medida].rendimientoGanancia !== undefined"
-              class="rendimiento-ganancia-ref"
-            >
-              Ganancia calculada con rendimiento
-              <strong>{{ gananciasCalculadas[medida].rendimientoGanancia.toFixed(2) }}</strong>
-              <small>({{ gananciasCalculadas[medida].rendimientoGananciaTexto }})</small>
+            <p v-if="esMedidaRefri(medida) && rendimientoRefriAnterior(medida) === undefined" class="rendimiento-ganancia-ref">
+              Buscando el rendimiento de {{ medidaBaseRefri(medida) }} del embarque anterior…
             </p>
             
             <!-- Sección de ganancia -->
@@ -3364,6 +3362,12 @@ export default {
 
       // Cargar el catálogo de costos una vez (también lo usan los crudos).
       await this.asegurarCacheCostosGlobales();
+      // Medidas refri: rendimiento de la base del embarque anterior (se
+      // muestra en la tarjeta aunque no se analice la ganancia).
+      for (const medida of this.medidasUnicas) {
+        const baseRefri = this.medidaBaseRefri(medida);
+        if (baseRefri) await this.obtenerRendimientoDiaAnterior(baseRefri);
+      }
       
       for (const medida of this.medidasUnicas) {
         // Solo calcular ganancias si el análisis está activado para esta medida
@@ -3383,11 +3387,6 @@ export default {
         if (!resultadoCalculo) continue; // Ninguna línea con precio
 
         resultadoCalculo.costoFuente = resueltoBase ? resueltoBase.fuente : null;
-        if (this.medidaBaseRefri(medida)) {
-          const rendGanancia = await this.rendimientoParaGanancia(medida);
-          resultadoCalculo.rendimientoGanancia = Math.round((Number(rendGanancia.valor) || 0) * 100) / 100;
-          resultadoCalculo.rendimientoGananciaTexto = rendGanancia.texto;
-        }
         resultadoCalculo.costoFuenteTexto = describirFuenteCosto(resueltoBase);
         ganancias[medida] = resultadoCalculo;
       }
@@ -4039,7 +4038,23 @@ export default {
       return (Number(valor) || 0) <= 0;
     },
 
+    // Medidas refri: rendimiento de la medida base en el embarque del día
+    // anterior. undefined = aún no se consulta; null = no hubo (se pide el
+    // rendimiento manual como respaldo); número = el que se usa.
+    rendimientoRefriAnterior(medida) {
+      const base = this.medidaBaseRefri(medida);
+      if (!base) return undefined;
+      const clave = base.toLowerCase().trim();
+      if (!Object.prototype.hasOwnProperty.call(this.rendimientoDiaAnteriorCache, clave)) return undefined;
+      const valor = this.rendimientoDiaAnteriorCache[clave];
+      return valor === null || valor === undefined ? null : Number(valor);
+    },
+
     obtenerRendimientoActual(medida) {
+      if (this.esMedidaRefri(medida)) {
+        const anterior = this.rendimientoRefriAnterior(medida);
+        if (typeof anterior === 'number') return anterior;
+      }
       if (this.esMedidaRefri(medida) && this.analizarGanancia[medida]) {
         return Number(this.rendimientoManual[medida]) || 0;
       }
@@ -4057,6 +4072,8 @@ export default {
 
     tieneEntradaPendiente(medida) {
       if (this.esMedidaRefri(medida)) {
+        // Con rendimiento del embarque anterior no hay nada que capturar.
+        if (this.rendimientoRefriAnterior(medida) !== null) return false;
         return Boolean(this.analizarGanancia[medida]) &&
           (Number(this.rendimientoManual[medida]) || 0) <= 0;
       }

@@ -102,6 +102,9 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
   del desglose solo suma lo vendido.
 - Kilos por cliente sin decimales (`Math.floor` de la suma de sus líneas, como se muestran):
   la ganancia de cada renglón y el total son la suma exacta de lo que se ve.
+- Medidas refri ("71/90 refri"): rendimiento = el de la medida base en el embarque del día
+  anterior (`rendimientoRefriAnterior`); la tarjeta lo muestra y oculta el rendimiento manual.
+  Solo si no hubo base el día anterior (o sin internet) se pide el rendimiento manual.
 - Crudos: mismo costo + $3.50/kg; la ganancia por cliente usa su propio precio.
 - Maquila Ozuna: precio vacío usa el de las líneas del embarque; esas medidas no
   prenden "Analizar ganancia" por default (se contaría doble).
