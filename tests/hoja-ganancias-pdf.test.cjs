@@ -127,3 +127,39 @@ test('el PDF se genera de verdad con pdfmake (una sola hoja con 7 recuadros)', a
   const paginas = (buffer.toString('latin1').match(/\/Type \/Page\b/g) || []).length
   assert.equal(paginas, 1)
 })
+
+test('página 1: usa el rendimiento de la pantalla (refri del día anterior, total sin decimales)', () => {
+  const compilar = (file, requerir) => {
+    const code = transformSync(fs.readFileSync(path.join(root, file), 'utf8'), {
+      configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs']
+    }).code
+    const module = { exports: {} }
+    new Function('require', 'module', 'exports', code)(requerir, module, module.exports)
+    return module.exports
+  }
+  const formatters = compilar('src/utils/pdf/formatters.js', () => ({}))
+  const { generarTablaRendimientos } = compilar('src/utils/pdf/generators/rendimientos.js', id => (id === '../formatters' ? formatters : { layoutTabla: {} }))
+  const tabla = generarTablaRendimientos([
+    { medida: '51/60 tirado', kilosCrudos: 200, totalEmbarcado: 158.7, rendimiento: 200 / 158, costoFinal: 172, incluyeCostoFinal: true },
+    { medida: '71/90 refri', kilosCrudos: 0, totalEmbarcado: 310, rendimiento: 1.17, costoFinal: 139, incluyeCostoFinal: true },
+    { medida: 'Saladero', kilosCrudos: 17, totalEmbarcado: 8.4, costoFinal: 167, incluyeCostoFinal: true }
+  ], {}, { mostrarColumnaCosto: true })
+  const texto = JSON.stringify(tabla)
+  assert.match(texto, /\(1\.27\)/, '200 / 158 = 1.27, no 200 / 158.7 = 1.26')
+  assert.match(texto, /\(1\.17\)/, 'refri: rendimiento del día anterior, no 0.00')
+  assert.match(texto, /\(2\.13\)/, 'sin rendimiento: kilos / total embarcado entero (17 / 8)')
+  assert.doesNotMatch(texto, /\(0\.00\)/)
+})
+
+test('medidas sin costo: aviso en el recuadro y en el resumen', () => {
+  const hoja = h.generarHojaGanancias({
+    gananciasLimpios: { macuil: limpio([{ cliente: 'Veronica', kilos: 328, precio: 125 }], { costoFuente: null, proveedorCosto: '' }) },
+    gananciasCrudos: { 'med ch': { totalKilos: 160, totalKilosCosto: 152, costoBase: 3.5, gananciaTotal: 14368, costoFuente: null, detallesPorCliente: [] } },
+    embarqueData: { fecha: '2026-11-25' }
+  })
+  const texto = JSON.stringify(hoja)
+  assert.match(texto, /Sin costo: esta ganancia sale inflada/)
+  assert.match(texto, /crudo · sin costo/)
+  assert.match(texto, /macuil \(-?\$/)
+  assert.match(texto, /med ch \(\$14,368\)/)
+})

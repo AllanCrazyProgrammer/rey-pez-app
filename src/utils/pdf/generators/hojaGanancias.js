@@ -153,6 +153,10 @@ export function ovalo(texto, { ancho, alto = 24, fontSize = 15, color = TINTA, b
   };
 }
 
+// Sin costo: la pantalla no encontró costo (costoFuente null). Si el dato no
+// trae la fuente, se decide por el costo mismo.
+const esSinCosto = (g, costo) => (g?.costoFuente === undefined ? !(num(costo) > 0) : !g.costoFuente);
+
 const enRenglon = (nodo) => ({ columns: [nodo, { width: '*', text: '', fontSize: 6 }] });
 
 const anchoOvalo = (texto, fontSize, holgura = 22) => Math.max(holgura + 12, Math.ceil(texto.length * fontSize * 0.62) + holgura);
@@ -218,22 +222,25 @@ function encabezadoCaja(titulo, detalle, colorDetalle = GRIS) {
   };
 }
 
-function gananciaPorKilo(valor, nota) {
-  const color = valor < 0 ? ROJO : TINTA;
+function gananciaPorKilo(valor, nota, { sinCosto = false } = {}) {
+  const color = sinCosto ? GRIS : (valor < 0 ? ROJO : TINTA);
   return [
     { text: [{ text: precioTexto(valor), fontSize: 20, bold: true, color }, { text: ' /kg', fontSize: 9, color: GRIS }] },
     nota ? { text: nota, fontSize: 8, color: GRIS, margin: [0, 0, 0, 3] } : { text: '', margin: [0, 0, 0, 3] }
   ];
 }
 
-function totalEnOvalo(total) {
+function totalEnOvalo(total, { sinCosto = false } = {}) {
   const texto = `= ${dinero(total)}`;
-  return enRenglon(ovalo(texto, {
+  const nodo = enRenglon(ovalo(texto, {
     ancho: anchoOvalo(texto, 14),
     alto: 26,
     fontSize: 14,
-    color: total < 0 ? ROJO : VERDE
+    color: sinCosto ? GRIS : (total < 0 ? ROJO : VERDE)
   }));
+  if (!sinCosto) return nodo;
+  // Sin costo la ganancia sale inflada: se avisa en el mismo recuadro.
+  return { stack: [nodo, { text: 'Sin costo: esta ganancia sale inflada', fontSize: 8, bold: true, color: ROJO, margin: [0, 1, 0, 0] }] };
 }
 
 function cajaLimpio(nombre, g) {
@@ -248,10 +255,11 @@ function cajaLimpio(nombre, g) {
   let detalleTitulo = g.proveedorCosto || '';
   let colorDetalle = GRIS;
   if (!detalleTitulo && g.costoFuente === 'manual') detalleTitulo = 'costo manual';
-  if (!g.costoFuente) { detalleTitulo = 'sin costo'; colorDetalle = ROJO; }
-
   const costoBase = num(g.costoBase);
-  const izquierda = [...gananciaPorKilo(gananciaKg, nota), totalEnOvalo(g.gananciaTotal)];
+  const sinCosto = esSinCosto(g, costoBase);
+  if (sinCosto) { detalleTitulo = 'sin costo'; colorDetalle = ROJO; }
+
+  const izquierda = [...gananciaPorKilo(gananciaKg, nota, { sinCosto }), totalEnOvalo(g.gananciaTotal, { sinCosto })];
 
   if (num(g.kilosCrudo) > 0) {
     izquierda.push(
@@ -300,15 +308,17 @@ function cajaCrudo(talla, g) {
   const costoKg = num(g.costoBase);
   const kilosCosto = num(g.totalKilosCosto);
   const precioBase = filas.principal ?? num(g.precioVenta);
+  const sinCosto = esSinCosto(g, g.costoSinSobrecosto);
   // Ganancia por kilo vendido al precio principal: el costo se reparte por
   // kilo vendido (kilos costo × costo / kilos vendidos), como en la pantalla.
   const costoPorKgVendido = num(g.totalKilos) > 0 ? (kilosCosto * costoKg) / num(g.totalKilos) : costoKg;
   const izquierda = [
     ...gananciaPorKilo(
       Math.round((precioBase - costoPorKgVendido) * 100) / 100,
-      `venta ${precioTexto(precioBase)} - ${precioTexto(Math.round(costoPorKgVendido * 100) / 100)}`
+      `venta ${precioTexto(precioBase)} - ${precioTexto(Math.round(costoPorKgVendido * 100) / 100)}`,
+      { sinCosto }
     ),
-    totalEnOvalo(g.gananciaTotal),
+    totalEnOvalo(g.gananciaTotal, { sinCosto }),
     { text: `${kilosTexto(kilosCosto)} kg × ${precioTexto(costoKg)}`, fontSize: 10, color: TINTA, margin: [0, 6, 0, 0] },
     { text: `= ${dinero(kilosCosto * costoKg)}`, fontSize: 10, color: TINTA }
   ];
@@ -320,7 +330,11 @@ function cajaCrudo(talla, g) {
       margin: [0, 2, 0, 0]
     });
   }
-  return contenidoCaja(encabezadoCaja(talla, 'crudo'), izquierda, columnaKilos(filas));
+  return contenidoCaja(
+    encabezadoCaja(talla, sinCosto ? 'crudo · sin costo' : 'crudo', sinCosto ? ROJO : GRIS),
+    izquierda,
+    columnaKilos(filas)
+  );
 }
 
 function contenidoCaja(encabezado, izquierda, derecha) {
@@ -333,7 +347,7 @@ function contenidoCaja(encabezado, izquierda, derecha) {
   };
 }
 
-function cajaResumen({ limpios, maquila, crudos, hayMaquila, hayCrudos }) {
+function cajaResumen({ limpios, maquila, crudos, hayMaquila, hayCrudos, sinCosto = [] }) {
   const total = limpios + maquila + crudos;
   const renglon = (etiqueta, valor) => [
     { text: etiqueta, fontSize: 13, color: TINTA },
@@ -354,6 +368,18 @@ function cajaResumen({ limpios, maquila, crudos, hayMaquila, hayCrudos }) {
       margin: [0, 2, 0, 0]
     }
   ]);
+  const avisoSinCosto = sinCosto.length
+    ? [{
+        text: [
+          { text: 'Sin costo: ', bold: true },
+          sinCosto.map(m => `${m.nombre} (${dinero(m.ganancia)})`).join(', '),
+          '. Su ganancia está sumada y sale inflada; captura el costo en Rendimientos.'
+        ],
+        fontSize: 8.5,
+        color: ROJO,
+        margin: [0, 8, 0, 0]
+      }]
+    : [];
   return {
     stack: [
       { text: 'Ganancia del día', bold: true, fontSize: 14, color: TINTA, margin: [0, 0, 0, 6] },
@@ -368,7 +394,8 @@ function cajaResumen({ limpios, maquila, crudos, hayMaquila, hayCrudos }) {
           paddingTop: () => 2,
           paddingBottom: () => 2
         }
-      }
+      },
+      ...avisoSinCosto
     ],
     margin: [6, 6, 6, 6]
   };
@@ -434,7 +461,11 @@ export function generarHojaGanancias({ gananciasLimpios = {}, gananciasMaquila =
       maquila: sumar(maquila),
       crudos: sumar(crudos),
       hayMaquila: maquila.length > 0,
-      hayCrudos: crudos.length > 0
+      hayCrudos: crudos.length > 0,
+      sinCosto: [
+        ...limpios.filter(([, g]) => esSinCosto(g, g.costoBase)).map(([medida, g]) => ({ nombre: nombre(medida), ganancia: num(g.gananciaTotal) })),
+        ...crudos.filter(([, g]) => esSinCosto(g, g.costoSinSobrecosto)).map(([talla, g]) => ({ nombre: talla, ganancia: num(g.gananciaTotal) }))
+      ]
     }),
     border: [false, false, false, false]
   };

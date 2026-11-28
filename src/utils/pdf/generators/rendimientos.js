@@ -54,6 +54,9 @@ export const generarTablaRendimientos = (datosRendimientos, nombresMedidasPerson
         medida: medidaBase,
         kilosCrudos: parseFloat(dato.kilosCrudos) || 0,
         totalEmbarcado: parseFloat(dato.totalEmbarcado) || 0,
+        // El mismo rendimiento que usa la ganancia (total embarcado sin
+        // decimales; medidas refri: el de la base del embarque anterior).
+        rendimiento: Number.isFinite(Number(dato.rendimiento)) && dato.rendimiento !== null ? Number(dato.rendimiento) : null,
         costoFinal: tieneCosto && Number.isFinite(costoNumerico) ? costoNumerico : null,
         incluyeCostoFinal: tieneCosto && Number.isFinite(costoNumerico),
         esMaquilaOzuna: esMaquilaOzuna
@@ -81,7 +84,10 @@ export const generarTablaRendimientos = (datosRendimientos, nombresMedidasPerson
       ...(mostrarColumnaCosto ? [{ text: 'Costo Final', style: 'tableHeader' }] : [])
     ],
     ...Object.values(datosAgrupados).map(dato => {
-      const rendimiento = dato.totalEmbarcado > 0 ? dato.kilosCrudos / dato.totalEmbarcado : 0;
+      const totalEntero = Math.floor(dato.totalEmbarcado);
+      const rendimiento = dato.rendimiento !== null && dato.rendimiento !== undefined
+        ? dato.rendimiento
+        : (totalEntero > 0 ? dato.kilosCrudos / totalEntero : 0);
       const rendimientoStyle = rendimiento > 1 ? 'rendimientoAlto' : 'rendimientoBajo';
       
       // Preparamos el texto de la medida
