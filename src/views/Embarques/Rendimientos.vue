@@ -262,6 +262,14 @@
                 {{ getRendimiento(medida).toFixed(2) }}
               </span>
             </p>
+            <p
+              v-if="gananciasCalculadas[medida] && analizarGanancia[medida] && gananciasCalculadas[medida].rendimientoGanancia !== undefined"
+              class="rendimiento-ganancia-ref"
+            >
+              Ganancia calculada con rendimiento
+              <strong>{{ gananciasCalculadas[medida].rendimientoGanancia.toFixed(2) }}</strong>
+              <small>({{ gananciasCalculadas[medida].rendimientoGananciaTexto }})</small>
+            </p>
             
             <!-- Sección de ganancia -->
             <div v-if="gananciasCalculadas[medida] && analizarGanancia[medida]" class="ganancia-info">
@@ -2756,6 +2764,21 @@ export default {
       return rendimiento;
     },
 
+    // Rendimiento con el que se calcula la ganancia. Medidas refri: el de la
+    // medida base del día anterior; si no hay, el de la propia tarjeta.
+    // Devuelve {valor, texto} (texto explica de dónde sale, para mostrarlo).
+    async rendimientoParaGanancia(medida) {
+      const baseRefri = this.medidaBaseRefri(medida);
+      if (baseRefri) {
+        const ayer = await this.obtenerRendimientoDiaAnterior(baseRefri);
+        if (ayer !== null && ayer !== undefined) {
+          return { valor: ayer, texto: `${baseRefri} del día anterior` };
+        }
+        return { valor: this.getRendimiento(medida), texto: `sin ${baseRefri} del día anterior: se usa el de esta tarjeta` };
+      }
+      return { valor: this.getRendimiento(medida), texto: '' };
+    },
+
     async calcularCostoFinal(medida) {
       // Costo resuelto con la misma lógica que Gestión de Costos
       // (manual del embarque, luego catálogo medida+proveedor, luego guardado).
@@ -2773,15 +2796,7 @@ export default {
         console.warn(`⚠️ [${medida}] No se encontró costo para esta medida`);
       }
 
-      let rendimientoOriginal;
-      if (baseRefri) {
-        rendimientoOriginal = await this.obtenerRendimientoDiaAnterior(baseRefri);
-        if (rendimientoOriginal === null || rendimientoOriginal === undefined) {
-          rendimientoOriginal = this.getRendimiento(medida);
-        }
-      } else {
-        rendimientoOriginal = this.getRendimiento(medida);
-      }
+      const { valor: rendimientoOriginal } = await this.rendimientoParaGanancia(medida);
       // Rendimiento a 2 decimales (como en la UI); el costo extra respeta 0.
       return calcularCostoFinalKg({
         costo,
@@ -3368,6 +3383,11 @@ export default {
         if (!resultadoCalculo) continue; // Ninguna línea con precio
 
         resultadoCalculo.costoFuente = resueltoBase ? resueltoBase.fuente : null;
+        if (this.medidaBaseRefri(medida)) {
+          const rendGanancia = await this.rendimientoParaGanancia(medida);
+          resultadoCalculo.rendimientoGanancia = Math.round((Number(rendGanancia.valor) || 0) * 100) / 100;
+          resultadoCalculo.rendimientoGananciaTexto = rendGanancia.texto;
+        }
         resultadoCalculo.costoFuenteTexto = describirFuenteCosto(resueltoBase);
         ganancias[medida] = resultadoCalculo;
       }
@@ -6706,6 +6726,18 @@ button.costo-fuente-btn:focus-visible { border-color: currentColor; outline: non
   accent-color: #38bdf8;
 }
 .editar-costo-nota-base { margin-top: 0; }
+
+.rendimiento-ganancia-ref {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed #38bdf8;
+  border-radius: 10px;
+  background: #eff8ff;
+  color: #1e4e79;
+  font-size: .9rem;
+}
+.rendimiento-ganancia-ref strong { font-size: 1.05rem; }
+.rendimiento-ganancia-ref small { display: block; color: #5b7088; }
 
 .toggle-costo-extra {
   display: inline-flex;
