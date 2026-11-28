@@ -19,6 +19,7 @@ const VERDE = '#1b7f3b';
 const ROJO = '#c0392b';
 const LINEA = '#4a5a70';
 const MARCO_TITULO = '#e8a0a8';
+const AMARILLO = '#d4a017';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -161,7 +162,7 @@ const enRenglon = (nodo) => ({ columns: [nodo, { width: '*', text: '', fontSize:
 
 const anchoOvalo = (texto, fontSize, holgura = 22) => Math.max(holgura + 12, Math.ceil(texto.length * fontSize * 0.62) + holgura);
 
-function columnaKilos({ vendidos, refri, total }, { sinPrecio = 0, clientesSinPrecio = [] } = {}) {
+function columnaKilos({ vendidos, refri, total, principal = null }, { sinPrecio = 0, clientesSinPrecio = [] } = {}) {
   const body = vendidos.map(f => {
     const valor = f.bolsas && f.factorBolsa
       ? [
@@ -173,14 +174,24 @@ function columnaKilos({ vendidos, refri, total }, { sinPrecio = 0, clientesSinPr
       { text: f.cliente || '', fontSize: 8, color: GRIS, noWrap: true, margin: [0, 2, 0, 0] },
       { text: valor, alignment: 'right', noWrap: true },
       f.precioDistinto
-        ? ovalo(precioTexto(f.precio), { ancho: anchoOvalo(precioTexto(f.precio), 7.5, 10), alto: 13, fontSize: 7.5, bold: false, grosor: 0.8 })
+        // En renglón propio: el texto queda centrado en su óvalo aunque la
+        // columna sea más ancha (por el precio verde del total).
+        ? enRenglon(ovalo(precioTexto(f.precio), { ancho: anchoOvalo(precioTexto(f.precio), 7.5, 10), alto: 13, fontSize: 7.5, bold: false, grosor: 0.8 }))
         : { text: '', fontSize: 6 }
     ];
   });
   body.push([
     { text: '', margin: [0, 1, 0, 0] },
     { text: kilosTexto(total), fontSize: 12, bold: true, color: TINTA, alignment: 'right', margin: [0, 1, 0, 0] },
-    { text: 'kg', fontSize: 8, color: GRIS, margin: [0, 4, 0, 0] }
+    {
+      // Precio de venta principal en verde junto a la suma de kilos.
+      text: [
+        { text: 'kg', fontSize: 8, color: GRIS },
+        num(principal) > 0 ? { text: `  ${precioTexto(principal)}`, fontSize: 11, bold: true, color: VERDE } : ''
+      ],
+      noWrap: true,
+      margin: [0, 2, 0, 0]
+    }
   ]);
   refri.forEach(f => {
     body.push([
@@ -209,6 +220,11 @@ function columnaKilos({ vendidos, refri, total }, { sinPrecio = 0, clientesSinPr
       paddingBottom: () => 2
     }
   };
+}
+
+// "Costo" en amarillo: marca que las cuentas de abajo son del costo.
+function etiquetaCosto() {
+  return { text: 'Costo', fontSize: 10, bold: true, color: AMARILLO, margin: [0, 6, 0, 0] };
 }
 
 function encabezadoCaja(titulo, detalle, colorDetalle = GRIS) {
@@ -261,13 +277,14 @@ function cajaLimpio(nombre, g) {
 
   const izquierda = [...gananciaPorKilo(gananciaKg, nota, { sinCosto }), totalEnOvalo(g.gananciaTotal, { sinCosto })];
 
+  izquierda.push(etiquetaCosto());
   if (num(g.kilosCrudo) > 0) {
     izquierda.push(
-      { text: `${kilosTexto(g.kilosCrudo)} kg × ${precioTexto(costoBase)}`, fontSize: 10, color: TINTA, margin: [0, 6, 0, 0] },
+      { text: `${kilosTexto(g.kilosCrudo)} kg × ${precioTexto(costoBase)}`, fontSize: 10, color: TINTA },
       { text: `= ${dinero(num(g.kilosCrudo) * costoBase)}`, fontSize: 10, color: TINTA }
     );
   } else {
-    izquierda.push({ text: `costo ${precioTexto(costoBase)}`, fontSize: 10, color: TINTA, margin: [0, 6, 0, 0] });
+    izquierda.push({ text: precioTexto(costoBase), fontSize: 10, color: TINTA });
   }
 
   const rendimiento = num(g.rendimientoUsado).toFixed(2);
@@ -299,7 +316,7 @@ function cajaMaquila(nombre, g) {
     ...gananciaPorKilo(num(g.precioMaquila), 'precio de maquila'),
     totalEnOvalo(g.gananciaTotal)
   ];
-  const derecha = columnaKilos({ vendidos: [], refri: [], total: kilos });
+  const derecha = columnaKilos({ vendidos: [], refri: [], total: kilos, principal: num(g.precioMaquila) });
   return contenidoCaja(encabezadoCaja(nombre, 'maquila'), izquierda, derecha);
 }
 
@@ -319,7 +336,8 @@ function cajaCrudo(talla, g) {
       { sinCosto }
     ),
     totalEnOvalo(g.gananciaTotal, { sinCosto }),
-    { text: `${kilosTexto(kilosCosto)} kg × ${precioTexto(costoKg)}`, fontSize: 10, color: TINTA, margin: [0, 6, 0, 0] },
+    etiquetaCosto(),
+    { text: `${kilosTexto(kilosCosto)} kg × ${precioTexto(costoKg)}`, fontSize: 10, color: TINTA },
     { text: `= ${dinero(kilosCosto * costoKg)}`, fontSize: 10, color: TINTA }
   ];
   if (num(g.sobrecostoKg) > 0) {
