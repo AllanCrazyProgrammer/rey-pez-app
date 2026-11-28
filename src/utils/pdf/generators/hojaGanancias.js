@@ -296,6 +296,13 @@ function cajaLimpio(nombre, g) {
       { text: `${kilosTexto(g.kilosCrudo)} kg × ${precioTexto(costoBase)}`, fontSize: 10, color: TINTA },
       { text: `= ${dinero(num(g.kilosCrudo) * costoBase)}`, fontSize: 10, color: TINTA }
     );
+    // División entre los kilos totales: costo del crudo por kilo limpio.
+    if (num(g.kilosEmbarcadosRendimiento) > 0) {
+      izquierda.push(
+        { text: [`÷ ${kilosTexto(g.kilosEmbarcadosRendimiento)} kg `, { text: 'embarcados', fontSize: 8, color: GRIS }], fontSize: 10, color: TINTA },
+        { text: `= ${precioTexto(Math.round((num(g.kilosCrudo) * costoBase / num(g.kilosEmbarcadosRendimiento)) * 100) / 100)} /kg`, fontSize: 10, color: TINTA }
+      );
+    }
   } else {
     izquierda.push({ text: precioTexto(costoBase), fontSize: 10, color: TINTA });
   }
@@ -313,7 +320,9 @@ function cajaLimpio(nombre, g) {
   });
   const notas = [];
   if (g.rendimientoTexto) notas.push(`rend. ${g.rendimientoTexto}`);
-  if (num(g.costoExtraAplicado) > 0) notas.push(`incluye +${dinero(g.costoExtraAplicado)} extra`);
+  // Cómo sale el costo final: costo × rendimiento (+ extra).
+  const formula = `${precioTexto(costoBase)} × ${rendimiento}${num(g.costoExtraAplicado) > 0 ? ` + ${dinero(g.costoExtraAplicado)} extra` : ''}`;
+  notas.push(formula);
   if (notas.length) izquierda.push({ text: notas.join(' · '), fontSize: 7.5, color: GRIS, margin: [0, 2, 0, 0] });
 
   return contenidoCaja(
@@ -353,6 +362,12 @@ function cajaCrudo(talla, g) {
     { text: `${kilosTexto(kilosCosto)} kg × ${precioTexto(costoKg)}`, fontSize: 10, color: TINTA },
     { text: `= ${dinero(kilosCosto * costoKg)}`, fontSize: 10, color: TINTA }
   ];
+  if (num(g.totalKilos) > 0) {
+    izquierda.push(
+      { text: [`÷ ${kilosTexto(g.totalKilos)} kg `, { text: 'vendidos', fontSize: 8, color: GRIS }], fontSize: 10, color: TINTA },
+      { text: `= ${precioTexto(Math.round(costoPorKgVendido * 100) / 100)} /kg`, fontSize: 10, color: TINTA }
+    );
+  }
   if (num(g.sobrecostoKg) > 0) {
     izquierda.push({
       text: `costo ${precioTexto(g.costoSinSobrecosto)} + ${precioTexto(g.sobrecostoKg)} de crudo`,

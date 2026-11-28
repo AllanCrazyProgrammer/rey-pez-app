@@ -3394,6 +3394,8 @@ export default {
         resultadoCalculo.medidaCosto = claveCostoBase;
         resultadoCalculo.proveedorCosto = resueltoBase?.detalle?.proveedorNombre || '';
         resultadoCalculo.kilosCrudo = this.medidaBaseRefri(medida) ? null : this.kilosCrudosDeMedida(medida);
+        // Kilos con los que se saca el rendimiento (total embarcado sin decimales).
+        resultadoCalculo.kilosEmbarcadosRendimiento = this.medidaBaseRefri(medida) ? null : Math.floor(Number(this.obtenerTotalEmbarcado(medida)) || 0);
         resultadoCalculo.rendimientoUsado = Math.round((Number(rendGanancia.valor) || 0) * 100) / 100;
         resultadoCalculo.rendimientoTexto = rendGanancia.texto;
         resultadoCalculo.costoExtraAplicado = this.debeAplicarCostoExtra(medida) ? normalizarCostoExtra(this.embarqueData?.costoExtra) : 0;

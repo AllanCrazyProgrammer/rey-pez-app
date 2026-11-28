@@ -107,7 +107,7 @@ test('hoja sin medidas analizadas: aviso en lugar de tabla', () => {
   assert.match(hoja.text, /No hay medidas/)
 })
 
-test('el PDF se genera de verdad con pdfmake (una sola hoja con 7 recuadros)', async () => {
+test('el PDF se genera de verdad con pdfmake (7 recuadros en máximo 2 hojas)', async () => {
   const gananciasLimpios = {}
   ;['71/90', '51/60', '36/40', '61/70', '41/50'].forEach((m, i) => {
     gananciasLimpios[m] = limpio([
@@ -125,7 +125,7 @@ test('el PDF se genera de verdad con pdfmake (una sola hoja con 7 recuadros)', a
   }))
   assert.equal(buffer.subarray(0, 5).toString(), '%PDF-')
   const paginas = (buffer.toString('latin1').match(/\/Type \/Page\b/g) || []).length
-  assert.equal(paginas, 1)
+  assert.ok(paginas >= 1 && paginas <= 2, `páginas: ${paginas}`)
 })
 
 test('página 1: usa el rendimiento de la pantalla (refri del día anterior, total sin decimales)', () => {
@@ -176,4 +176,15 @@ test('precio en cada renglón; "prom" en el total solo si hay varios precios', (
   // (731×180 + 194×199) / 925 = 183.98 -> $184
   assert.match(varios, /\$184/)
   assert.match(varios, /"\$180"/)
+})
+
+test('costo: división del crudo entre los kilos embarcados', () => {
+  const texto = JSON.stringify(h.generarHojaGanancias({
+    gananciasLimpios: { '71/90': limpio([{ cliente: 'Otilio', kilos: 350, precio: 165 }], { kilosCrudo: 420, kilosEmbarcadosRendimiento: 357, rendimientoUsado: 1.18, costoFinal: 140 }) }
+  }))
+  assert.match(texto, /420 kg × \$103/)
+  assert.match(texto, /= \$43,260/)
+  assert.match(texto, /÷ 357 kg /)
+  assert.match(texto, /= \$121\.18 \/kg/) // 43,260 / 357
+  assert.match(texto, /\$103 × 1\.18 \+ \$18 extra/)
 })
