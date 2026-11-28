@@ -4,9 +4,7 @@ import { useUIStore } from '@/stores/ui';
 import pdfMake, { configurarPdfMake, estilosPdf, configuracionDocumento } from './config';
 import { loadImageAsBase64, formatearFecha } from './formatters';
 import { generarTablaRendimientos } from './generators/rendimientos';
-import { generarTablaGanancias } from './generators/ganancias';
-import { generarTablaTarasCrudo } from './generators/tarasCrudo';
-import { generarResumenGananciasTotal } from './generators/resumen';
+import { generarHojaGanancias } from './generators/hojaGanancias';
 import {
   buildResumenMedidasSacadaContent,
   estilosResumenMedidasSacada,
@@ -21,9 +19,14 @@ export const generarPDFRendimientos = async (
   datosRendimientos, 
   embarqueData, 
   gananciasCalculadas, 
+  // Ya no se usan (eran de la tabla vieja de crudos); se conservan para no
+  // mover el orden de los argumentos que pasan la pantalla y el reporte.
+  // eslint-disable-next-line no-unused-vars
   tarasCrudosPorMedida = {}, 
   gananciasVisiblesCrudos = {}, 
+  // eslint-disable-next-line no-unused-vars
   costosCrudos = {}, 
+  // eslint-disable-next-line no-unused-vars
   configuracionPesos = {}, 
   gananciasVisiblesMaquila = {},
   gruposListaMedidasDiaEmbarque = null,
@@ -91,12 +94,14 @@ export const generarPDFRendimientos = async (
         { text: '\n', height: 5 },
         generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData),
         ...contenidoTrasRendimientos,
-        // Página(s) de resúmenes (ganancias, taras)
-        generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData, gananciasVisiblesMaquila),
-        { text: '\n', height: 10 },
-        generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos),
-        { text: '\n', height: 10 },
-        generarResumenGananciasTotal(gananciasCalculadas, gananciasVisiblesMaquila, gananciasVisiblesCrudos)
+        // Hoja de análisis de ganancia: un recuadro por medida, como el cuaderno
+        generarHojaGanancias({
+          gananciasLimpios: gananciasCalculadas,
+          gananciasMaquila: gananciasVisiblesMaquila,
+          gananciasCrudos: gananciasVisiblesCrudos,
+          nombresMedidas: nombresMedidasPersonalizados,
+          embarqueData
+        })
       ],
       styles: { ...estilosPdf, ...estilosResumenMedidasSacada },
       ...configuracionDocumento

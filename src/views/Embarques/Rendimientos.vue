@@ -3388,6 +3388,15 @@ export default {
 
         resultadoCalculo.costoFuente = resueltoBase ? resueltoBase.fuente : null;
         resultadoCalculo.costoFuenteTexto = describirFuenteCosto(resueltoBase);
+        // Datos para la hoja de ganancia del PDF (cuenta como en papel:
+        // "kilos crudo × costo" y "(rendimiento) = costo final").
+        const rendGanancia = await this.rendimientoParaGanancia(medida);
+        resultadoCalculo.medidaCosto = claveCostoBase;
+        resultadoCalculo.proveedorCosto = resueltoBase?.detalle?.proveedorNombre || '';
+        resultadoCalculo.kilosCrudo = this.medidaBaseRefri(medida) ? null : this.kilosCrudosDeMedida(medida);
+        resultadoCalculo.rendimientoUsado = Math.round((Number(rendGanancia.valor) || 0) * 100) / 100;
+        resultadoCalculo.rendimientoTexto = rendGanancia.texto;
+        resultadoCalculo.costoExtraAplicado = this.debeAplicarCostoExtra(medida) ? normalizarCostoExtra(this.embarqueData?.costoExtra) : 0;
         ganancias[medida] = resultadoCalculo;
       }
       
@@ -3451,13 +3460,17 @@ export default {
         const precio = delEmbarque || this.obtenerPrecioVentaParaFecha(
           medidaPrecio, fechaEmbarque, this.obtenerClienteIdParaPrecios(cliente.nombre || '')
         );
+        const enBolsas = producto.tipo === 'c/h20';
         return {
           cliente: cliente.nombre,
           kilos,
           precio: precio ? precio.precio : null,
           origen: precio ? precio.origen : null,
           fecha: precio ? precio.fecha : '',
-          desdeEmbarque: Boolean(delEmbarque)
+          desdeEmbarque: Boolean(delEmbarque),
+          // c/h2o: bolsas × neto, para mostrar la cuenta en el PDF
+          bolsas: enBolsas ? this.calcularTotalBolsas(producto) : 0,
+          factorBolsa: enBolsas ? (parseFloat(producto.camaronNeto) || 0.65) : 0
         };
       });
 
@@ -4717,8 +4730,18 @@ export default {
       return this.precioMaquilaDelEmbarque(medida);
     },
 
+    // Kilos enteros (sin decimales), igual que en limpios.
     calcularGananciaMaquila(medida) {
-      return this.obtenerTotalEmbarcado(medida) * this.precioMaquilaEfectivo(medida);
+      return Math.floor(Number(this.obtenerTotalEmbarcado(medida)) || 0) * this.precioMaquilaEfectivo(medida);
+    },
+
+    // Kilos en crudo capturados en la tarjeta (mix: suma de sus dos partes).
+    kilosCrudosDeMedida(medida) {
+      const valor = this.kilosCrudos[medida];
+      if (this.esMedidaMix(medida)) {
+        return (Number(valor?.medida1) || 0) + (Number(valor?.medida2) || 0);
+      }
+      return Number(valor) || 0;
     },
 
 

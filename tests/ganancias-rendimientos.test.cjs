@@ -326,3 +326,20 @@ test('kilos sin decimales por cliente: el total es la suma de lo que se ve (caso
   assert.equal(r.gananciaTotal, 8750)
   assert.equal(r.gananciaTotal, joselito.gananciaTotal + otilio.gananciaTotal)
 })
+
+test('líneas en bolsas (c/h2o): el desglose guarda "bolsas × neto"', () => {
+  const r = g.calcularGananciaLimpio([
+    { cliente: 'Joselito', kilos: 97.5, precio: 165, bolsas: 150, factorBolsa: 0.65 },
+    { cliente: 'Catarro', kilos: 95, precio: 165 },
+    { cliente: 'Otilio', kilos: 58.5, precio: 165, bolsas: 90, factorBolsa: 0.65 },
+    { cliente: 'Otilio', kilos: 10, precio: 165 }
+  ], 136)
+  const [joselito, catarro, otilio] = r.detallesPorCliente
+  assert.equal(joselito.bolsas, 150)
+  assert.equal(joselito.factorBolsa, 0.65)
+  assert.equal(joselito.totalEmbarcado, 97)
+  assert.equal(catarro.bolsas, null)
+  assert.equal(otilio.bolsas, null, 'mezcla de bolsas y kilos: solo kilos')
+  assert.equal(otilio.totalEmbarcado, 68)
+  assert.ok(!('factoresBolsa' in joselito))
+})

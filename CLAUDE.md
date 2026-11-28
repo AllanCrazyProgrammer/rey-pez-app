@@ -124,6 +124,12 @@ Reglas únicas en `src/utils/gananciasRendimientos.js` (pruebas:
   de costo de Rendimientos) > `ordenarProveedoresDefault` (sin proveedor, luego el más reciente).
 - Gestión de Costos copia la foto base (`clonarDatosPlanos`): si comparte los mapas que
   edita, el guardado cree que no hubo cambios y no escribe.
+- PDF de Rendimientos, hoja "Análisis de ganancia": `src/utils/pdf/generators/hojaGanancias.js`
+  (forma del cuaderno del papá: un recuadro por medida en cuadrícula de 2 columnas, ganancia/kg,
+  total y costo final en óvalo, kilos por cliente con "bolsas × .65", precio distinto en óvalo,
+  y resumen Limpios/Maquila/Crudos/Total). Usa lo ya calculado por la pantalla (`kilosCrudo`,
+  `rendimientoUsado`, `proveedorCosto`, `costoExtraAplicado` en cada ganancia). Pruebas:
+  `node --test tests/hoja-ganancias-pdf.test.cjs` (genera el PDF real con pdfmake).
 - Prueba con emulador: dev server con
   `VUE_APP_FIRESTORE_EMULATOR=127.0.0.1:<puerto>` y proyecto `demo-reypez`.
 

@@ -100,9 +100,7 @@ test('rendimientos previews without saving or queuing and exports backups withou
     './config': { __esModule: true, default: { createPdf: () => { generated++; return { getBuffer: callback => callback(data) }; } }, configurarPdfMake: () => {}, estilosPdf: {}, configuracionDocumento: {} },
     './formatters': { loadImageAsBase64: async () => '', formatearFecha: () => '26/09/2026' },
     './generators/rendimientos': { generarTablaRendimientos: () => ({}) },
-    './generators/ganancias': { generarTablaGanancias: () => ({}) },
-    './generators/tarasCrudo': { generarTablaTarasCrudo: () => ({}) },
-    './generators/resumen': { generarResumenGananciasTotal: () => ({}) },
+    './generators/hojaGanancias': { generarHojaGanancias: () => ({}) },
     './sacadas': {}
   };
   const { generarPDFRendimientos } = load('src/utils/pdf/index.js', pdfMocks, window);

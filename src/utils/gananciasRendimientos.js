@@ -162,10 +162,22 @@ export function calcularGananciaLimpio(lineas, costoFinal) {
         fechaPrecio: linea.fecha || '',
         desdeEmbarque: Boolean(linea.desdeEmbarque),
         noCuenta,
-        totalEmbarcado: 0
+        totalEmbarcado: 0,
+        bolsas: 0,
+        factoresBolsa: new Set(),
+        lineasSinBolsa: 0
       });
     }
-    grupos.get(clave).totalEmbarcado += kilos;
+    const grupo = grupos.get(clave);
+    grupo.totalEmbarcado += kilos;
+    // Producto en bolsas (c/h2o): se guarda la cuenta "bolsas × neto" para
+    // mostrarla como en papel ("150 × .65 = 97").
+    if (numero(linea.bolsas) > 0 && numero(linea.factorBolsa) > 0) {
+      grupo.bolsas += numero(linea.bolsas);
+      grupo.factoresBolsa.add(numero(linea.factorBolsa));
+    } else {
+      grupo.lineasSinBolsa += 1;
+    }
     if (noCuenta) kilosRefri += kilos;
   });
 
@@ -174,11 +186,14 @@ export function calcularGananciaLimpio(lineas, costoFinal) {
   // Kilos enteros por cliente (sin decimales, como se muestran): la ganancia
   // de cada renglón y el total son exactamente los que se ven en pantalla.
   // Ej.: 97.6 kg + 253.8 kg cuentan como 97 + 253 = 350 kg.
-  const detallesPorCliente = Array.from(grupos.values()).map(g => {
+  const detallesPorCliente = Array.from(grupos.values()).map(({ factoresBolsa, lineasSinBolsa, bolsas, ...g }) => {
     const kilosEnteros = Math.floor(g.totalEmbarcado + 1e-9);
     const gananciaUnitaria = g.noCuenta ? 0 : g.precioVenta - costo;
+    const soloBolsas = lineasSinBolsa === 0 && factoresBolsa.size === 1 && bolsas > 0;
     return {
       ...g,
+      bolsas: soloBolsas ? Math.round(bolsas * 100) / 100 : null,
+      factorBolsa: soloBolsas ? [...factoresBolsa][0] : null,
       clienteId: null,
       esEspecifico: g.origen === 'especifico',
       totalEmbarcado: kilosEnteros,
