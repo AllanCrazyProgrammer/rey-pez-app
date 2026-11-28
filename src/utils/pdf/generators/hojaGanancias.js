@@ -173,23 +173,36 @@ function columnaKilos({ vendidos, refri, total, principal = null }, { sinPrecio 
     return [
       { text: f.cliente || '', fontSize: 8, color: GRIS, noWrap: true, margin: [0, 2, 0, 0] },
       { text: valor, alignment: 'right', noWrap: true },
+      // Precio de cada cliente en verde; si es distinto al principal va en
+      // óvalo, como lo marca el papá. En renglón propio para que el texto
+      // quede centrado en su óvalo aunque la columna sea más ancha.
       f.precioDistinto
-        // En renglón propio: el texto queda centrado en su óvalo aunque la
-        // columna sea más ancha (por el precio verde del total).
-        ? enRenglon(ovalo(precioTexto(f.precio), { ancho: anchoOvalo(precioTexto(f.precio), 7.5, 10), alto: 13, fontSize: 7.5, bold: false, grosor: 0.8 }))
-        : { text: '', fontSize: 6 }
+        ? enRenglon(ovalo(precioTexto(f.precio), { ancho: anchoOvalo(precioTexto(f.precio), 9, 10), alto: 15, fontSize: 9, bold: true, color: VERDE, grosor: 0.8 }))
+        : { text: num(f.precio) > 0 ? precioTexto(f.precio) : '', fontSize: 9, bold: true, color: VERDE, noWrap: true, margin: [5, 2, 0, 0] }
     ];
   });
+  // Total: precio único, o promedio ponderado por kilos con "prom".
+  const precios = new Set(vendidos.filter(f => num(f.precio) > 0).map(f => num(f.precio)));
+  const kilosConPrecio = vendidos.reduce((s, f) => s + (num(f.precio) > 0 ? num(f.kilos) : 0), 0);
+  const promedio = kilosConPrecio > 0
+    ? Math.round(vendidos.reduce((s, f) => s + num(f.precio) * num(f.kilos), 0) / kilosConPrecio)
+    : 0;
+  const precioTotal = precios.size > 1 ? promedio : (precios.size === 1 ? [...precios][0] : num(principal));
   body.push([
     { text: '', margin: [0, 1, 0, 0] },
     { text: kilosTexto(total), fontSize: 12, bold: true, color: TINTA, alignment: 'right', margin: [0, 1, 0, 0] },
     {
-      // Precio de venta principal en verde junto a la suma de kilos.
-      text: [
-        { text: 'kg', fontSize: 8, color: GRIS },
-        num(principal) > 0 ? { text: `  ${precioTexto(principal)}`, fontSize: 11, bold: true, color: VERDE } : ''
+      // Precio en verde junto a la suma de kilos ("prom" abajo si hay varios).
+      stack: [
+        {
+          text: [
+            { text: 'kg', fontSize: 8, color: GRIS },
+            num(precioTotal) > 0 ? { text: `  ${precioTexto(precioTotal)}`, fontSize: 11, bold: true, color: VERDE } : ''
+          ],
+          noWrap: true
+        },
+        precios.size > 1 ? { text: 'prom', fontSize: 7, bold: true, color: VERDE, alignment: 'right' } : { text: '', fontSize: 1 }
       ],
-      noWrap: true,
       margin: [0, 2, 0, 0]
     }
   ]);

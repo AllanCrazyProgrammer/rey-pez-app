@@ -163,3 +163,17 @@ test('medidas sin costo: aviso en el recuadro y en el resumen', () => {
   assert.match(texto, /macuil \(-?\$/)
   assert.match(texto, /med ch \(\$14,368\)/)
 })
+
+test('precio en cada renglón; "prom" en el total solo si hay varios precios', () => {
+  const unPrecio = JSON.stringify(h.generarHojaGanancias({
+    gananciasLimpios: { '71/90': limpio([{ cliente: 'Catarro', kilos: 95, precio: 165 }, { cliente: 'Otilio', kilos: 255, precio: 165 }]) }
+  }))
+  assert.doesNotMatch(unPrecio, /"prom"/)
+  const varios = JSON.stringify(h.generarHojaGanancias({
+    gananciasLimpios: { '51/60': limpio([{ cliente: 'Catarro', kilos: 731, precio: 180 }, { cliente: 'Joselito', kilos: 194, precio: 199 }]) }
+  }))
+  assert.match(varios, /"prom"/)
+  // (731×180 + 194×199) / 925 = 183.98 -> $184
+  assert.match(varios, /\$184/)
+  assert.match(varios, /"\$180"/)
+})
